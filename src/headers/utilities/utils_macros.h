@@ -355,7 +355,9 @@
 #define utils_generate_exception(exception_name, base, fields, base_args, ...) \
 	class exception_name : public base \
 	{ \
+	private: \
 		__utils_define_fields fields \
+	public: \
 		exception_name(__utils_define_arguments base_args, __utils_define_arguments fields) \
 			: base(__utils_pass_parameters base_args), __utils_init_fields fields {} \
 		exception_name(const exception_name& other) \
@@ -364,6 +366,7 @@
 		{ \
 			base::operator=(other); \
 			__utils_copy_assign_fields fields \
+			return *this; \
 		} \
 		__utils_define_getters fields \
 	};
