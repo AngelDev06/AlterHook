@@ -112,44 +112,67 @@
 #if (utils_msvc || utils_clang) && utils_windows
 	#define __utils_emit_cdecl(fn, cv, ref, exception) \
 		fn(__cdecl, cv, ref, exception)
+	#define __utils_emit_cdecl2(fn, cv, ref, exception) \
+		fn(__cdecl, cv, ref, exception)
 
 	#ifdef _M_CEE
 		#define __utils_emit_clrcall(fn, cv, ref, exception) \
 			fn(__clrcall, cv, ref, exception)
+		#define __utils_emit_cdecl2(fn, cv, ref, exception) \
+			fn(__clrcall, cv, ref, exception)
 	#else
 		#define __utils_emit_clrcall(fn, cv, ref, exception)
+		#define __utils_emit_clrcall2(fn, cv, ref, exception)
 	#endif
 
 	#if !utils_windows64 && !defined(_M_CEE)
 		#define __utils_emit_fastcall(fn, cv, ref, exception) \
 			fn(__fastcall, cv, ref, exception)
+		#define __utils_emit_fastcall2(fn, cv, ref, exception) \
+			fn(__fastcall, cv, ref, exception)
 	#else
 		#define __utils_emit_fastcall(fn, cv, ref, exception)
+		#define __utils_emit_fastcall2(fn, cv, ref, exception)
 	#endif
 
 	#if !utils_windows64
 		#define __utils_emit_stdcall(fn, cv, ref, exception) \
 			fn(__stdcall, cv, ref, exception)
+		#define __utils_emit_stdcall2(fn, cv, ref, exception) \
+			fn(__stdcall, cv, ref, exception)
 		#define __utils_emit_thiscall(fn, cv, ref, exception) \
+			fn(__thiscall, cv, ref, exception)
+		#define __utils_emit_thiscall2(fn, cv, ref, exception) \
 			fn(__thiscall, cv, ref, exception)
 	#else
 		#define __utils_emit_stdcall(fn, cv, ref, exception)
+		#define __utils_emit_stdcall2(fn, cv, ref, exception)
 		#define __utils_emit_thiscall(fn, cv, ref, exception)
+		#define __utils_emit_thiscall2(fn, cv, ref, exception)
 	#endif
 
 	#if ((!utils_windows64 && _M_IX86_FP >= 2) || utils_windows64) && !defined(_M_CEE)
 		#define __utils_emit_vectorcall(fn, cv, ref, exception) \
 			fn(__vectorcall, cv, ref, exception)
+		#define __utils_emit_vectorcall2(fn, cv, ref, exception) \
+			fn(__vectorcall, cv, ref, exception)
 	#else
 		#define __utils_emit_vectorcall(fn, cv, ref, exception)
+		#define __utils_emit_vectorcall2(fn, cv, ref, exception)
 	#endif
 #else
 	#define __utils_emit_cdecl(fn, cv, ref, exception)
+	#define __utils_emit_cdecl2(fn, cv, ref, exception)
 	#define __utils_emit_clrcall(fn, cv, ref, exception)
+	#define __utils_emit_clrcall2(fn, cv, ref, exception)
 	#define __utils_emit_fastcall(fn, cv, ref, exception)
+	#define __utils_emit_fastcall2(fn, cv, ref, exception)
 	#define __utils_emit_stdcall(fn, cv, ref, exception)
+	#define __utils_emit_stdcall2(fn, cv, ref, exception)
 	#define __utils_emit_thiscall(fn, cv, ref, exception)
+	#define __utils_emit_thiscall2(fn, cv, ref, exception)
 	#define __utils_emit_vectorcall(fn, cv, ref, exception)
+	#define __utils_emit_vectorcall2(fn, cv, ref, exception)
 #endif
 
 // These are used for code generation purposes
@@ -364,9 +387,69 @@
 			: base(other), __utils_copy_fields fields {} \
 		exception_name& operator=(const exception_name& other) \
 		{ \
-			base::operator=(other); \
-			__utils_copy_assign_fields fields \
+			if (this != &other) \
+			{ \
+				base::operator=(other); \
+				__utils_copy_assign_fields fields \
+			} \
 			return *this; \
 		} \
 		__utils_define_getters fields \
+		__VA_ARGS__ \
+	};
+
+// Same as `utils_generate_exception` but without the fields param
+#define utils_generate_exception_no_fields(exception_name, base, base_args, ...) \
+	class exception_name : public base \
+	{ \
+	public: \
+		exception_name(__utils_define_arguments base_args) : base(__utils_pass_parameters base_args) {} \
+		exception_name(const exception_name& other) : base(other) {} \
+		exception_name& operator=(const exception_name& other) \
+		{ \
+			if (this != &other) \
+				base::operator=(other); \
+			return *this; \
+		} \
+		__VA_ARGS__ \
+	};
+
+// Same as `utils_generate_exception` but without the base_args param
+#define utils_generate_exception_no_base_args(exception_name, base, fields, ...) \
+	class exception_name : public base \
+	{ \
+	private: \
+		__utils_define_fields fields \
+	public: \
+		exception_name(__utils_define_arguments fields) \
+			: base(), __utils_init_fields fields {} \
+		exception_name(const exception_name& other) \
+			: base(other), __utils_copy_fields fields {} \
+		exception_name& operator=(const exception_name& other) \
+		{ \
+			if (this != &other) \
+			{ \
+				base::operator=(other); \
+				__utils_copy_assign_fields fields \
+			} \
+			return *this; \
+		} \
+		__utils_define_getters fields \
+		__VA_ARGS__ \
+	};
+
+// Same as `utils_generate_exception` but without fields and base_args params
+#define utils_generate_empty_exception(exception_name, base, ...) \
+	class exception_name : public base \
+	{ \
+	public: \
+		exception_name() : base() {} \
+		exception_name(const exception_name& other) : base(other) {} \
+		exception_name& operator=(const exception_name& other) \
+		{ \
+			if (this != &other) \
+				base::operator=(other); \
+			return *this; \
+		} \
+		__VA_ARGS__ \
 	};
