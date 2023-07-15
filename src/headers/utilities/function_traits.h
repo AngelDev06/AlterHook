@@ -38,7 +38,7 @@ namespace utils
 
 		__utils_non_member_call_cv_ref_noexcept(__utils_clean_stl_function)
 		__utils_non_member_call_cv_ref_noexcept(__utils_clean_function)
-		__utils_member_call_cv_ref(__utils_clean_member_function)
+		__utils_member_call_cv_ref_noexcept(__utils_clean_member_function)
 	}
 
 	// takes any kind of function (including regular ones and methods) with any calling convention/cv qualification/references/exception settings
