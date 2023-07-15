@@ -38,5 +38,11 @@
     <ClInclude Include="..\..\..\src\headers\utilities\static_vector.h">
       <Filter>Header Files\utilities</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\template_string.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\utils.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

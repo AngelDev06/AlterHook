@@ -4,6 +4,7 @@
 #include <utility>
 #include <iterator>
 #include <algorithm>
+#include <sstream>
 #include <cstddef>
 #include "utils_macros.h"
 #include "other.h"
