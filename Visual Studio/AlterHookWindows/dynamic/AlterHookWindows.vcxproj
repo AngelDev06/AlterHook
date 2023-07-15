@@ -20,6 +20,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h" />
+    <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h" />
+    <ClInclude Include="..\..\..\src\headers\utilities\other.h" />
+    <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\utils_macros.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

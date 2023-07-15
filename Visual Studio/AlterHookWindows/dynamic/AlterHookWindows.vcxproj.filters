@@ -26,5 +26,14 @@
     <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h">
       <Filter>Header Files\utilities</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\other.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
