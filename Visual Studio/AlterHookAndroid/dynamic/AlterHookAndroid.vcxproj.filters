@@ -24,5 +24,40 @@
     <ClInclude Include="..\..\..\src\headers\utilities\utils_macros.h">
       <Filter>Header Files\utilities</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\other.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\static_vector.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\template_string.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\utilities\utils.h">
+      <Filter>Header Files\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\exceptions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h">
+      <Filter>PCH</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\addresser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\headers\macros.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\src\addresser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
