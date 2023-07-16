@@ -240,6 +240,8 @@
 #define __utils_concat(x, y) x##y
 #define utils_concat(x, y) __utils_concat(x, y)
 
+#define utils_align(value, alignment) ((alignment) * ((value) / (alignment)))
+
 // All of the following come from: https://github.com/swansontec/map-macro
 // Which is an implementation of a "recursive" macro allowing a macro
 // to be "invoked" with each argument of __VA_ARGS__ at a time

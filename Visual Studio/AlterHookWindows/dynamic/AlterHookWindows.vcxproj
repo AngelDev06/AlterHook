@@ -19,6 +19,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\pre-compiled headers\windows\pch.h" />
+    <ClInclude Include="..\..\..\src\headers\addresser.h" />
+    <ClInclude Include="..\..\..\src\headers\arm_disassembler.h" />
+    <ClInclude Include="..\..\..\src\headers\buffer.h" />
+    <ClInclude Include="..\..\..\src\headers\exceptions.h" />
+    <ClInclude Include="..\..\..\src\headers\macros.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\other.h" />
@@ -27,6 +33,22 @@
     <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\utils.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\utils_macros.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\pre-compiled headers\windows\pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\addresser.cpp" />
+    <ClCompile Include="..\..\..\src\buffer.cpp" />
+    <ClCompile Include="..\..\..\src\windows\other.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\capstone\vs\capstone_static\capstone.vcxproj">
+      <Project>{0418da81-a05d-4eaf-8f54-e1b692522aa9}</Project>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -104,11 +126,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,11 +145,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -140,11 +164,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -158,11 +183,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
