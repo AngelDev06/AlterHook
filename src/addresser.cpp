@@ -108,18 +108,7 @@ namespace alterhook
 		return address;
 	}
 
-	bool addresser::is_virtual_impl(void* address) noexcept
-	{
-		auto memfunc = *reinterpret_cast<virtual_function_array::vmethod_t*>(address);
-		for (auto element : virtual_function_array::array)
-		{
-			if (element == memfunc)
-				return true;
-		}
-		return false;
-	}
-
-	#if utils_windows
+	#if utils_msvc
 	/* TO FIX
 	bool addresser::is_virtual_msvc_impl(void* address) noexcept
 	{
@@ -165,5 +154,16 @@ namespace alterhook
 		} while (true);
 	}
 	*/
+	#else
+	bool addresser::is_virtual_impl(void* address) noexcept
+	{
+		auto memfunc = *reinterpret_cast<virtual_function_array::vmethod_t*>(address);
+		for (auto element : virtual_function_array::array)
+		{
+			if (element == memfunc)
+				return true;
+		}
+		return false;
+	}
 	#endif
 }

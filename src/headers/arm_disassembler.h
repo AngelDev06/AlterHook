@@ -86,12 +86,18 @@ namespace alterhook
 			if (cs_err error = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON))
 				throw(exceptions::disassembler_init_fail(start_address, error));
 		}
-		// Not checking for errors on close to keep this noexcept
+		// not checking for errors on close to keep this noexcept
 		~disassembler() noexcept { cs_close(&handle); }
 		disassembler& disasm(size_t size) noexcept
 		{
 			disasm_size = size;
 			return *this;
+		}
+		// changes from ARM to THUMB & vice versa
+		void switch_instruction_set()
+		{
+			thumb = !thumb;
+			cs_option(handle, CS_OPT_MODE, thumb ? CS_MODE_THUMB : CS_MODE_ARM);
 		}
 
 		iterator begin() const noexcept { return iterator(handle, address, disasm_size); }

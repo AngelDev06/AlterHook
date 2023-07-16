@@ -21,6 +21,7 @@ namespace alterhook::exceptions
 			(const std::byte*, detour)
 		)
 	)
+
 	utils_generate_exception_no_base_args(
 		disassembler_exception, std::exception,
 		(
@@ -35,7 +36,16 @@ namespace alterhook::exceptions
 		const char* what() const noexcept override { return "An exception occured with the disassembler"; }
 	)
 
-	inline namespace disassembler_exceptions
+	utils_generate_exception_no_base_args(
+		os_exception, std::exception,
+		(
+			(uint64_t, error_code)
+		),
+		const char* get_error_string() const noexcept;
+		virtual std::string error_function() const = 0;
+	)
+
+	inline namespace disassembler
 	{
 		utils_generate_exception_no_fields(
 			disassembler_init_fail, disassembler_exception,
@@ -54,5 +64,25 @@ namespace alterhook::exceptions
 			),
 			const char* what() const noexcept override { return "Dissasembler iterator failed to be initialized"; }
 		)
+	}
+
+	inline namespace os
+	{
+		#if utils_windows
+		utils_generate_exception(
+			virtual_alloc_exception, os_exception,
+			(
+				(const void*, target_address),
+				(size_t, size),
+				(uint64_t, allocation_type),
+				(uint64_t, protection)
+			),
+			(
+				(uint64_t, flag)
+			),
+			const char* what() const noexcept override { return "An exception occurred when trying to allocate a memory block"; }
+			std::string error_function() const override;
+		)
+		#endif
 	}
 }
