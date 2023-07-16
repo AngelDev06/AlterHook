@@ -51,6 +51,11 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\capstone\vs\capstone_android_static\capstone.vcxproj">
+      <Project>{7530b11f-8be5-47c3-a022-3c26b95566b4}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{c1c4edb6-b137-4b46-b039-ae131d49677b}</ProjectGuid>
     <Keyword>Android</Keyword>
