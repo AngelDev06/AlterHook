@@ -1,0 +1,4 @@
+[submodule "capstone"]
+	path = capstone
+	url = https://github.com/AngelDev06/capstone
+	branch = vs-android
