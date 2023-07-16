@@ -71,6 +71,21 @@
 	#define utils_packed
 #endif
 
+#if defined(_M_X64) || defined(__x86_x64__)
+	#define utils_x64 true
+	#define utils_x86 false
+	#define utils_arm false
+#else
+	#define utils_x64 false
+	#ifdef __arm__
+		#define utils_arm true
+		#define utils_x86 false
+	#else
+		#define utils_arm false
+		#define utils_x86 true
+	#endif
+#endif
+
 #if utils_msvc
 	#ifdef _MSVC_LANG
 		#define utils_cpp_version _MSVC_LANG
@@ -351,7 +366,7 @@
 #define __utils_copy_assign_fields1(pair) __utils_copy_assign_fields0 pair
 #define __utils_copy_assign_fields(...) utils_map(__utils_copy_assign_fields1, __VA_ARGS__)
 
-#define __utils_define_getters0(type, identifier) type utils_concat(get_, identifier)() { return utils_concat(m_, identifier); }
+#define __utils_define_getters0(type, identifier) type utils_concat(get_, identifier)() const { return utils_concat(m_, identifier); }
 #define __utils_define_getters1(pair) __utils_define_getters0 pair
 #define __utils_define_getters(...) utils_map(__utils_define_getters1, __VA_ARGS__)
 
