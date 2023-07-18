@@ -17,4 +17,5 @@
 #include <fstream>
 #include <limits>
 #include <thread>
+#include <bitset>
 #include "macros.h"
