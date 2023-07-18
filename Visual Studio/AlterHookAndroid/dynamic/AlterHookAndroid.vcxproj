@@ -37,11 +37,13 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h" />
     <ClInclude Include="..\..\..\src\headers\addresser.h" />
+    <ClInclude Include="..\..\..\src\headers\api.h" />
     <ClInclude Include="..\..\..\src\headers\arm_disassembler.h" />
     <ClInclude Include="..\..\..\src\headers\buffer.h" />
     <ClInclude Include="..\..\..\src\headers\exceptions.h" />
     <ClInclude Include="..\..\..\src\headers\linux_thread_handler.h" />
     <ClInclude Include="..\..\..\src\headers\macros.h" />
+    <ClInclude Include="..\..\..\src\headers\tools.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\other.h" />
