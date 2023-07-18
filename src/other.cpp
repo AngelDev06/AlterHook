@@ -170,4 +170,34 @@ namespace alterhook
 				unset_signal_handler();
 		}
 	}
+
+	bool is_executable_address(const void* address)
+	{
+		std::ifstream maps{ "/proc/self/maps" };
+		if (!maps.is_open())
+			return false;
+
+		do
+		{
+			uintptr_t begin_address = 0;
+			uintptr_t end_address = 0;
+			
+			maps >> std::hex >> begin_address;
+			maps.seekg(1, std::ios_base::cur);
+			maps >> end_address;
+
+			if (reinterpret_cast<uintptr_t>(address) >= begin_address && reinterpret_cast<uintptr_t>(address) < end_address)
+			{
+				char perms[5]{};
+				maps >> perms;
+				if (perms[2] == 'x')
+					return true;
+				return false;
+			}
+
+			maps.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		} while (maps.good());
+
+		return false;
+	}
 }
