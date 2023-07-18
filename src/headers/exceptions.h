@@ -23,6 +23,13 @@ namespace alterhook::exceptions
 	)
 
 	utils_generate_exception_no_base_args(
+		trampoline_exception, std::exception,
+		(
+			(std::byte*, target)
+		)
+	)
+
+	utils_generate_exception_no_base_args(
 		disassembler_exception, std::exception,
 		(
 			(const std::byte*, target)
@@ -140,5 +147,13 @@ namespace alterhook::exceptions
 			const char* what() const noexcept override { return "A thread failed to be processed in order for hooks to work"; }
 		)
 		#endif
+
+		utils_generate_exception_no_base_args(
+			invalid_address, misc_exception,
+			(
+				(std::byte*, address)
+			),
+			const char* what() const noexcept override { return "A non executable address was passed"; }
+		)
 	}
 }
