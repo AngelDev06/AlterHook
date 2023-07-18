@@ -8,7 +8,12 @@
 		#define ALTERHOOK_API __declspec(dllimport)
 	#endif
 #elif defined(__GNUC__) && defined(ALTERHOOK_SHARED)
-#define ALTERHOOK_API __attribute__((visibility("default")))
+	#define ALTERHOOK_API __attribute__((visibility("default")))
 #else
-#define ALTERHOOK_API
+	#define ALTERHOOK_API
+#endif
+#ifdef __GNUC__
+	#define ALTERHOOK_HIDDEN __attribute__((visibility("hidden")))
+#else
+	#define ALTERHOOK_HIDDEN
 #endif

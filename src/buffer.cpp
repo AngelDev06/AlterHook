@@ -9,6 +9,8 @@ namespace alterhook
 	#if utils_windows
 	constexpr size_t memory_block_size = 0x1000;
 	constexpr size_t max_memory_range = 0x40000000;
+	#else
+	const auto memory_block_size = sysconf(_SC_PAGE_SIZE);
 	#endif
 	// to enforce thread safety on allocations & deallocations
 	static std::mutex buffer_lock;
@@ -127,7 +129,12 @@ namespace alterhook
 		#else
 			#define __alterhook_range_check
 			#if !utils_windows
-				#define __alterhook_alloc_mem_block()
+				#define __alterhook_alloc_mem_block() \
+					static_cast<memory_block*>(mmap(nullptr, memory_block_size, PROT_READ | PROT_WRITE | PROT_EXEC, \
+						MAP_PRIVATE | MAP_ANONYMOUS, 0, 0))
+			#define __alterhook_raise_alloc_exception() \
+					throw(exceptions::mmap_exception( \
+						errno, nullptr, memory_block_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0))
 			#else
 				#define __alterhook_alloc_mem_block() \
 					static_cast<memory_block*>(VirtualAlloc(nullptr, memory_block_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE))
@@ -202,8 +209,11 @@ namespace alterhook
 					else
 						buffer = pblock->next;
 
+					// no error checking is performed to keep this function noexcept
 					#if utils_windows
 					VirtualFree(pblock, 0, MEM_RELEASE);
+					#else
+					munmap(pblock, memory_block_size);
 					#endif
 				}
 				break;
