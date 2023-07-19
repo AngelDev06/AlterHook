@@ -11,7 +11,7 @@ namespace alterhook
 		private:
 			csh handle = 0;
 			const std::byte* code = nullptr;
-			uint64_t position = 0;
+			uint64_t address = 0;
 			size_t size = 0;
 			cs_insn* instr = nullptr;
 			bool status = false;
@@ -22,7 +22,7 @@ namespace alterhook
 				const std::byte* code,
 				size_t size,
 				uint64_t position = 0
-			) : handle(handle), code(code), position(position), size(size)
+			) : handle(handle), code(code), size(size), address(reinterpret_cast<uintptr_t>(code))
 			{
 				if (!size)
 					return;
@@ -30,7 +30,7 @@ namespace alterhook
 				// and throw an exception if not
 				if (!(instr = cs_malloc(handle)))
 					throw(exceptions::disassembler_iter_init_fail(code, cs_errno(handle)));
-				status = cs_disasm_iter(handle, reinterpret_cast<const uint8_t**>(&code), &size, &position, instr);
+				status = cs_disasm_iter(handle, reinterpret_cast<const uint8_t**>(&code), &size, &address, instr);
 			}
 			~disassembler_iterator() noexcept
 			{
@@ -50,7 +50,7 @@ namespace alterhook
 			}
 			disassembler_iterator& operator++()
 			{
-				status = cs_disasm_iter(handle, reinterpret_cast<const uint8_t**>(&code), &size, &position, instr);
+				status = cs_disasm_iter(handle, reinterpret_cast<const uint8_t**>(&code), &size, &address, instr);
 				return *this;
 			}
 			bool operator==(const disassembler_iterator& other) const noexcept 

@@ -9,7 +9,7 @@ namespace alterhook
 	{
 	public:
 		trampoline() {}
-		trampoline(std::byte* target);
+		trampoline(std::byte* target) { init(target); }
 		trampoline(const trampoline& other);
 		trampoline(trampoline&& other) noexcept;
 		trampoline& operator=(const trampoline& other);
