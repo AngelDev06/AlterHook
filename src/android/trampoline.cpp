@@ -19,7 +19,7 @@ namespace alterhook
 	{
 		enum instruction_set
 		{
-			ARM, THUMB, UNKNOWN
+			IS_ARM, IS_THUMB, IS_UNKNOWN
 		};
 
 		enum tbm_flags
@@ -49,6 +49,18 @@ namespace alterhook
 					return operands[i].imm;
 			}
 			return INT64_MAX;
+		}
+
+		static ALTERHOOK_HIDDEN arm_op_mem* find_mem(const cs_insn& instr) noexcept
+		{
+			cs_arm_op* operands = instr.detail->arm.operands;
+
+			for (uint8_t i = 0, count = instr.detail->arm.op_count; i != count; ++i)
+			{
+				if (operands[i].type == ARM_OP_MEM)
+					return &operands[i].mem;
+			}
+			return nullptr;
 		}
 
 		struct ALTERHOOK_HIDDEN trampoline_instruction_entry
@@ -84,11 +96,12 @@ namespace alterhook
 				HANDLE_BRANCHES:
 					if (memchr(instr.detail->groups, ARM_GRP_BRANCH_RELATIVE, instr.detail->groups_count))
 					{
-
+						if (instr.id == ARM_INS_BX || instr.id == ARM_INS_BLX)
+							next_instr_set = IS_ARM;
+						branch_dest = find_imm(instr);
 					}
-
 				}
-				if (cs_arm_op* operand = find_pc_reg(instr))
+				else if (cs_arm_op* operand = find_pc_reg(instr))
 				{
 					switch (instr.id)
 					{
@@ -105,12 +118,6 @@ namespace alterhook
 						break;
 
 					}
-				}
-
-				switch (instr.id)
-				{
-				case ARM_INS_ADD:
-
 				}
 			}
 		};
