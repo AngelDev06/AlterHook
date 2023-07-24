@@ -3,6 +3,11 @@
 #pragma once
 #include <utility>
 #include <cassert>
+#if utils_cpp20
+#include <bit>
+#else
+#include <limits>
+#endif
 #include "utils_macros.h"
 #define utils_assert(expr, msg) assert(((void)msg, expr))
 
@@ -93,4 +98,51 @@ namespace utils
 	struct overloaded : types... { using types::operator()...; };
 	template <typename... types>
 	overloaded(types...) -> overloaded<types...>;
+
+	// why on earth did we have to wait till c++20 to get bitwise rotate added
+	#if utils_cpp20
+		#define utils_ror(x, s) std::rotr(x, s)
+		#define utils_rol(x, s) std::rotl(x, s)
+	#else
+	template <typename T>
+	constexpr T ror(T x, unsigned int s) noexcept
+	{
+		static_assert(std::is_unsigned_v<T>, "ror: type passed is not unsigned");
+		constexpr auto digits = std::numeric_limits<T>::digits;
+		#if utils_msvc
+		if constexpr (digits == 64)
+			return _rotr64(x, s);
+		else if constexpr (digits == 32)
+			return _rotr(x, s);
+		else if constexpr (digits == 16)
+			return _rotr16(x, static_cast<unsigned char>(s));
+		else
+			return _rotr8(x, static_cast<unsigned char>(s));
+		#else
+		return (x >> s) | (x << (digits - s));
+		#endif
+	}
+
+	template <typename T>
+	constexpr T rol(T x, unsigned int s) noexcept
+	{
+		static_assert(std::is_unsigned_v<T>, "rol: type passed is not unsigned");
+		constexpr auto digits = std::numeric_limits<T>::digits;
+		#if utils_msvc
+		if constexpr (digits == 64)
+			return _rotl64(x, s);
+		else if constexpr (digits == 32)
+			return _rotl(x, s);
+		else if constexpr (digits == 16)
+			return _rotl16(x, static_cast<unsigned char>(s));
+		else
+			return _rotl8(x, static_cast<unsigned char>(s));
+		#else
+		return (x << s) | (x >> (digits - s));
+		#endif
+	}
+
+	#define utils_ror(x, s) ::utils::ror(x, s)
+	#define utils_rol(x, s) ::utils::rol(x, s)
+	#endif
 }

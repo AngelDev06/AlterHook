@@ -1,16 +1,121 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
+#include "arm_instructions.h"
 #include "exceptions.h"
 #include "linux_thread_handler.h"
 namespace fs = std::filesystem;
 
 namespace alterhook
 {
+	static ALTERHOOK_HIDDEN cs_insn* disasm_one(csh& handle, const std::byte target[], uint64_t address = 0)
+	{
+		cs_insn* instr = nullptr;
+		size_t size = 24;
+		auto buffer = reinterpret_cast<const uint8_t*>(target);
+		if (
+			handle = cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle) ||
+			!(instr = cs_malloc(handle)) ||
+			!cs_disasm_iter(handle, &buffer, &size, &address, instr)
+		)
+		{
+			cs_free(instr, 1);
+			cs_close(&handle);
+			return nullptr;
+		}
+		return instr;
+	}
+	static ALTERHOOK_HIDDEN void cleanup(cs_insn* instr, csh handle)
+	{
+		cs_free(instr, 1);
+		cs_close(&handle);
+	}
+
 	namespace exceptions
 	{
+		std::string invalid_it_block::str() const
+		{
+			std::stringstream stream;
+			csh handle = 0;
+			cs_insn* instructions = nullptr;
+			const uint64_t address = reinterpret_cast<uintptr_t>(m_it_block_address);
+			size_t count = instruction_count() + 1;
+
+			if (cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle))
+				return {};
+			count = cs_disasm(handle, reinterpret_cast<const uint8_t*>(m_buffer), 32, address, count, &instructions);
+			if (cs_errno(handle) || !count)
+				return {};
+
+			try
+			{
+				stream << "IT BLOCK:";
+				for (size_t i = 0; i != count; ++i)
+					stream << "\n\t0x" << std::hex << std::setfill('0') << std::setw(8) << instructions[i].address
+					<< ": " << instructions[i].mnemonic << '\t' << instructions[i].op_str;
+			}
+			catch (...)
+			{
+				cs_free(instructions, count);
+				cs_close(&handle);
+				throw;
+			}
+			cs_free(instructions, count);
+			cs_close(&handle);
+			return stream.str();
+		}
+
+		std::string invalid_it_block::it_str() const
+		{
+			std::stringstream stream;
+			csh handle = 0;
+
+			if (cs_insn* instr = disasm_one(handle, m_buffer, reinterpret_cast<uintptr_t>(m_it_block_address)))
+			{
+				try
+				{
+					stream << "0x" << std::hex << std::setfill('0') << std::setw(8)
+						<< instr->address << ": " << instr->mnemonic << '\t' << instr->op_str;
+				}
+				catch (...)
+				{
+					cleanup(instr, handle);
+					throw;
+				}
+				cleanup(instr, handle);
+			}
+			return stream.str();
+		}
+
+		std::string pc_relative_handling_fail::str() const
+		{
+			std::stringstream stream;
+			csh handle = 0;
+
+			if (cs_insn* instr = disasm_one(handle, m_buffer, reinterpret_cast<uintptr_t>(m_instruction_address)))
+			{
+				try
+				{
+					stream << "0x" << std::hex << std::setfill('0') << std::setw(8)
+						<< instr->address << ": " << instr->mnemonic << '\t' << instr->op_str;
+				}
+				catch (...)
+				{
+					cleanup(instr, handle);
+					throw;
+				}
+				cleanup(instr, handle);
+			}
+			return stream.str();
+		}
+
+		size_t invalid_it_block::instruction_count() const
+		{
+			return reinterpret_cast<const THUMB_IT*>(m_buffer)->instruction_count();
+		}
+
 		const char* os_exception::get_error_string() const noexcept { return strerror(m_error_code); }
-		
+
 		std::string mmap_exception::error_function() const
 		{
 			std::stringstream stream;
@@ -29,7 +134,18 @@ namespace alterhook
 				<< ')';
 			return stream.str();
 		}
+
+		std::string thread_process_fail::str() const
+		{
+			std::stringstream stream;
+			stream << "trampoline address: 0x" << std::hex << std::setfill('0') << std::setw(8)
+				<< reinterpret_cast<uintptr_t>(m_trampoline_address) << "\ntarget address: 0x"
+				<< std::setfill('0') << std::setw(8) << reinterpret_cast<uintptr_t>(m_target_address)
+				<< "\nposition: " << std::dec << m_position;
+			return stream.str();
+		}
 	}
+
 	void process_frozen_threads(trampoline& tramp, bool enable_hook, unsigned long& pc);
 
 	size_t thread_freezer::ref_count = 0;
@@ -37,7 +153,7 @@ namespace alterhook
 	std::atomic_size_t thread_freezer::processed_threads_count{};
 	std::shared_mutex thread_freezer::freezer_lock{};
 	bool thread_freezer::should_suspend = false;
-	struct sigaction thread_freezer::old_action{};
+	struct sigaction thread_freezer::old_action {};
 	std::pair<trampoline*, bool> thread_freezer::args{};
 	std::pair<std::atomic_bool, std::tuple<std::byte*, std::byte*, size_t>> thread_freezer::result{};
 
@@ -91,7 +207,7 @@ namespace alterhook
 
 	void thread_freezer::set_signal_handler()
 	{
-		struct sigaction act{};
+		struct sigaction act {};
 		act.sa_sigaction = thread_control_handler;
 		act.sa_flags = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
 		sigemptyset(&act.sa_mask);
@@ -181,7 +297,7 @@ namespace alterhook
 		{
 			uintptr_t begin_address = 0;
 			uintptr_t end_address = 0;
-			
+
 			maps >> std::hex >> begin_address;
 			maps.seekg(1, std::ios_base::cur);
 			maps >> end_address;

@@ -360,14 +360,6 @@
 #define __utils_init_fields1(pair) __utils_init_fields0 pair
 #define __utils_init_fields(...) utils_map_list(__utils_init_fields1, __VA_ARGS__)
 
-#define __utils_copy_fields0(type, identifier) utils_concat(m_, identifier)(other.utils_concat(m_, identifier))
-#define __utils_copy_fields1(pair) __utils_copy_fields0 pair
-#define __utils_copy_fields(...) utils_map_list(__utils_copy_fields1, __VA_ARGS__)
-
-#define __utils_copy_assign_fields0(type, identifier) utils_concat(m_, identifier) = other.utils_concat(m_, identifier);
-#define __utils_copy_assign_fields1(pair) __utils_copy_assign_fields0 pair
-#define __utils_copy_assign_fields(...) utils_map(__utils_copy_assign_fields1, __VA_ARGS__)
-
 #define __utils_define_getters0(type, identifier) type utils_concat(get_, identifier)() const { return utils_concat(m_, identifier); }
 #define __utils_define_getters1(pair) __utils_define_getters0 pair
 #define __utils_define_getters(...) utils_map(__utils_define_getters1, __VA_ARGS__)
@@ -395,24 +387,16 @@
 #define utils_generate_exception(exception_name, base, fields, base_args, ...) \
 	class exception_name : public base \
 	{ \
+	public: \
+		__VA_ARGS__ \
 	private: \
 		__utils_define_fields fields \
 	public: \
 		exception_name(__utils_define_arguments base_args, __utils_define_arguments fields) \
 			: base(__utils_pass_parameters base_args), __utils_init_fields fields {} \
-		exception_name(const exception_name& other) \
-			: base(other), __utils_copy_fields fields {} \
-		exception_name& operator=(const exception_name& other) \
-		{ \
-			if (this != &other) \
-			{ \
-				base::operator=(other); \
-				__utils_copy_assign_fields fields \
-			} \
-			return *this; \
-		} \
+		exception_name(const exception_name& other) = default; \
+		exception_name& operator=(const exception_name& other) = default; \
 		__utils_define_getters fields \
-		__VA_ARGS__ \
 	};
 
 // Same as `utils_generate_exception` but without the fields param
@@ -420,39 +404,27 @@
 	class exception_name : public base \
 	{ \
 	public: \
-		exception_name(__utils_define_arguments base_args) : base(__utils_pass_parameters base_args) {} \
-		exception_name(const exception_name& other) : base(other) {} \
-		exception_name& operator=(const exception_name& other) \
-		{ \
-			if (this != &other) \
-				base::operator=(other); \
-			return *this; \
-		} \
 		__VA_ARGS__ \
+	public: \
+		exception_name(__utils_define_arguments base_args) : base(__utils_pass_parameters base_args) {} \
+		exception_name(const exception_name& other) = default; \
+		exception_name& operator=(const exception_name& other) = default; \
 	};
 
 // Same as `utils_generate_exception` but without the base_args param
 #define utils_generate_exception_no_base_args(exception_name, base, fields, ...) \
 	class exception_name : public base \
 	{ \
+	public: \
+		__VA_ARGS__ \
 	private: \
 		__utils_define_fields fields \
 	public: \
 		exception_name(__utils_define_arguments fields) \
 			: base(), __utils_init_fields fields {} \
-		exception_name(const exception_name& other) \
-			: base(other), __utils_copy_fields fields {} \
-		exception_name& operator=(const exception_name& other) \
-		{ \
-			if (this != &other) \
-			{ \
-				base::operator=(other); \
-				__utils_copy_assign_fields fields \
-			} \
-			return *this; \
-		} \
+		exception_name(const exception_name& other) = default; \
+		exception_name& operator=(const exception_name& other) = default; \
 		__utils_define_getters fields \
-		__VA_ARGS__ \
 	};
 
 // Same as `utils_generate_exception` but without fields and base_args params
@@ -460,13 +432,9 @@
 	class exception_name : public base \
 	{ \
 	public: \
-		exception_name() : base() {} \
-		exception_name(const exception_name& other) : base(other) {} \
-		exception_name& operator=(const exception_name& other) \
-		{ \
-			if (this != &other) \
-				base::operator=(other); \
-			return *this; \
-		} \
 		__VA_ARGS__ \
+	public: \
+		exception_name() : base() {} \
+		exception_name(const exception_name& other) = default; \
+		exception_name& operator=(const exception_name& other) = default; \
 	};
