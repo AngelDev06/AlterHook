@@ -485,7 +485,7 @@ namespace alterhook
 			set_fourth_condition(fcond);
 		}
 
-		constexpr uint8_t instruction_count()
+		constexpr uint8_t instruction_count() const
 		{
 			if ((instr & 0b1111) == 0b1000)
 				return 1;

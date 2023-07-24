@@ -17,13 +17,8 @@ namespace alterhook
 		~trampoline() {}
 
 		void init(std::byte* target);
-		#if utils_cpp20
-		template <utils::function_type fn, typename... types>
-		utils::fn_return_t<fn> invoke(types&&... values)
-		#else
 		template <typename fn, typename... types>
-		std::enable_if_t<utils::function_type<fn>, utils::fn_return_t<fn>> invoke(types&&... values) const
-		#endif
+		auto invoke(types&&... values) const
 		{
 			utils_assert(ptrampoline, "trampoline::invoke: attempt to invoke an uninitialized trampoline");
 			// for arm we need to add the thumb bit to the trampoline address if needed. (we check if the target has it)

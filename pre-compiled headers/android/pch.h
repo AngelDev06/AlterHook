@@ -18,4 +18,5 @@
 #include <limits>
 #include <thread>
 #include <bitset>
+#include <variant>
 #include "macros.h"

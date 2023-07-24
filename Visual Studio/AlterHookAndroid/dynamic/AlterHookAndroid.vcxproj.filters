@@ -54,7 +54,7 @@
     <ClInclude Include="..\..\..\src\headers\macros.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\arm_disassembler.h">
+    <ClInclude Include="..\..\..\src\headers\disassembler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\headers\buffer.h">
@@ -83,7 +83,10 @@
     <ClCompile Include="..\..\..\src\buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\other.cpp">
+    <ClCompile Include="..\..\..\src\misc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\android\other.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

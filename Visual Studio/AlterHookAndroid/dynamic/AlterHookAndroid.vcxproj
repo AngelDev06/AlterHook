@@ -38,7 +38,7 @@
     <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h" />
     <ClInclude Include="..\..\..\src\headers\addresser.h" />
     <ClInclude Include="..\..\..\src\headers\api.h" />
-    <ClInclude Include="..\..\..\src\headers\arm_disassembler.h" />
+    <ClInclude Include="..\..\..\src\headers\disassembler.h" />
     <ClInclude Include="..\..\..\src\headers\arm_instructions.h" />
     <ClInclude Include="..\..\..\src\headers\buffer.h" />
     <ClInclude Include="..\..\..\src\headers\exceptions.h" />
@@ -56,9 +56,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
+    <ClCompile Include="..\..\..\src\android\other.cpp" />
     <ClCompile Include="..\..\..\src\android\trampoline.cpp" />
     <ClCompile Include="..\..\..\src\buffer.cpp" />
-    <ClCompile Include="..\..\..\src\other.cpp" />
+    <ClCompile Include="..\..\..\src\misc.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\capstone\vs\capstone_android_static\capstone.vcxproj">
