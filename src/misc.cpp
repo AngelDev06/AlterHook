@@ -24,6 +24,14 @@ namespace alterhook
 				cs_open(CS_ARCH_X86, CS_MODE_32, &handle)
 		#endif
 
+		std::string trampoline_exception::str() const
+		{
+			std::stringstream stream;
+			stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
+				<< reinterpret_cast<uintptr_t>(m_target);
+			return stream.str();
+		}
+
 		std::string unsupported_instruction_handling::str() const
 		{
 			std::stringstream stream;
@@ -50,6 +58,8 @@ namespace alterhook
 
 			try
 			{
+				stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8) << 
+					reinterpret_cast<uintptr_t>(get_target()) << '\n';
 				stream << "0x" << std::hex << std::setfill('0') << std::setw(8)
 					<< instr->address << ": " << instr->mnemonic << '\t' << instr->op_str;
 			}
@@ -59,6 +69,24 @@ namespace alterhook
 				throw;
 			}
 			cleanup();
+			return stream.str();
+		}
+
+		std::string trampoline_max_size_exceeded::str() const
+		{
+			std::stringstream stream;
+			stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
+				<< reinterpret_cast<uintptr_t>(get_target()) << "\nSIZE: "
+				<< std::dec << m_size << "\nMAX SIZE: " << m_max_size;
+			return stream.str();
+		}
+
+		std::string insufficient_function_size::str() const
+		{
+			std::stringstream stream;
+			stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
+				<< reinterpret_cast<uintptr_t>(get_target()) << "\nSIZE: "
+				<< std::dec << m_size << "\nNEEDED SIZE: " << m_needed_size;
 			return stream.str();
 		}
 

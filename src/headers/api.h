@@ -49,6 +49,8 @@ namespace alterhook
 		trampoline_ptr ptrampoline{};
 		#if utils_windows64
 		std::byte* prelay = nullptr;
+		#elif utils_arm
+		std::bitset<8> instruction_sets{};
 		#endif
 		bool patch_above = false;
 		size_t tramp_size = 0;
