@@ -42,14 +42,8 @@
     <ClInclude Include="..\..\..\src\headers\utilities\utils.h">
       <Filter>Header Files\utilities</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\exceptions.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h">
       <Filter>PCH</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\addresser.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\headers\macros.h">
       <Filter>Header Files</Filter>
@@ -63,14 +57,23 @@
     <ClInclude Include="..\..\..\src\headers\linux_thread_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\tools.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\api.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\headers\arm_instructions.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\api.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\exceptions.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\addresser.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\tools.h">
+      <Filter>Include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

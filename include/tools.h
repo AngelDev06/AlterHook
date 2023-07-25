@@ -12,7 +12,7 @@ namespace alterhook
 		utils_consteval void assert_valid_detour_original_pair()
 		{
 			typedef utils::clean_type_t<dtr> detour_type;
-			typedef utils::clean_type_t<fn_storage> storage_type;
+			typedef utils::clean_type_t<orig> storage_type;
 			static_assert(
 				std::is_same_v<utils::fn_return_t<detour_type>, utils::fn_return_t<storage_type>>,
 				"The return type of the detour and the original function need to be the same"

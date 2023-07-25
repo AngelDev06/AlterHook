@@ -1,12 +1,6 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include <utility>
-#include <functional>
-#include "utils_macros.h"
-#include "type_sequence.h"
-#include "other.h"
-#include "calling_conventions.h"
 
 namespace utils
 {
