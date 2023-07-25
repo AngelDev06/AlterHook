@@ -98,11 +98,13 @@ namespace alterhook
 				throw(exceptions::disassembler_init_fail(start_address, error));
 		}
 		#elif utils_arm
-		disassembler(const std::byte* start_address, bool thumb)
+		disassembler(const std::byte* start_address, bool thumb, bool detail = true)
 			: address(start_address), thumb(thumb)
 		{
 			if (cs_err error = cs_open(CS_ARCH_ARM, thumb ? CS_MODE_THUMB : CS_MODE_ARM, &handle))
 				throw(exceptions::disassembler_init_fail(start_address, error));
+			if (!detail)
+				return;
 			if (cs_err error = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON))
 				throw(exceptions::disassembler_init_fail(start_address, error));
 		}

@@ -1154,6 +1154,7 @@ namespace alterhook
 					throw(exceptions::trampoline_max_size_exceeded(target, tramp_pos + copy_size, available_size));
 
 				memcpy(copy_dest, copy_source, copy_size);
+				positions.push_back({ (instr.address - reinterpret_cast<uintptr_t>(target)) + instr.size, tramp_pos });
 				tramp_pos += copy_size;
 				break;
 			}
@@ -1187,5 +1188,75 @@ namespace alterhook
 
 			patch_above = true;
 		}
+	}
+
+	trampoline::trampoline(const trampoline& other)
+		: ptarget(other.ptarget), ptrampoline(trampoline_buffer::allocate()), instruction_sets(other.instruction_sets),
+		patch_above(other.patch_above), tramp_size(other.tramp_size), positions(other.positions)
+	{
+		memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
+	}
+
+	trampoline::trampoline(trampoline&& other) noexcept
+		: ptarget(std::exchange(other.ptarget, nullptr)), ptrampoline(std::move(other.ptrampoline)), instruction_sets(other.instruction_sets),
+		patch_above(other.patch_above), tramp_size(other.tramp_size), positions(other.positions) {}
+
+	trampoline& trampoline::operator=(const trampoline& other)
+	{
+		if (this != &other)
+		{
+			ptarget = other.ptarget;
+			instruction_sets = other.instruction_sets;
+			patch_above = other.patch_above;
+			tramp_size = other.tramp_size;
+			positions = other.positions;
+			if (!ptrampoline)
+				ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
+			memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
+		}
+		return *this;
+	}
+
+	trampoline& trampoline::operator=(trampoline&& other) noexcept
+	{
+		if (this != &other)
+		{
+			ptarget = std::exchange(other.ptarget, nullptr);
+			ptrampoline = std::move(other.ptrampoline);
+			instruction_sets = other.instruction_sets;
+			patch_above = other.patch_above;
+			tramp_size = other.tramp_size;
+			positions = other.positions;
+		}
+		return *this;
+	}
+
+	std::string trampoline::str() const
+	{
+		utils_assert(ptarget, "Attempt to disassemble an uninitialized trampoline");
+		std::stringstream stream;
+		bool uses_thumb = instruction_sets[0];
+		size_t i = 0;
+		disassembler arm{ ptrampoline.get(), instruction_sets[0], false };
+
+		for (const cs_insn& instr : arm.disasm(tramp_size))
+		{
+			if (instr.address != reinterpret_cast<uintptr_t>(ptrampoline.get()))
+				stream << '\n';
+			stream << "0x" << std::hex << std::setfill('0') << std::setw(8) << instr.address
+				<< ": " << instr.mnemonic << '\t' << instr.op_str;
+
+			if ((i + 1) != positions.size())
+			{
+				auto [oldpos, newpos] = positions[i + 1];
+				if (newpos == (instr.address + instr.size))
+				{
+					if (instruction_sets[i + 1] != instruction_sets[i])
+						arm.switch_instruction_set();
+					++i;
+				}
+			}
+		}
+		return stream.str();
 	}
 }
