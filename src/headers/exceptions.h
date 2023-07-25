@@ -27,7 +27,7 @@ namespace alterhook::exceptions
 		(
 			(const std::byte*, target)
 		),
-		virtual std::string str() const = 0;
+		virtual std::string str() const;
 	)
 
 	utils_generate_exception_no_base_args(
@@ -89,23 +89,64 @@ namespace alterhook::exceptions
 		private:
 			__alterhook_add_uih_field
 			std::byte m_instr[24]{};
-		)
+			)
 
 		#if utils_arm
-		utils_generate_exception_no_fields(
-			invalid_it_block, trampoline_exception,
+		utils_generate_exception(
+			it_block_exception, trampoline_exception,
+			(
+				(uintptr_t, it_address),
+				(size_t, remaining_instructions)
+			),
 			(
 				(const std::byte*, target)
 			),
 			std::string str() const override;
-			const char* what() const noexcept override { return "An invalid IT block was spotted"; }
 			std::string it_str() const;
 			size_t instruction_count() const;
-			invalid_it_block(const std::byte it_block[], const std::byte* target)
-				: trampoline_exception(target), m_it_block_address(it_block) { memcpy(m_buffer, it_block, 32); }
+			it_block_exception(const std::byte it_block[], uintptr_t address, size_t size, size_t remaining, const std::byte* target)
+				: trampoline_exception(target), m_it_address(address), m_size(size), m_remaining_instructions(remaining)
+			{ 
+				memcpy(m_buffer, it_block, size); 
+			}
 		private:
-			const std::byte* m_it_block_address;
+			size_t m_size = 0;
 			std::byte m_buffer[32]{};
+		)
+
+		inline namespace it_block
+		{
+			utils_generate_exception_no_fields(
+				invalid_it_block, it_block_exception,
+				(
+					(const std::byte*, it_block),
+					(uintptr_t, address),
+					(size_t, size),
+					(size_t, remaining),
+					(const std::byte*, target)
+				),
+				const char* what() const noexcept override { return "An invalid IT block was spotted"; }
+			)
+
+			utils_generate_exception_no_fields(
+				incomplete_it_block, it_block_exception,
+				(
+					(const std::byte*, it_block),
+					(uintptr_t, address),
+					(size_t, size),
+					(size_t, remaining),
+					(const std::byte*, target)
+				),
+				const char* what() const noexcept override { return "A part of an IT block was cut off when completing the trampoline function"; }
+			)
+		}
+
+		utils_generate_exception_no_fields(
+			unused_register_not_found, trampoline_exception,
+			(
+				(const std::byte*, target)
+			),
+			const char* what() const noexcept override { return "Couldn't find a register suitable for handling PC relative instructions"; }
 		)
 
 		utils_generate_exception_no_fields(
@@ -123,6 +164,40 @@ namespace alterhook::exceptions
 			std::byte m_buffer[24]{};
 		)
 		#endif
+
+		utils_generate_exception_no_fields(
+			instructions_in_branch_handling_fail, trampoline_exception,
+			(
+				(const std::byte*, target)
+			),
+			const char* what() const noexcept override { return "An instruction in the middle of a branch cannot be altered without breaking the branch"; }
+		)
+
+		utils_generate_exception(
+			trampoline_max_size_exceeded, trampoline_exception,
+			(
+				(size_t, size),
+				(size_t, max_size)
+			),
+			(
+				(const std::byte*, target)
+			),
+			std::string str() const override;
+			const char* what() const noexcept override { return "Exceeded the trampoline's available size"; }
+		)
+
+		utils_generate_exception(
+			insufficient_function_size, trampoline_exception,
+			(
+				(size_t, size),
+				(size_t, needed_size)
+			),
+			(
+				(const std::byte*, target)
+			),
+			std::string str() const override;
+			const char* what() const noexcept override { return "The original function isn't long enough to hook"; }
+		)
 	}
 
 	inline namespace disassembler

@@ -33,26 +33,28 @@ namespace alterhook
 
 	namespace exceptions
 	{
-		std::string invalid_it_block::str() const
+		std::string it_block_exception::str() const
 		{
 			std::stringstream stream;
 			csh handle = 0;
 			cs_insn* instructions = nullptr;
-			const uint64_t address = reinterpret_cast<uintptr_t>(m_it_block_address);
-			size_t count = instruction_count() + 1;
-
+			size_t count = 0;
+			
 			if (cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle))
 				return {};
-			count = cs_disasm(handle, reinterpret_cast<const uint8_t*>(m_buffer), 32, address, count, &instructions);
+			count = cs_disasm(handle, reinterpret_cast<const uint8_t*>(m_buffer), m_size, m_it_address, 0, &instructions);
 			if (cs_errno(handle) || !count)
 				return {};
 
 			try
 			{
-				stream << "IT BLOCK:";
+				stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
+					<< reinterpret_cast<uintptr_t>(get_target()) << "\nIT INSTRUCTIONS COUNT: "
+					<< std::dec << instruction_count() << "\nIT REMAINING INSTRUCTIONS COUNT: "
+					<< m_remaining_instructions << "\nIT BLOCK:";
 				for (size_t i = 0; i != count; ++i)
 					stream << "\n\t0x" << std::hex << std::setfill('0') << std::setw(8) << instructions[i].address
-					<< ": " << instructions[i].mnemonic << '\t' << instructions[i].op_str;
+						<< ": " << instructions[i].mnemonic << '\t' << instructions[i].op_str;
 			}
 			catch (...)
 			{
@@ -65,12 +67,12 @@ namespace alterhook
 			return stream.str();
 		}
 
-		std::string invalid_it_block::it_str() const
+		std::string it_block_exception::it_str() const
 		{
 			std::stringstream stream;
 			csh handle = 0;
 
-			if (cs_insn* instr = disasm_one(handle, m_buffer, reinterpret_cast<uintptr_t>(m_it_block_address)))
+			if (cs_insn* instr = disasm_one(handle, m_buffer, m_it_address))
 			{
 				try
 				{
@@ -85,6 +87,11 @@ namespace alterhook
 				cleanup(instr, handle);
 			}
 			return stream.str();
+		}
+
+		size_t it_block_exception::instruction_count() const
+		{
+			return reinterpret_cast<const THUMB_IT*>(m_buffer)->instruction_count();
 		}
 
 		std::string pc_relative_handling_fail::str() const
@@ -96,6 +103,8 @@ namespace alterhook
 			{
 				try
 				{
+					stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8) << 
+						reinterpret_cast<uintptr_t>(get_target()) << '\n';
 					stream << "0x" << std::hex << std::setfill('0') << std::setw(8)
 						<< instr->address << ": " << instr->mnemonic << '\t' << instr->op_str;
 				}
@@ -107,11 +116,6 @@ namespace alterhook
 				cleanup(instr, handle);
 			}
 			return stream.str();
-		}
-
-		size_t invalid_it_block::instruction_count() const
-		{
-			return reinterpret_cast<const THUMB_IT*>(m_buffer)->instruction_count();
 		}
 
 		const char* os_exception::get_error_string() const noexcept { return strerror(m_error_code); }
