@@ -6,6 +6,7 @@
 #include "arm_instructions.h"
 #include "addresser.h"
 #include "buffer.h"
+#include "tools.h"
 #include "api.h"
 
 namespace alterhook
@@ -1258,5 +1259,10 @@ namespace alterhook
 			}
 		}
 		return stream.str();
+	}
+
+	void ALTERHOOK_HIDDEN process_frozen_threads(trampoline& tramp, bool enable_hook, unsigned long& pc)
+	{
+
 	}
 }

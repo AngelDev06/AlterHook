@@ -1,14 +1,6 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include <utility>
-#include <cassert>
-#if utils_cpp20
-#include <bit>
-#else
-#include <limits>
-#endif
-#include "utils_macros.h"
 #define utils_assert(expr, msg) assert(((void)msg, expr))
 
 namespace utils

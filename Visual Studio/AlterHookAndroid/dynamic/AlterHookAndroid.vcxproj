@@ -35,16 +35,17 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\include\addresser.h" />
+    <ClInclude Include="..\..\..\include\alterhook.h" />
+    <ClInclude Include="..\..\..\include\api.h" />
+    <ClInclude Include="..\..\..\include\exceptions.h" />
+    <ClInclude Include="..\..\..\include\tools.h" />
     <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h" />
-    <ClInclude Include="..\..\..\src\headers\addresser.h" />
-    <ClInclude Include="..\..\..\src\headers\api.h" />
     <ClInclude Include="..\..\..\src\headers\disassembler.h" />
     <ClInclude Include="..\..\..\src\headers\arm_instructions.h" />
     <ClInclude Include="..\..\..\src\headers\buffer.h" />
-    <ClInclude Include="..\..\..\src\headers\exceptions.h" />
     <ClInclude Include="..\..\..\src\headers\linux_thread_handler.h" />
     <ClInclude Include="..\..\..\src\headers\macros.h" />
-    <ClInclude Include="..\..\..\src\headers\tools.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h" />
     <ClInclude Include="..\..\..\src\headers\utilities\other.h" />
@@ -172,7 +173,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -183,7 +184,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -194,7 +195,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -205,7 +206,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -216,7 +217,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -227,7 +228,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -238,7 +239,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -249,7 +250,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
