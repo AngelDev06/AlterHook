@@ -31,11 +31,6 @@ namespace alterhook
 			instr &= ~(0b1111 << 12);
 			instr |= reg << 12;
 		}
-
-		void write_to(void* dst)
-		{
-			*static_cast<uint32_t*>(dst) = instr;
-		}
 	};
 
 	struct PUSH : ARM_INSTRUCTION
@@ -169,8 +164,6 @@ namespace alterhook
 		constexpr void set_offset(int32_t offset) { ldr.set_offset(offset); }
 
 		constexpr void set_condition(CondCodes cond) { ldr.set_condition(cond); }
-
-		void write_to(void* dst) { memcpy(dst, this, sizeof(JMP_ABS)); }
 	};
 
 	struct FULL_JMP_ABS
@@ -179,8 +172,6 @@ namespace alterhook
 		uint32_t address;
 
 		constexpr FULL_JMP_ABS(uint32_t address) : ldr(pc, -4), address(address) {}
-
-		void write_to(void* dst) { memcpy(dst, this, sizeof(FULL_JMP_ABS)); }
 	};
 
 	struct CALL_ABS
@@ -197,8 +188,6 @@ namespace alterhook
 			mov.set_condition(cond);
 			ldr.set_condition(cond);
 		}
-
-		void write_to(void* dst) { memcpy(dst, this, sizeof(CALL_ABS)); }
 	};
 
 	struct THUMB2_INSTRUCTION
@@ -210,11 +199,6 @@ namespace alterhook
 		{
 			operands &= ~(0b1111 << 12);
 			operands |= reg << 12;
-		}
-
-		void write_to(void* dst)
-		{
-			*static_cast<THUMB2_INSTRUCTION*>(dst) = *this;
 		}
 	};
 
@@ -300,6 +284,25 @@ namespace alterhook
 		}
 	};
 
+	struct THUMB2_LDR_IMM : THUMB2_INSTRUCTION
+	{
+		constexpr THUMB2_LDR_IMM(reg_t destreg, reg_t operandreg, uint16_t offset)
+			: THUMB2_INSTRUCTION({ static_cast<uint16_t>(0xF8D0 | operandreg), static_cast<uint16_t>((destreg << 12) | offset) }) {}
+
+		void set_register(reg_t reg) = delete;
+		constexpr void set_destination_register(reg_t reg) { THUMB2_INSTRUCTION::set_register(reg); }
+		constexpr void set_operand_register(reg_t reg)
+		{
+			opcode &= ~0b1111;
+			opcode |= reg;
+		}
+		constexpr void set_offset(uint16_t offset)
+		{
+			operands &= ~0xFFF;
+			operands |= offset;
+		}
+	};
+
 	struct THUMB2_ADD : THUMB2_INSTRUCTION
 	{
 		constexpr THUMB2_ADD(reg_t destreg, reg_t operandreg, uint16_t offset)
@@ -336,11 +339,6 @@ namespace alterhook
 		constexpr THUMB2_JMP_ABS() : ldr(pc, 0) {}
 
 		constexpr void set_offset(int32_t offset) { ldr.set_offset(offset); }
-
-		void write_to(void* dst)
-		{
-			memcpy(dst, this, sizeof(THUMB2_JMP_ABS));
-		}
 	};
 
 	struct THUMB2_FULL_JMP_ABS
@@ -349,8 +347,6 @@ namespace alterhook
 		uint32_t address;
 
 		constexpr THUMB2_FULL_JMP_ABS(uint32_t address) : ldr(pc, 0), address(address) {}
-
-		void write_to(void* dst) { memcpy(dst, this, sizeof(THUMB2_FULL_JMP_ABS)); }
 	};
 
 	struct THUMB2_CALL_ABS
@@ -363,8 +359,6 @@ namespace alterhook
 		constexpr void set_offset(int32_t offset) { ldr.set_offset(offset - 4); }
 
 		constexpr void align() { add.set_offset(7); }
-
-		void write_to(void* dst) { memcpy(dst, this, sizeof(THUMB2_CALL_ABS)); }
 	};
 
 	struct THUMB_INSTRUCTION
@@ -381,11 +375,6 @@ namespace alterhook
 		{
 			instr &= ~0xFF;
 			instr |= offset;
-		}
-
-		void write_to(void* dst)
-		{
-			*static_cast<uint16_t*>(dst) = instr;
 		}
 	};
 
@@ -460,17 +449,14 @@ namespace alterhook
 	struct NOP : private ARM_INSTRUCTION
 	{
 		constexpr NOP() : ARM_INSTRUCTION({ 0xE320F000 }) {}
-		using ARM_INSTRUCTION::write_to;
 	};
 	struct THUMB_NOP : private THUMB_INSTRUCTION
 	{
 		constexpr THUMB_NOP() : THUMB_INSTRUCTION({ 0xBF00 }) {}
-		using THUMB_INSTRUCTION::write_to;
 	};
 	struct THUMB2_NOP : private THUMB2_INSTRUCTION
 	{
 		constexpr THUMB2_NOP() : THUMB2_INSTRUCTION({ 0xF3AF, 0x8000 }) {}
-		using THUMB2_INSTRUCTION::write_to;
 	};
 
 	struct THUMB_IT : private THUMB_INSTRUCTION
@@ -606,6 +592,5 @@ namespace alterhook
 		constexpr it_cond get_second_condition() { return ((instr >> 3) & 1) == ((instr >> 4) & 1) ? T : E; }
 		constexpr it_cond get_third_condition() { return ((instr >> 2) & 1) == ((instr >> 4) & 1) ? T : E; }
 		constexpr it_cond get_fourth_condition() { return ((instr >> 1) & 1) == ((instr >> 4) & 1) ? T : E; }
-		using THUMB_INSTRUCTION::write_to;
 	};
 }

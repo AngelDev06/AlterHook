@@ -31,12 +31,12 @@ namespace alterhook
 			M_LINK, // whether the instruction performs a call i.e. modifies the PC & LR register
 			M_TBM, // whether the instruction needs to be modified to function i.e. reads from PC
 			M_REGLIST, // whether the instructions has a reglist
-			M_FINAL_POP, // whether the current instruction is the final pop that finishes pc handling
 			M_PUSH, // whether the current instruction is the push that starts pc handling
 			M_LDR, // whether the current instruction is the ldr that loads a given register with the value of PC
 			M_POP, // whether the current instruction is the pop that finishes the PC handling setup
 			M_ADD, // whether the current instruction is the add instruction that increments the value of the register representing the PC
 			M_ADR, // whether the current instruction is an adr instruction
+			M_SMALL_LDR, // whether the current instruction is the small thumb ldr literal (this one doesn't encode the PC so it's an exception)
 			M_ORIGINAL_PUSH // whether the current instruction is a push with reglist operand that was already part of the target
 		};
 
@@ -104,19 +104,6 @@ namespace alterhook
 			return INT64_MAX;
 		}
 
-		static ALTERHOOK_HIDDEN std::bitset<16> build_reglist(const cs_insn& instr) noexcept
-		{
-			std::bitset<16> reglist{};
-
-			for (size_t i = 0, end = instr.detail->arm.op_count; i != end; ++i)
-			{
-				cs_arm_op& operand = instr.detail->arm.operands[i];
-				if (operand.type == ARM_OP_REG && operand.encoding.operand_pieces_count == 1 && operand.encoding.sizes[0] == 1)
-					reglist.set(__alterhook_reg_bitnum(operand.reg));
-			}
-			return reglist;
-		}
-
 		struct ALTERHOOK_HIDDEN to_be_modified
 		{
 			uintptr_t instr;
@@ -124,7 +111,6 @@ namespace alterhook
 			bool thumb;
 			cs_operand_encoding encoding;
 			std::bitset<16> flags;
-			std::bitset<16> reglist;
 			std::variant<PUSH_REGLIST*, THUMB2_PUSH_REGLIST*, THUMB_PUSH_REGLIST*>* orig_push;
 
 			void patch_reg(reg_t reg)
@@ -156,39 +142,7 @@ namespace alterhook
 
 			void modify(reg_t reg)
 			{
-				/*
-				* - When handling the PC register we may encounter an instruction that
-				*	has a reglist operand.
-				* - Since that reglist operand may include the PC we temporarily handle
-				*	it by disabling current PC handling setup (by placing a pop) and
-				*	re-enable it later if needed.
-				* - However since we now know which register we are using to hold the
-				*	value of PC we proceed to check if that reglist contains it.
-				* - If it does contain it we handle the instructions we have placed
-				*	as expected, but if it doesn't then these instructions have no meaning
-				*	so we replace them with nop (since we can't change instruction order).
-				* - BUT if this is the final pop (the one which disables PC handling setup
-				*	for good) then we can't replace it with nop as that would break the setup
-				*	entirely.
-				* - So in that case we handle it as expected.
-				*/
-				if (flags[M_REGLIST] && !reglist[reg] && !flags[M_FINAL_POP])
-				{
-					// on thumb we replace both push & ldr with single 4 byte nop
-					if (thumb)
-					{
-						if (!flags[M_LDR])
-						{
-							if (flags[M_PUSH])
-								new (reinterpret_cast<void*>(instr)) THUMB2_NOP;
-							else
-								new (reinterpret_cast<void*>(instr)) THUMB_NOP;
-						}
-					}
-					else
-						new (reinterpret_cast<void*>(instr)) NOP;
-				}
-				else if (flags[M_PUSH])
+				if (flags[M_PUSH])
 				{
 					// if we have encountered a push with reglist operand included in the target
 					// then we check if we can make use of it. that can happen if the register
@@ -246,6 +200,8 @@ namespace alterhook
 					// encoded anywhere
 					else if (flags[M_ADR])
 						reinterpret_cast<THUMB2_ADD*>(instr)->set_operand_register(reg);
+					else if (flags[M_SMALL_LDR])
+						reinterpret_cast<THUMB2_LDR_IMM*>(instr)->set_operand_register(reg);
 					else
 						patch_reg(reg);
 				}
@@ -426,6 +382,12 @@ namespace alterhook
 					}
 					else if (arm.modifies_reg(instr, ARM_REG_LR))
 						flags.set(M_LINK);
+
+					if (branch_dest & 1)
+					{
+						branch_dest &= ~1;
+						next_instr_set = IS_THUMB;
+					}
 				}
 				else
 					check_branch_instructions();
@@ -482,15 +444,21 @@ namespace alterhook
 						{
 							if (operand.encoding.operand_pieces_count == 1 && operand.encoding.sizes[0] == 1)
 								flags.set(M_REGLIST);
-							if (!encountered_reglist[reg_bitnum])
+							else if (!encountered_reglist[reg_bitnum])
 								encountered_reglist.set(reg_bitnum);
 						}
 					}
 					else if (operand.type == ARM_OP_MEM)
 					{
 						utils_assert(operand.mem.index != ARM_REG_PC, "(unreachable) PC is index operand");
-						if (operand.mem.base == ARM_REG_PC)
-							add_mem_pc_encoding(operand);
+						if (operand.mem.base == ARM_REG_PC) 
+						{
+							if (instr.id == ARM_INS_LDR && instr.size == 2)
+								flags.set(M_SMALL_LDR);
+							else
+								add_mem_pc_encoding(operand);
+							flags.set(M_TBM);
+						}
 					}
 				}
 			}
@@ -523,9 +491,12 @@ namespace alterhook
 		positions.clear();
 		patch_above = false;
 		ptarget = target;
+		#ifndef NDEBUG
+		memset(ptrampoline.get(), 0, memory_slot_size);
+		#endif
 
 		bool uses_thumb = reinterpret_cast<uintptr_t>(target) & 1;
-		bool should_setup_pc_handling = false;
+		bool should_setup_pc_handling = true;
 		bool finished = false;
 		bool push_found = false;
 		const uintptr_t tramp_begin = reinterpret_cast<uintptr_t>(ptrampoline.get());
@@ -550,7 +521,6 @@ namespace alterhook
 		THUMB_IT* it_block = nullptr;
 		to_be_modified tbm{};
 		utils::static_vector<to_be_modified, 16> tbm_list{};
-		decltype(tbm_list)::iterator final_pop{ tbm_list.begin() };
 		utils::static_vector<std::pair<uintptr_t, bool>, 3> branch_addresses{};
 		disassembler arm{ target, uses_thumb };
 		std::shared_lock lock{ hook_lock };
@@ -564,7 +534,7 @@ namespace alterhook
 			tbm.instr = tramp_addr;
 			tbm.thumb = uses_thumb;
 			tbm.size = instr.size;
-			addr = instr.address;
+			addr = instr.address + instr.size;
 			tmpbuffpos = 0;
 			trampoline_instruction_entry entry{ arm, instr, encountered_reglist, uses_thumb };
 
@@ -622,40 +592,12 @@ namespace alterhook
 				return dataloc;
 			};
 
-			auto iter = std::find_if(
-				branch_addresses.begin(), branch_addresses.end(),
-				[&](std::pair<uintptr_t, bool>& element) { return element.first == instr.address; }
-			);
-			if (iter != branch_addresses.end())
-			{
-				// can't branch inside an IT block
-				if (it_remaining)
-				{
-					memcpy(reinterpret_cast<void*>(tramp_addr), instr.bytes, instr.size);
-					throw(exceptions::invalid_it_block(
-						reinterpret_cast<std::byte*>(it_block),
-						it_original_address,
-						(tramp_addr + copy_size) - reinterpret_cast<uintptr_t>(it_block),
-						it_remaining,
-						target
-					));
-				}
-				if (uses_thumb != iter->second)
-					arm.switch_instruction_set();
-				uses_thumb = iter->second;
-				branch_addresses.erase(iter);
-			}
-
 			// handles the situation where an instruction that has a reglist operand is spotted
 			// and PC handling setup is currently active. we got to disable PC handling setup
-			// for safety reasons. if that's unecessary then all the instructions placed will
-			// be replaced with nop when modifying
-			if (entry.flags[M_REGLIST] && !should_setup_pc_handling)
+			// for safety reasons. The same applies to single register push/pop instructions
+			// as they interfere with the stack
+			if ((entry.flags[M_REGLIST] || instr.id == ARM_INS_PUSH || instr.id == ARM_INS_POP) && !should_setup_pc_handling)
 			{
-				tbm.flags.set(M_REGLIST);
-				tbm.reglist = build_reglist(instr);
-				final_pop = tbm_list.end();
-
 				if (uses_thumb)
 				{
 					if (it_remaining)
@@ -701,7 +643,7 @@ namespace alterhook
 
 				memcpy(&tmpbuff[tmpbuffpos], instr.bytes, instr.size);
 				
-				tbm.flags.reset(); tbm.flags.set(M_REGLIST);
+				tbm.flags.reset();
 				copy_source = tmpbuff.data();
 				should_setup_pc_handling = true;
 
@@ -824,11 +766,8 @@ namespace alterhook
 
 							if (uses_thumb)
 							{
-								if (finished && !should_setup_pc_handling) 
-								{
-									final_pop = tbm_list.end();
+								if (finished && !should_setup_pc_handling)
 									write_and_advance(THUMB_POP(r7), M_POP);
-								}
 								if (instr.detail->arm.cc != ARMCC_AL && instr.detail->arm.cc != ARMCC_UNDEF)
 								{
 									new (&tmpbuff[tmpbuffpos]) THUMB_IT(instr.detail->arm.cc);
@@ -857,7 +796,6 @@ namespace alterhook
 							throw(exceptions::pc_relative_handling_fail(reinterpret_cast<std::byte*>(instr.address), target));
 						if (!should_setup_pc_handling)
 						{
-							final_pop = tbm_list.end();
 							if (uses_thumb)
 								write_and_advance(THUMB_POP(r7), M_POP);
 							else
@@ -904,7 +842,7 @@ namespace alterhook
 					orig_push = reinterpret_cast<PUSH_REGLIST*>(tramp_addr);
 				push_found = true;
 			}
-			else if (entry.flags[M_TBM])
+			else if (entry.flags[M_TBM] || (instr.id == ARM_INS_ADR && uses_thumb))
 			{
 				copy_source = tmpbuff.data();
 
@@ -1045,12 +983,19 @@ namespace alterhook
 				}
 
 				// thumb adr is an exception
-				if (instr.id == ARM_INS_ADR && instr.size == sizeof(uint16_t))
+				if (instr.id == ARM_INS_ADR && uses_thumb)
 				{
-					copy_size -= 2;
+					copy_size -= instr.size;
 					reg_t reg = static_cast<reg_t>(__alterhook_reg_bitnum(instr.detail->regs_write[0]));
 					uint64_t imm = instr.detail->arm.operands[1].imm;
 					write_and_advance(THUMB2_ADD(reg, r7, imm), M_ADR);
+				}
+				else if (entry.flags[M_SMALL_LDR])
+				{
+					copy_size -= instr.size;
+					reg_t reg = static_cast<reg_t>(__alterhook_reg_bitnum(instr.detail->regs_write[0]));
+					uint32_t imm = instr.detail->arm.operands[1].mem.disp;
+					write_and_advance(THUMB2_LDR_IMM(reg, r7, static_cast<uint16_t>(imm)), M_SMALL_LDR);
 				}
 				else
 				{
@@ -1078,6 +1023,30 @@ namespace alterhook
 				--it_remaining;
 
 			instruction_sets.set(positions.size(), uses_thumb);
+			auto iter = std::find_if(
+				branch_addresses.begin(), branch_addresses.end(),
+				[&](std::pair<uintptr_t, bool>& element) { return element.first == (instr.address + instr.size); }
+			);
+			if (iter != branch_addresses.end())
+			{
+				// can't branch inside an IT block
+				if (it_remaining)
+				{
+					memcpy(reinterpret_cast<void*>(tramp_addr), instr.bytes, instr.size);
+					throw(exceptions::invalid_it_block(
+						reinterpret_cast<std::byte*>(it_block),
+						it_original_address,
+						(tramp_addr + copy_size) - reinterpret_cast<uintptr_t>(it_block),
+						it_remaining,
+						target
+					));
+				}
+				if (uses_thumb != iter->second)
+					arm.switch_instruction_set();
+				uses_thumb = iter->second;
+				branch_addresses.erase(iter);
+			}
+
 			positions.push_back({ instr.address - reinterpret_cast<uintptr_t>(target), tramp_pos });
 			memcpy(reinterpret_cast<void*>(tramp_addr), copy_source, copy_size);
 			tramp_pos += copy_size;
@@ -1097,11 +1066,11 @@ namespace alterhook
 				tbm.instr = tramp_addr + copy_size;
 				void* copy_dest = reinterpret_cast<void*>(tramp_begin + tramp_pos);
 				copy_size = 0;
+				tmpbuffpos = 0;
 				copy_source = tmpbuff.data();
 
 				if (!should_setup_pc_handling)
 				{
-					final_pop = tbm_list.end();
 					if (uses_thumb)
 					{
 						write_and_advance(THUMB_POP(r7), M_POP);
@@ -1172,8 +1141,6 @@ namespace alterhook
 			);
 			if (search_result == regs.end())
 				throw(exceptions::unused_register_not_found(target));
-			if (final_pop != tbm_list.begin())
-				final_pop->flags.set(M_FINAL_POP);
 			for (to_be_modified& tbm : tbm_list)
 				tbm.modify(*search_result);
 		}
@@ -1240,7 +1207,7 @@ namespace alterhook
 		size_t i = 0;
 		disassembler arm{ ptrampoline.get(), instruction_sets[0], false };
 
-		for (const cs_insn& instr : arm.disasm(tramp_size))
+		for (const cs_insn& instr : arm.disasm(tramp_size + 1))
 		{
 			if (instr.address != reinterpret_cast<uintptr_t>(ptrampoline.get()))
 				stream << '\n';
@@ -1250,7 +1217,7 @@ namespace alterhook
 			if ((i + 1) != positions.size())
 			{
 				auto [oldpos, newpos] = positions[i + 1];
-				if (newpos == (instr.address + instr.size))
+				if (newpos == ((instr.address - reinterpret_cast<uintptr_t>(ptrampoline.get())) + instr.size))
 				{
 					if (instruction_sets[i + 1] != instruction_sets[i])
 						arm.switch_instruction_set();

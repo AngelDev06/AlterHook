@@ -19,10 +19,9 @@ namespace alterhook
 			disassembler_iterator() {}
 			disassembler_iterator(
 				csh handle,
-				const std::byte* code,
-				size_t size,
-				uint64_t position = 0
-			) : handle(handle), code(code), size(size), address(reinterpret_cast<uintptr_t>(code))
+				const std::byte* orig_code,
+				size_t code_size
+			) : handle(handle), code(orig_code), size(code_size), address(reinterpret_cast<uintptr_t>(orig_code))
 			{
 				if (!size)
 					return;
