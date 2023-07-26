@@ -53,7 +53,7 @@ namespace alterhook
 	bool memory_block::is_valid_slot(memory_slot* pslot)
 	{
 		ptrdiff_t slot_offset = reinterpret_cast<uintptr_t>(pslot) - reinterpret_cast<uintptr_t>(this);
-		return slot_offset && !(slot_offset % memory_slot_size) && slot_offset < memory_slot_size;
+		return slot_offset && !(slot_offset % memory_slot_size) && slot_offset < memory_block_size;
 	}
 	#endif
 
@@ -103,7 +103,7 @@ namespace alterhook
 	}
 	#endif
 
-	#ifndef NDEBUG
+	#if !defined(NDEBUG) && utils_x86
 		#define __alterhook_return_pslot { auto pslottmp = pblock->get_slot(); \
 			pslottmp->buffer.fill(std::byte(0xCC)); return reinterpret_cast<std::byte*>(pslottmp); }
 	#else
