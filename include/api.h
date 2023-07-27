@@ -35,6 +35,9 @@ namespace alterhook
 		size_t count() const noexcept { return positions.size(); }
 		std::string str() const;
 	private:
+		#ifdef __alterhook_expose_impl
+		friend void process_frozen_threads(const trampoline& tramp, bool enable_hook, unsigned long& pc);
+		#endif
 		friend class hook;
 		friend class hook_chain;
 		struct deleter
@@ -53,6 +56,9 @@ namespace alterhook
 		#endif
 		bool patch_above = false;
 		size_t tramp_size = 0;
+		#if utils_arm
+		std::pair<bool, uint8_t> pc_handling{};
+		#endif
 		utils::static_vector<std::pair<uint8_t, uint8_t>, 8> positions{};
 	};
 }
