@@ -7,6 +7,8 @@
 #include "addresser.h"
 #include "buffer.h"
 #include "tools.h"
+#include "linux_thread_handler.h"
+#define __alterhook_expose_impl
 #include "api.h"
 
 namespace alterhook
@@ -491,7 +493,7 @@ namespace alterhook
 		positions.clear();
 		patch_above = false;
 		ptarget = target;
-		#ifndef NDEBUG
+		#if !defined(NDEBUG) && utils_arm
 		memset(ptrampoline.get(), 0, memory_slot_size);
 		#endif
 
@@ -848,6 +850,8 @@ namespace alterhook
 
 				if (should_setup_pc_handling)
 				{
+					if (!pc_handling.first)
+						pc_handling = { true, tramp_pos };
 					if (push_found)
 					{
 						tbm.orig_push = &orig_push;
@@ -1160,14 +1164,16 @@ namespace alterhook
 
 	trampoline::trampoline(const trampoline& other)
 		: ptarget(other.ptarget), ptrampoline(trampoline_buffer::allocate()), instruction_sets(other.instruction_sets),
-		patch_above(other.patch_above), tramp_size(other.tramp_size), positions(other.positions)
+		patch_above(other.patch_above), tramp_size(other.tramp_size), pc_handling(other.pc_handling),
+		positions(other.positions)
 	{
 		memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
 	}
 
 	trampoline::trampoline(trampoline&& other) noexcept
 		: ptarget(std::exchange(other.ptarget, nullptr)), ptrampoline(std::move(other.ptrampoline)), instruction_sets(other.instruction_sets),
-		patch_above(other.patch_above), tramp_size(other.tramp_size), positions(other.positions) {}
+		patch_above(other.patch_above), tramp_size(other.tramp_size), pc_handling(other.pc_handling),
+		positions(other.positions) {}
 
 	trampoline& trampoline::operator=(const trampoline& other)
 	{
@@ -1177,6 +1183,7 @@ namespace alterhook
 			instruction_sets = other.instruction_sets;
 			patch_above = other.patch_above;
 			tramp_size = other.tramp_size;
+			pc_handling = other.pc_handling;
 			positions = other.positions;
 			if (!ptrampoline)
 				ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
@@ -1194,6 +1201,7 @@ namespace alterhook
 			instruction_sets = other.instruction_sets;
 			patch_above = other.patch_above;
 			tramp_size = other.tramp_size;
+			pc_handling = other.pc_handling;
 			positions = other.positions;
 		}
 		return *this;
@@ -1228,8 +1236,71 @@ namespace alterhook
 		return stream.str();
 	}
 
-	void ALTERHOOK_HIDDEN process_frozen_threads(trampoline& tramp, bool enable_hook, unsigned long& pc)
+	void ALTERHOOK_HIDDEN process_frozen_threads(const trampoline& tramp, bool enable_hook, unsigned long& pc)
 	{
-
+		auto& [status, data] = thread_freezer::result;
+		uint8_t exceptpos = 0;
+		if (enable_hook)
+		{
+			const uintptr_t target = reinterpret_cast<uintptr_t>(tramp.ptarget) & ~1;
+			for (const auto [oldpos, newpos] : tramp.positions)
+			{
+				if (pc == (target + oldpos))
+				{
+					const uintptr_t dest = reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + newpos;
+					const uintptr_t pushloc = reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + tramp.pc_handling.second;
+					if (tramp.pc_handling.first && dest > pushloc)
+					{
+						bool expected = false;
+						if (status.compare_exchange_strong(
+							expected, true, std::memory_order_acq_rel, std::memory_order_acquire
+						))
+						{
+							exceptpos = oldpos;
+							goto PUT_EXCEPTION;
+						}
+						return;
+					}
+					pc = dest;
+					return;
+				}
+			}
+			return;
+		}
+		else
+		{
+			uint8_t prevpos = 0;
+			for (const auto [oldpos, newpos] : tramp.positions)
+			{
+				const uintptr_t dest = reinterpret_cast<uintptr_t>(tramp.ptarget) + oldpos;
+				const uintptr_t src = reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + newpos;
+				const uintptr_t prevsrc = reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + prevpos;
+				const uintptr_t pushloc = reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + tramp.pc_handling.second;
+				if (pc <= src && pc >= prevsrc)
+				{
+					if (pc < src || (tramp.pc_handling.first && pc > pushloc))
+					{
+						bool expected = false;
+						if (status.compare_exchange_strong(
+							expected, true, std::memory_order_acq_rel, std::memory_order_acquire
+						))
+						{
+							exceptpos = static_cast<uint8_t>(pc - reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()));
+							goto PUT_EXCEPTION;
+						}
+						return;
+					}
+					pc = dest;
+					return;
+				}
+				prevpos = newpos;
+			}
+			return;
+		}
+	PUT_EXCEPTION:
+		auto& [ptramp, ptarget, pos] = data;
+		ptramp = tramp.ptrampoline.get();
+		ptarget = tramp.ptarget;
+		pos = exceptpos;
 	}
 }

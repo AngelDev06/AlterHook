@@ -150,7 +150,7 @@ namespace alterhook
 		}
 	}
 
-	void process_frozen_threads(trampoline& tramp, bool enable_hook, unsigned long& pc);
+	void process_frozen_threads(const trampoline& tramp, bool enable_hook, unsigned long& pc);
 
 	size_t thread_freezer::ref_count = 0;
 	std::mutex thread_freezer::ref_count_lock{};
@@ -158,7 +158,7 @@ namespace alterhook
 	std::shared_mutex thread_freezer::freezer_lock{};
 	bool thread_freezer::should_suspend = false;
 	struct sigaction thread_freezer::old_action {};
-	std::pair<trampoline*, bool> thread_freezer::args{};
+	std::pair<const trampoline*, bool> thread_freezer::args{};
 	std::pair<std::atomic_bool, std::tuple<std::byte*, std::byte*, size_t>> thread_freezer::result{};
 
 	void thread_freezer::scan_threads()
@@ -238,7 +238,7 @@ namespace alterhook
 			processed_threads_count.fetch_add(1, std::memory_order_acq_rel);
 	}
 
-	void thread_freezer::init(trampoline& tramp, bool enable_hook)
+	void thread_freezer::init(const trampoline& tramp, bool enable_hook)
 	{
 		// read only operation, it can work in parallel
 		scan_threads();
