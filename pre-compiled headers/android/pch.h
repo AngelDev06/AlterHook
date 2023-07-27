@@ -10,6 +10,7 @@
 #include <shared_mutex>
 #include <atomic>
 #include <sys/mman.h>
+#include <sys/cachectl.h>
 #include <signal.h>
 #include <sstream>
 #include <iomanip>

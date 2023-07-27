@@ -372,6 +372,8 @@ namespace utils
 			{ \
 				typedef ret cc type(args...) exception; \
 			};
+		#define __utils_lambda_to_fn(cc, cv, ref, exception) \
+			__utils_lambda_to_fn_overloads( , cv, ref, exception)
 		#define __utils_lambda_to_fn__cdecl(cc, cv, ref, exception) \
 			__utils_lambda_to_fn_overloads(cc, cv, ref, exception)
 		#define __utils_lambda_to_fn__clrcall(cc, cv, ref, exception) \

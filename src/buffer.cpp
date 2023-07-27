@@ -10,7 +10,7 @@ namespace alterhook
 	constexpr size_t memory_block_size = 0x1000;
 	constexpr size_t max_memory_range = 0x40000000;
 	#else
-	const auto memory_block_size = sysconf(_SC_PAGE_SIZE);
+	inline const auto memory_block_size = sysconf(_SC_PAGE_SIZE);
 	#endif
 	// to enforce thread safety on allocations & deallocations
 	static std::mutex buffer_lock;

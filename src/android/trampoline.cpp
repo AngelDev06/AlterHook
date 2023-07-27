@@ -20,6 +20,8 @@ namespace alterhook
 		trampoline_buffer::deallocate(ptrampoline);
 	}
 
+	std::pair<bool, int> get_prot(const std::byte* address);
+
 	inline namespace init_impl
 	{
 		enum instruction_set
@@ -485,7 +487,8 @@ namespace alterhook
 	{
 		if (ptarget == target)
 			return;
-		if (!is_executable_address(target))
+		auto [status, value] = get_prot(target);
+		if (!status || !(value & PROT_EXEC))
 			throw(exceptions::invalid_address(target));
 		if (!ptrampoline)
 			ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
@@ -493,6 +496,7 @@ namespace alterhook
 		positions.clear();
 		patch_above = false;
 		ptarget = target;
+		old_protect = value;
 		#if !defined(NDEBUG) && utils_arm
 		memset(ptrampoline.get(), 0, memory_slot_size);
 		#endif
@@ -1165,7 +1169,7 @@ namespace alterhook
 	trampoline::trampoline(const trampoline& other)
 		: ptarget(other.ptarget), ptrampoline(trampoline_buffer::allocate()), instruction_sets(other.instruction_sets),
 		patch_above(other.patch_above), tramp_size(other.tramp_size), pc_handling(other.pc_handling),
-		positions(other.positions)
+		positions(other.positions), old_protect(other.old_protect)
 	{
 		memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
 	}
@@ -1173,7 +1177,7 @@ namespace alterhook
 	trampoline::trampoline(trampoline&& other) noexcept
 		: ptarget(std::exchange(other.ptarget, nullptr)), ptrampoline(std::move(other.ptrampoline)), instruction_sets(other.instruction_sets),
 		patch_above(other.patch_above), tramp_size(other.tramp_size), pc_handling(other.pc_handling),
-		positions(other.positions) {}
+		positions(other.positions), old_protect(other.old_protect) {}
 
 	trampoline& trampoline::operator=(const trampoline& other)
 	{
@@ -1185,6 +1189,7 @@ namespace alterhook
 			tramp_size = other.tramp_size;
 			pc_handling = other.pc_handling;
 			positions = other.positions;
+			old_protect = other.old_protect;
 			if (!ptrampoline)
 				ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
 			memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
@@ -1203,6 +1208,7 @@ namespace alterhook
 			tramp_size = other.tramp_size;
 			pc_handling = other.pc_handling;
 			positions = other.positions;
+			old_protect = other.old_protect;
 		}
 		return *this;
 	}

@@ -17,6 +17,7 @@
 #include <string_view>
 #include <memory>
 #include <bitset>
+#include <array>
 #if utils_cpp20
 #include <bit>
 #else
