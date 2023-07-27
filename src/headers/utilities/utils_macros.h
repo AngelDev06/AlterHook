@@ -191,12 +191,17 @@
 #endif
 
 // These are used for code generation purposes
-#define __utils_non_member_call(fn, cv, ref, exception) \
-	__utils_emit_cdecl(fn, cv, ref, exception) \
-	__utils_emit_clrcall(fn, cv, ref, exception) \
-	__utils_emit_fastcall(fn, cv, ref, exception) \
-	__utils_emit_stdcall(fn, cv, ref, exception) \
-	__utils_emit_vectorcall(fn, cv, ref, exception)
+#if utils_windows
+	#define __utils_non_member_call(fn, cv, ref, exception) \
+		__utils_emit_cdecl(fn, cv, ref, exception) \
+		__utils_emit_clrcall(fn, cv, ref, exception) \
+		__utils_emit_fastcall(fn, cv, ref, exception) \
+		__utils_emit_stdcall(fn, cv, ref, exception) \
+		__utils_emit_vectorcall(fn, cv, ref, exception)
+#else
+	#define __utils_non_member_call(fn, cv, ref, exception) \
+		fn( , cv, ref, exception)
+#endif
 
 #define __utils_non_member_call_cv(fn, ref, exception) \
 	__utils_non_member_call(fn, , ref, exception) \
@@ -213,13 +218,18 @@
 	__utils_non_member_call_cv_ref(fn, ) \
 	__utils_non_member_call_cv_ref(fn, noexcept)
 
-#define __utils_member_call(fn, cv, ref, exception) \
-	__utils_emit_cdecl(fn, cv, ref, exception) \
-	__utils_emit_clrcall(fn, cv, ref, exception) \
-	__utils_emit_fastcall(fn, cv, ref, exception) \
-	__utils_emit_stdcall(fn, cv, ref, exception) \
-	__utils_emit_thiscall(fn, cv, ref, exception) \
-	__utils_emit_vectorcall(fn, cv, ref, exception)
+#if utils_windows
+	#define __utils_member_call(fn, cv, ref, exception) \
+		__utils_emit_cdecl(fn, cv, ref, exception) \
+		__utils_emit_clrcall(fn, cv, ref, exception) \
+		__utils_emit_fastcall(fn, cv, ref, exception) \
+		__utils_emit_stdcall(fn, cv, ref, exception) \
+		__utils_emit_thiscall(fn, cv, ref, exception) \
+		__utils_emit_vectorcall(fn, cv, ref, exception)
+#else
+	#define __utils_member_call(fn, cv, ref, exception) \
+		fn( , cv, ref, exception)
+#endif
 
 #define __utils_member_call_cv(fn, ref, exception) \
 	__utils_member_call(fn, , ref, exception) \

@@ -6,8 +6,17 @@
 #include "linux_thread_handler.h"
 namespace fs = std::filesystem;
 
+#ifdef __GNUC__
+	#define __alterhook_flush_cache(address, size) \
+		__builtin___clear_cache(reinterpret_cast<char*>(address), reinterpret_cast<char*>(address) + size)
+#else
+	#define __alterhook_flush_cache(address, size) cacheflush(reinterpret_cast<uintptr_t>(address), size, 0)
+#endif
+
 namespace alterhook
 {
+	extern const long memory_block_size;
+
 	static ALTERHOOK_HIDDEN cs_insn* disasm_one(csh& handle, const std::byte target[], uint64_t address = 0)
 	{
 		cs_insn* instr = nullptr;
@@ -146,6 +155,14 @@ namespace alterhook
 				<< reinterpret_cast<uintptr_t>(m_trampoline_address) << "\ntarget address: 0x"
 				<< std::setfill('0') << std::setw(8) << reinterpret_cast<uintptr_t>(m_target_address)
 				<< "\nposition: " << std::dec << m_position;
+			return stream.str();
+		}
+
+		std::string mprotect_exception::error_function() const
+		{
+			std::stringstream stream;
+			stream << "mprotect(" << std::hex << std::setfill('0') << std::setw(8) << reinterpret_cast<uintptr_t>(m_address)
+				<< ", " << std::dec << m_length << ", " << m_protection << ')';
 			return stream.str();
 		}
 	}
@@ -291,11 +308,10 @@ namespace alterhook
 		}
 	}
 
-	bool is_executable_address(const void* address)
+	std::pair<bool, int> ALTERHOOK_HIDDEN get_prot(const std::byte* address)
 	{
 		std::ifstream maps{ "/proc/self/maps" };
-		if (!maps.is_open())
-			return false;
+		utils_assert(maps.is_open(), "get_prot: couldn't open `/proc/self/maps`");
 
 		do
 		{
@@ -309,15 +325,92 @@ namespace alterhook
 			if (reinterpret_cast<uintptr_t>(address) >= begin_address && reinterpret_cast<uintptr_t>(address) < end_address)
 			{
 				char perms[5]{};
+				int result = PROT_NONE;
 				maps >> perms;
+
+				if (perms[0] == 'r')
+					result |= PROT_READ;
+				if (perms[1] == 'w')
+					result |= PROT_WRITE;
 				if (perms[2] == 'x')
-					return true;
-				return false;
+					result |= PROT_EXEC;
+				return { true, result };
 			}
 
 			maps.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 		} while (maps.good());
 
+		return { false, PROT_NONE };
+	}
+
+	bool is_executable_address(const void* address)
+	{
+		auto [status, value] = get_prot(static_cast<const std::byte*>(address));
+		if (status && (value & PROT_EXEC))
+			return true;
 		return false;
+	}
+
+	void ALTERHOOK_HIDDEN inject_to_target(std::byte* target, const std::byte* backup_or_detour, bool patch_above, bool enable, int old_protect)
+	{
+		utils_assert(target, "inject_to_target: no target address specified");
+		utils_assert(backup_or_detour, "inject_to_target: no backup or detour specified");
+		const bool uses_thumb = reinterpret_cast<uintptr_t>(target) & 1;
+		reinterpret_cast<uintptr_t&>(target) &= ~1;
+		const std::array patch_info = { 
+			std::pair(target, reinterpret_cast<uintptr_t>(target) % 4 ? sizeof(FULL_JMP_ABS) + 2 : sizeof(FULL_JMP_ABS)),
+			std::pair(target - sizeof(uint32_t), sizeof(FULL_JMP_ABS))
+		};
+		auto [address, size] = patch_info[patch_above];
+		std::byte* const prot_addr = reinterpret_cast<std::byte*>(utils_align(reinterpret_cast<uintptr_t>(address), memory_block_size));
+		const size_t prot_len = utils_align((address - prot_addr) + size + (memory_block_size - 1), memory_block_size);
+		constexpr int protection = PROT_READ | PROT_WRITE | PROT_EXEC;
+
+		if (mprotect(prot_addr, prot_len, protection) == -1)
+			throw(exceptions::mprotect_exception(errno, prot_addr, prot_len, protection));
+		if (enable)
+		{
+			std::byte buffer[sizeof(FULL_JMP_ABS) + 2]{};
+			if (uses_thumb)
+			{
+				if (patch_above)
+				{
+					THUMB2_JMP_ABS tjmp{};
+					tjmp.set_offset(address - reinterpret_cast<std::byte*>(utils_align(reinterpret_cast<uintptr_t>(target) + 4, 4)));
+					new (buffer) auto(backup_or_detour);
+					new (&buffer[sizeof(backup_or_detour)]) auto(tjmp);
+				}
+				else
+				{
+					if (reinterpret_cast<uintptr_t>(target) % 4)
+					{
+						THUMB2_JMP_ABS tjmp{};
+						tjmp.set_offset(2);
+						new (buffer) auto(tjmp);
+						new (&buffer[sizeof(tjmp) + 2]) auto(backup_or_detour);
+					}
+					else
+						new (buffer) THUMB2_FULL_JMP_ABS(reinterpret_cast<uintptr_t>(backup_or_detour));
+				}
+			}
+			else
+			{
+				if (patch_above)
+				{
+					JMP_ABS jmp{};
+					jmp.set_offset(address - (target + 8));
+					new (buffer) auto(backup_or_detour);
+					new (&buffer[sizeof(backup_or_detour)]) auto(jmp);
+				}
+				else
+					new (buffer) FULL_JMP_ABS(reinterpret_cast<uintptr_t>(backup_or_detour));
+			}
+			memcpy(address, buffer, size);
+		}
+		else
+			memcpy(address, backup_or_detour, size);
+
+		mprotect(prot_addr, prot_len, old_protect);
+		__alterhook_flush_cache(address, size);
 	}
 }

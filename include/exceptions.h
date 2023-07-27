@@ -89,7 +89,7 @@ namespace alterhook::exceptions
 		private:
 			__alterhook_add_uih_field
 			std::byte m_instr[24]{};
-			)
+		)
 
 		#if utils_arm
 		utils_generate_exception(
@@ -275,6 +275,20 @@ namespace alterhook::exceptions
 				(uint64_t, flag)
 			),
 			const char* what() const noexcept override { return "An exception occurred when trying to setup the signal handler"; }
+			std::string error_function() const override;
+		)
+
+		utils_generate_exception(
+			mprotect_exception, os_exception,
+			(
+				(const void*, address),
+				(size_t, length),
+				(int, protection)
+			),
+			(
+				(uint64_t, flag)
+			),
+			const char* what() const noexcept override { return "An exception occured when changing the protection of a memory page"; }
 			std::string error_function() const override;
 		)
 		#endif

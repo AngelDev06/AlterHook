@@ -32,19 +32,19 @@ namespace alterhook
 
 	#if utils_cpp20
 	template <utils::callable_type T> requires(!utils::stl_function_type<T>)
-	constexpr void* get_target_address(T&& fn) noexcept
+	constexpr std::byte* get_target_address(T&& fn) noexcept
 	#else
 	template <typename T>
-	constexpr std::enable_if_t<utils::callable_type<T> && !utils::stl_function_type<T>, void*> get_target_address(T&& fn) noexcept
+	constexpr std::enable_if_t<utils::callable_type<T> && !utils::stl_function_type<T>, std::byte*> get_target_address(T&& fn) noexcept
 	#endif
 	{
 		typedef utils::remove_cvref_t<T> fn_t;
 		if constexpr (utils::member_function_type<fn_t>)
-			return reinterpret_cast<void*>(addresser::address_of(fn));
-		else if constexpr (utils::fn_object_v<fn_t>)
-			return reinterpret_cast<void*>(addresser::address_of(&fn_t::operator()));
+			return reinterpret_cast<std::byte*>(addresser::address_of(fn));
+		else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
+			return reinterpret_cast<std::byte*>(addresser::address_of(&fn_t::operator()));
 		else
-			return static_cast<void*>(fn);
+			return reinterpret_cast<std::byte*>(fn);
 	}
 
 	#if utils_cpp20
@@ -84,5 +84,29 @@ namespace alterhook
 			return static_cast<final_fn_type>(obj);
 		}
 		#endif
+
+		struct original
+		{
+			virtual original& operator=(std::nullptr_t null) = 0;
+			virtual original& operator=(std::byte* address) = 0;
+		};
+		template <typename T>
+		struct original_wrapper : original
+		{
+			T& val;
+
+			original_wrapper(T& orig) : val(orig) {}
+			original_wrapper& operator=(std::nullptr_t null) override 
+			{ 
+				val = null; 
+				return *this;
+			}
+			original_wrapper& operator=(std::byte* address) override
+			{
+				val = function_cast<T>(address);
+				return *this;
+			}
+		};
+		typedef std::aligned_storage_t<sizeof(original_wrapper<std::function<void()>>), alignof(original_wrapper<std::function<void()>>)> orig_buff_t;
 	}
 }
