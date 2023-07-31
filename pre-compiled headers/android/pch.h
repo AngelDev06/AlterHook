@@ -5,6 +5,7 @@
 #include <capstone/capstone.h>
 #include <array>
 #include <vector>
+#include <list>
 #include <unistd.h>
 #include <mutex>
 #include <shared_mutex>
