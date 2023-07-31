@@ -413,4 +413,22 @@ namespace alterhook
 		mprotect(prot_addr, prot_len, old_protect);
 		__alterhook_flush_cache(address, size);
 	}
+
+	void ALTERHOOK_HIDDEN patch_jmp(std::byte* target, const std::byte* detour, bool patch_above, int old_protect)
+	{
+		utils_assert(target, "patch_jmp: no target address specified");
+		utils_assert(detour, "patch_jmp: no detour specified");
+		reinterpret_cast<uintptr_t&>(target) &= ~1;
+		std::byte* address = patch_above ? target - sizeof(uint32_t) :
+			reinterpret_cast<uintptr_t>(target) % 4 ? target + sizeof(JMP_ABS) + 2 : target + sizeof(JMP_ABS);
+		std::byte* const prot_addr = reinterpret_cast<std::byte*>(utils_align(reinterpret_cast<uintptr_t>(address), memory_block_size));
+		const size_t prot_len = utils_align((address - prot_addr) + sizeof(uint32_t) + (memory_block_size - 1), memory_block_size);
+		constexpr int protection = PROT_READ | PROT_WRITE | PROT_EXEC;
+
+		if (mprotect(prot_addr, prot_len, protection) == -1)
+			throw(exceptions::mprotect_exception(errno, prot_addr, prot_len, protection));	
+		*reinterpret_cast<uint32_t*>(address) = reinterpret_cast<uintptr_t>(detour);
+		mprotect(prot_addr, prot_len, protection);
+		__alterhook_flush_cache(address, sizeof(uint32_t));
+	}
 }

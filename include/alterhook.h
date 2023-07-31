@@ -18,6 +18,7 @@
 #include <memory>
 #include <bitset>
 #include <array>
+#include <list>
 #if utils_cpp20
 #include <bit>
 #else
