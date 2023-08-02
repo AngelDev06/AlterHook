@@ -1,6 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#if utils_clang
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
+#endif
 
 namespace alterhook::exceptions
 {
@@ -39,7 +43,7 @@ namespace alterhook::exceptions
 		int m_flag = 0;
 	public:
 		disassembler_exception(const std::byte* target, int flag) 
-			: std::exception(), m_target(target), m_flag(flag) {}
+			: std::exception(), m_flag(flag), m_target(target) {}
 		const char* get_error_string() const noexcept;
 		const char* what() const noexcept override { return "An exception occurred with the disassembler"; }
 	)
@@ -105,7 +109,7 @@ namespace alterhook::exceptions
 			std::string it_str() const;
 			size_t instruction_count() const;
 			it_block_exception(const std::byte it_block[], uintptr_t address, size_t size, size_t remaining, const std::byte* target)
-				: trampoline_exception(target), m_it_address(address), m_size(size), m_remaining_instructions(remaining)
+				: trampoline_exception(target), m_size(size), m_it_address(address), m_remaining_instructions(remaining)
 			{ 
 				memcpy(m_buffer, it_block, size); 
 			}
@@ -319,3 +323,7 @@ namespace alterhook::exceptions
 		)
 	}
 }
+
+#if utils_clang
+#pragma clang diagnostic pop
+#endif

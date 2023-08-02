@@ -68,6 +68,27 @@ namespace alterhook
 			return reinterpret_cast<utils::unwrap_stl_function_t<fn_t>>(address);
 	}
 
+	#if utils_cpp20
+	template <utils::function_type T>
+	auto function_cast(const void* address) noexcept
+	#else
+	template <typename T>
+	auto function_cast(std::enable_if_t<utils::function_type<T>, const void*> address) noexcept
+	#endif
+	{
+		typedef utils::remove_cvref_t<T> fn_t;
+		if constexpr (utils::member_function_type<fn_t>)
+		{
+			T val{ nullptr };
+			reinterpret_cast<void*&>(val) = const_cast<void*>(address);
+			return val;
+		}
+		else if constexpr (std::is_function_v<utils::clean_type_t<T>>)
+			return reinterpret_cast<std::add_pointer_t<T>>(const_cast<void*>(address));
+		else
+			return reinterpret_cast<utils::unwrap_stl_function_t<fn_t>>(const_cast<void*>(address));
+	}
+
 	namespace helpers
 	{
 		#if utils_cc_assertions
@@ -88,7 +109,7 @@ namespace alterhook
 		struct original
 		{
 			virtual original& operator=(std::nullptr_t null) = 0;
-			virtual original& operator=(std::byte* address) = 0;
+			virtual original& operator=(const std::byte* address) = 0;
 		};
 		template <typename T>
 		struct original_wrapper : original
@@ -101,7 +122,7 @@ namespace alterhook
 				val = null; 
 				return *this;
 			}
-			original_wrapper& operator=(std::byte* address) override
+			original_wrapper& operator=(const std::byte* address) override
 			{
 				val = function_cast<T>(address);
 				return *this;

@@ -2,6 +2,12 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 
+#if utils_clang
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
+
 // all of the following are used to make asm generation look nicer than a mess of hardcoded constants
 namespace alterhook
 {
@@ -594,3 +600,7 @@ namespace alterhook
 		constexpr it_cond get_fourth_condition() { return ((instr >> 1) & 1) == ((instr >> 4) & 1) ? T : E; }
 	};
 }
+
+#if utils_clang
+#pragma clang diagnostic pop
+#endif

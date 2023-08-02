@@ -23,7 +23,7 @@ namespace alterhook
 		size_t size = 24;
 		auto buffer = reinterpret_cast<const uint8_t*>(target);
 		if (
-			handle = cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle) ||
+			(handle = cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle)) ||
 			!(instr = cs_malloc(handle)) ||
 			!cs_disasm_iter(handle, &buffer, &size, &address, instr)
 		)
