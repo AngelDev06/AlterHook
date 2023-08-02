@@ -397,6 +397,11 @@ namespace alterhook
 					check_branch_instructions();
 			}
 
+			#if utils_clang
+			#pragma clang diagnostic push
+			#pragma clang diagnostic ignored "-Wswitch"
+			#endif
+
 			void add_mem_pc_encoding(cs_arm_op& operand)
 			{
 				switch (operand.mem.format)
@@ -421,6 +426,10 @@ namespace alterhook
 					break;
 				}
 			}
+
+			#if utils_clang
+			#pragma clang diagnostic pop
+			#endif
 
 			void handle_pc_rel_instructions()
 			{
@@ -472,7 +481,7 @@ namespace alterhook
 				const cs_insn& instr,
 				std::bitset<16>& encountered_reglist,
 				bool thumb
-			) : arm(arm), instr(instr), encountered_reglist(encountered_reglist), next_instr_set(static_cast<instruction_set>(thumb))
+			) : arm(arm), instr(instr), next_instr_set(static_cast<instruction_set>(thumb)), encountered_reglist(encountered_reglist)
 			{
 				if (thumb)
 					thumb_calculate_branch_dest();
@@ -511,7 +520,6 @@ namespace alterhook
 		uintptr_t pc_loc = 0;
 		const size_t size_needed = uses_thumb && (reinterpret_cast<uintptr_t>(target) % 4) 
 			? sizeof(FULL_JMP_ABS) + 2 : sizeof(FULL_JMP_ABS);
-		uint8_t pc_offset = 0;
 		std::bitset<16> encountered_reglist{};
 		std::bitset<memory_slot_size> used_locations{};
 		size_t last_unused_pos = 0;
@@ -1169,7 +1177,7 @@ namespace alterhook
 	trampoline::trampoline(const trampoline& other)
 		: ptarget(other.ptarget), ptrampoline(trampoline_buffer::allocate()), instruction_sets(other.instruction_sets),
 		patch_above(other.patch_above), tramp_size(other.tramp_size), pc_handling(other.pc_handling),
-		positions(other.positions), old_protect(other.old_protect)
+		old_protect(other.old_protect), positions(other.positions)
 	{
 		memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
 	}
@@ -1177,7 +1185,7 @@ namespace alterhook
 	trampoline::trampoline(trampoline&& other) noexcept
 		: ptarget(std::exchange(other.ptarget, nullptr)), ptrampoline(std::move(other.ptrampoline)), instruction_sets(other.instruction_sets),
 		patch_above(other.patch_above), tramp_size(other.tramp_size), pc_handling(other.pc_handling),
-		positions(other.positions), old_protect(other.old_protect) {}
+		old_protect(other.old_protect), positions(other.positions) {}
 
 	trampoline& trampoline::operator=(const trampoline& other)
 	{
@@ -1217,9 +1225,9 @@ namespace alterhook
 	{
 		utils_assert(ptarget, "Attempt to disassemble an uninitialized trampoline");
 		std::stringstream stream;
-		bool uses_thumb = instruction_sets[0];
+		const bool uses_thumb = instruction_sets[0];
 		size_t i = 0;
-		disassembler arm{ ptrampoline.get(), instruction_sets[0], false };
+		disassembler arm{ ptrampoline.get(), uses_thumb, false };
 
 		for (const cs_insn& instr : arm.disasm(tramp_size + 1))
 		{
@@ -1241,6 +1249,11 @@ namespace alterhook
 		}
 		return stream.str();
 	}
+
+	#if utils_clang
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wrange-loop-construct"
+	#endif
 
 	void ALTERHOOK_HIDDEN process_frozen_threads(const trampoline& tramp, bool enable_hook, unsigned long& pc)
 	{
@@ -1309,4 +1322,8 @@ namespace alterhook
 		ptarget = tramp.ptarget;
 		pos = exceptpos;
 	}
+
+	#if utils_clang
+	#pragma clang diagnostic pop
+	#endif
 }

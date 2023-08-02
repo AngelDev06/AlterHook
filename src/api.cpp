@@ -18,11 +18,11 @@ namespace alterhook
 	#define __alterhook_inject(backup_or_detour, enable) \
 		inject_to_target(ptarget, backup_or_detour, patch_above, enable, old_protect)
 	#define __alterhook_inject_base_node(backup_or_detour, enable) \
-		inject_to_target(chain.ptarget, backup_or_detour, chain.patch_above, enable, chain.old_protect)
+		inject_to_target(pchain->ptarget, backup_or_detour, pchain->patch_above, enable, pchain->old_protect)
 	#define __alterhook_patch_jmp(detour) \
 		patch_jmp(ptarget, detour, patch_above, old_protect)
 	#define __alterhook_patch_base_node_jmp(detour) \
-		patch_jmp(chain.ptarget, detour, chain.patch_above, chain.old_protect)
+		patch_jmp(pchain->ptarget, detour, pchain->patch_above, pchain->old_protect)
 	#define __alterhook_set_base_node_prelay(pdetour)
 	#endif
 
@@ -139,34 +139,186 @@ namespace alterhook
 		}
 	}
 
+	hook_chain::hook_chain(alterhook::hook&& other) : trampoline(std::move(other))
+	{
+		memcpy(backup.data(), other.backup.data(), backup.size());
+		__alterhook_def_thumb_var(ptarget);
+		hook::iterator itr = disabled.emplace(disabled.end());
+		itr->init(*this, itr, other.pdetour, __alterhook_add_thumb_bit(ptrampoline.get()), other.original_buffer);
+	}
+
+	hook_chain::hook_chain(const hook_chain& other)
+		: trampoline(other)
+	{
+		memcpy(backup.data(), other.backup.data(), backup.size());
+		for (const hook& h : other)
+		{
+			hook::iterator itr = disabled.emplace(disabled.end());
+			itr->init(*this, itr, h.pdetour, h.poriginal, h.origbuff);
+		}
+	}
+
+	hook_chain::hook_chain(hook_chain&& other) noexcept
+		: trampoline(std::move(other)), disabled(std::move(other.disabled)), enabled(std::move(other.enabled)), starts_enabled(other.starts_enabled)
+	{
+		for (hook& h : *this)
+			h.pchain = this;
+	}
+
+	hook_chain::~hook_chain() noexcept
+	try
+	{
+		clear();
+	} catch (...) {}
+
 	void hook_chain::init_chain()
 	{
 		std::unique_lock lock{ hook_lock };
 		thread_freezer freeze{ *this, true };
-		__alterhook_inject(std::prev(enabled.end())->pdetour, true);
+		__alterhook_inject(enabled.back().pdetour, true);
+	}
+
+	void hook_chain::clear()
+	{
+		if (empty())
+			return;
+		if (!enabled.empty())
+		{
+			std::unique_lock lock{ hook_lock };
+			thread_freezer freeze{ *this, false };
+			__alterhook_inject(backup.data(), false);
+		}
+		enabled.clear();
+		disabled.clear();
+		starts_enabled = false;
+	}
+
+	void hook_chain::enable_all()
+	{
+		if (disabled.empty())
+			return;
+		if (enabled.empty())
+		{
+			reverse_list_iterator rbegin = disabled.rbegin();
+			__alterhook_def_thumb_var(ptarget);
+			rbegin->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+			*rbegin->origwrap = rbegin->poriginal;
+			{
+				std::unique_lock lock{ hook_lock };
+				thread_freezer freeze{ *this, true };
+				__alterhook_inject(rbegin->pdetour, true);
+			}
+			rbegin->enabled = true;
+
+			for (auto prev = rbegin, itr = std::next(rbegin), enditr = disabled.rend(); itr != enditr; ++itr, ++prev)
+			{
+				itr->enabled = true;
+				itr->poriginal = prev->poriginal;
+				*itr->origwrap = prev->poriginal;
+				prev->poriginal = itr->pdetour;
+				*prev->origwrap = itr->pdetour;
+			}
+			enabled.splice(enabled.begin(), disabled);
+		}
+		else
+		{
+			hook::iterator previtr = std::prev(disabled.end());
+			hook& dlast = *previtr;
+			// if disabled doesn't have other then we got to touch the target
+			if (!dlast.has_other)
+			{
+				hook& elast = enabled.back();
+				dlast.poriginal = elast.pdetour;
+				*dlast.origwrap = elast.pdetour;
+				dlast.enabled = true;
+				elast.has_other = false;
+				__alterhook_set_base_node_prelay(dlast.pdetour);
+				#if !utils_windows64
+				std::unique_lock lock{ hook_lock };
+				__alterhook_patch_jmp(dlast.pdetour);
+				#endif
+				enabled.splice(enabled.end(), disabled, previtr);
+			}
+
+			while (!disabled.empty())
+			{
+				hook::iterator curritr = std::prev(disabled.end());
+				hook::iterator trgitr = previtr;
+				hook& curr = *curritr;
+				
+				if (curr.has_other)
+				{
+					if (curr.other != enabled.begin())
+						std::prev(curr.other)->has_other = false;
+					trgitr = curr.other;
+					curr.has_other = false;
+				}
+
+				hook& trg = *trgitr;
+				curr.poriginal = trg.poriginal;
+				*curr.origwrap = trg.poriginal;
+				trg.poriginal = curr.pdetour;
+				*trg.origwrap = curr.pdetour;
+				curr.enabled = true;
+				enabled.splice(trgitr, disabled, curritr);
+				previtr = curritr;
+			}
+		}
+	}
+
+	void hook_chain::disable_all()
+	{
+		if (enabled.empty())
+			return;
+
+		{
+			std::unique_lock lock{ hook_lock };
+			thread_freezer freeze{ *this, false };
+			__alterhook_inject(backup.data(), false);
+		}
+
+		hook::iterator previtr = disabled.end();
+		while (!enabled.empty())
+		{
+			hook::iterator curritr = std::prev(enabled.end());
+			hook::iterator trgitr = previtr;
+			hook& curr = *curritr;
+
+			if (curr.has_other)
+			{
+				if (curr.other != disabled.begin())
+					std::prev(curr.other)->has_other = false;
+				trgitr = curr.other;
+				curr.has_other = false;
+			}
+
+			curr.enabled = false;
+			disabled.splice(trgitr, enabled, curritr);
+			previtr = curritr;
+		}
 	}
 
 	void hook_chain::hook::enable()
 	{
-		utils_assert(chain.ptarget != pdetour, "hook_chain::hook::enable: target & detour have the same address");
+		utils_assert(pchain->ptarget != pdetour, "hook_chain::hook::enable: target & detour have the same address");
 		if (enabled)
 			return;
 		iterator target{};
 		// re-setup if empty
-		if (chain.enabled.empty())
+		if (pchain->enabled.empty())
 		{
 			{
-				__alterhook_def_thumb_var(chain.ptarget);
-				poriginal = __alterhook_add_thumb_bit(chain.ptrampoline.get());
+				__alterhook_def_thumb_var(pchain->ptarget);
+				poriginal = __alterhook_add_thumb_bit(pchain->ptrampoline.get());
 				*origwrap = poriginal;
 				std::unique_lock lock{ hook_lock };
-				thread_freezer freeze{ chain, true };
+				thread_freezer freeze{ *pchain, true };
 				__alterhook_set_base_node_prelay(pdetour);
 				__alterhook_inject_base_node(__alterhook_get_real_dtr(), true);
 			}
 			other = std::next(current);
-			has_other = other != chain.disabled.end();
-			target = chain.enabled.end();
+			has_other = other != pchain->disabled.end();
+			target = pchain->enabled.end();
 		}
 		else
 		{
@@ -178,17 +330,17 @@ namespace alterhook
 			{
 				iterator result = std::next(current);
 				new_other = result;
-				new_has_other = result != chain.disabled.end();
-				while (result != chain.disabled.end() && !result->has_other)
+				new_has_other = result != pchain->disabled.end();
+				while (result != pchain->disabled.end() && !result->has_other)
 					++result;
-				target = result == chain.disabled.end() ? chain.enabled.end() : result->other;
+				target = result == pchain->disabled.end() ? pchain->enabled.end() : result->other;
 			}
 			else
 				target = other;
 			
-			if (target == chain.enabled.end())
+			if (target == pchain->enabled.end())
 			{
-				poriginal = reinterpret_cast<std::byte*>(*chain.base);
+				poriginal = pchain->enabled.back().pdetour;
 				*origwrap = poriginal;
 				__alterhook_set_base_node_prelay(pdetour);
 				#if !utils_windows64
@@ -209,7 +361,7 @@ namespace alterhook
 		}
 
 		// put current as other on prev if needed
-		if (current != chain.disabled.begin())
+		if (current != pchain->disabled.begin())
 		{
 			iterator prev = std::prev(current);
 			if (!prev->has_other)
@@ -218,16 +370,18 @@ namespace alterhook
 				prev->other = current;
 			}
 		}
+		else
+			pchain->starts_enabled = true;
 
 		// remove other on new prev if needed
-		if (target != chain.enabled.begin())
+		if (target != pchain->enabled.begin())
 		{
 			iterator prev = std::prev(current);
 			if (prev->has_other && prev->other == current)
 				prev->has_other = false;
 		}
 		enabled = true;
-		chain.enabled.splice(target, chain.disabled, current);
+		pchain->enabled.splice(target, pchain->disabled, current);
 	}
 
 	void hook_chain::hook::disable()
@@ -237,35 +391,35 @@ namespace alterhook
 		iterator target{};
 		iterator new_other{};
 		bool new_has_other = false;
-		if (chain.disabled.empty())
+		if (pchain->disabled.empty())
 		{
 			new_other = std::next(current);
-			new_has_other = other != chain.enabled.end();
-			target = chain.disabled.end();
+			new_has_other = other != pchain->enabled.end();
+			target = pchain->disabled.end();
 		}
 		else if (!has_other)
 		{
 			iterator result = std::next(current);
 			new_other = result;
-			new_has_other = other != chain.enabled.end();
-			while (result != chain.enabled.end() && !result->has_other)
+			new_has_other = other != pchain->enabled.end();
+			while (result != pchain->enabled.end() && !result->has_other)
 				++result;
-			target = result == chain.enabled.end() ? chain.disabled.end() : result->other;
+			target = result == pchain->enabled.end() ? pchain->disabled.end() : result->other;
 		}
 		else
 			target = other;
 
 		// if enabled list is going to be left empty, we are disabling setup
-		if (chain.enabled.size() == 1)
+		if (pchain->enabled.size() == 1)
 		{
 			std::unique_lock lock{ hook_lock };
-			thread_freezer freeze{ chain, false };
-			__alterhook_inject_base_node(chain.backup.data(), false);
+			thread_freezer freeze{ *pchain, false };
+			__alterhook_inject_base_node(pchain->backup.data(), false);
 		}
 		else
 		{
 			iterator next = std::next(current);
-			if (next == chain.enabled.end())
+			if (next == pchain->enabled.end())
 			{
 				__alterhook_set_base_node_prelay(poriginal);
 				#if !utils_windows64
@@ -280,7 +434,7 @@ namespace alterhook
 			}
 		}
 
-		if (current != chain.enabled.begin())
+		if (current != pchain->enabled.begin())
 		{
 			iterator prev = std::prev(current);
 			if (!prev->has_other)
@@ -289,8 +443,10 @@ namespace alterhook
 				prev->other = current;
 			}
 		}
+		else
+			pchain->starts_enabled = false;
 
-		if (target != chain.disabled.begin())
+		if (target != pchain->disabled.begin())
 		{
 			iterator prev = std::prev(target);
 			if (prev->has_other && prev->other == current)
@@ -299,6 +455,6 @@ namespace alterhook
 		other = new_other;
 		has_other = new_has_other;
 		enabled = false;
-		chain.disabled.splice(target, chain.enabled, current);
+		pchain->disabled.splice(target, pchain->enabled, current);
 	}
 }

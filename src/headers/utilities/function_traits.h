@@ -236,12 +236,15 @@ namespace utils
 	{
 		template <typename T1, typename T2>
 		utils_concept are_member_function_pointers = std::is_member_function_pointer_v<T1> && std::is_member_function_pointer_v<T2>;
+		template <typename T1, typename T2>
+		utils_concept has_any_mem_func_ptr = std::is_member_function_pointer_v<T1> || std::is_member_function_pointer_v<T2>;
 
 		template <typename T1, typename T2>
 		utils_concept are_pointers = std::is_pointer_v<T1> && std::is_pointer_v<T2>;
 
-		template <typename T1, typename T2>
-		utils_concept base_or_derived_and_equal_size_with = (std::is_base_of_v<T1, T2> || std::is_base_of_v<T2, T1>) && sizeof(T1) == sizeof(T2);
+		template <typename PT1, typename PT2, typename T1 = std::remove_pointer_t<PT1>, typename T2 = std::remove_pointer_t<PT2>>
+		utils_concept have_this_and_eq_size = are_pointers<PT1, PT2> && (std::is_base_of_v<T1, T2> || std::is_base_of_v<T2, T1>) && 
+			sizeof(T1) == sizeof(T2);
 
 		template <typename seq, typename fn_1, typename fn_2>
 		inline constexpr bool all_arguments_same_check = undefined_struct<seq, fn_1, fn_2>::value;
@@ -250,17 +253,20 @@ namespace utils
 
 		template <typename seq, typename fn_1, typename fn_2, bool member_fn>
 		inline constexpr bool all_arguments_same_check_2_impl = undefined_struct<seq, fn_1, fn_2>::value;
-		// handles case where both detour and original are member functions (we need to check if the first arg with is the this pointer is
+		// handles case where either detour or original is member function (we need to check if the first arg with is the this pointer is
 		// of type that has any relationship with the other one and have equal size)
 		template <size_t index, size_t... indexes, typename fn_1, typename fn_2>
 		inline constexpr bool all_arguments_same_check_2_impl<std::index_sequence<index, indexes...>, fn_1, fn_2, true> =
-			base_or_derived_and_equal_size_with<std::remove_pointer_t<remove_cvref_t<fn_argument_t<fn_1, index>>>, std::remove_pointer_t<remove_cvref_t<fn_argument_t<fn_2, index>>>> && (std::is_same_v<fn_argument_t<fn_1, indexes>, fn_argument_t<fn_2, indexes>> && ...);
+			have_this_and_eq_size<
+				remove_cvref_t<fn_argument_t<fn_1, index>>, 
+				remove_cvref_t<fn_argument_t<fn_2, index>>
+			> && (std::is_same_v<fn_argument_t<fn_1, indexes>, fn_argument_t<fn_2, indexes>> && ...);
 		template <size_t... indexes, typename fn_1, typename fn_2>
 		inline constexpr bool all_arguments_same_check_2_impl<std::index_sequence<indexes...>, fn_1, fn_2, false> =
 			(std::is_same_v<fn_argument_t<fn_1, indexes>, fn_argument_t<fn_2, indexes>> && ...);
 
 		template <typename seq, typename fn_1, typename fn_2>
-		inline constexpr bool all_arguments_same_check_2 = all_arguments_same_check_2_impl<seq, fn_1, fn_2, are_member_function_pointers<fn_1, fn_2>>;
+		inline constexpr bool all_arguments_same_check_2 = all_arguments_same_check_2_impl<seq, fn_1, fn_2, has_any_mem_func_ptr<fn_1, fn_2>>;
 
 		#if utils_cpp20
 		template <typename T1, typename T2>
@@ -268,13 +274,13 @@ namespace utils
 		{
 			typename fn_argument_t<T1, 0>;
 			typename fn_argument_t<T2, 0>;
-		} && base_or_derived_and_equal_size_with<std::remove_pointer_t<std::remove_cvref_t<fn_argument_t<T1, 0>>>, std::remove_pointer_t<std::remove_cvref_t<fn_argument_t<T2, 0>>>> && are_pointers<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>> && same_cv_qualification_v<std::remove_pointer_t<fn_argument_t<T1, 0>>, std::remove_pointer_t<fn_argument_t<T2, 0>>>;
+		} && have_this_and_eq_size<std::remove_pointer_t<std::remove_cvref_t<fn_argument_t<T1, 0>>>, std::remove_pointer_t<std::remove_cvref_t<fn_argument_t<T2, 0>>>> && are_pointers<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>> && same_cv_qualification_v<std::remove_pointer_t<fn_argument_t<T1, 0>>, std::remove_pointer_t<fn_argument_t<T2, 0>>>;
 		#else
 		template <typename T1, typename T2, typename = void>
 		inline constexpr bool have_compatible_member_fn_first_args = false;
 		template <typename T1, typename T2>
 		inline constexpr bool have_compatible_member_fn_first_args<T1, T2, std::void_t<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>>> =
-			base_or_derived_and_equal_size_with<std::remove_pointer_t<remove_cvref_t<fn_argument_t<T1, 0>>>, std::remove_pointer_t<remove_cvref_t<fn_argument_t<T2, 0>>>>&& are_pointers<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>>&& same_cv_qualification_v<std::remove_pointer_t<fn_argument_t<T1, 0>>, std::remove_pointer_t<fn_argument_t<T2, 0>>>;
+			have_this_and_eq_size<std::remove_pointer_t<remove_cvref_t<fn_argument_t<T1, 0>>>, std::remove_pointer_t<remove_cvref_t<fn_argument_t<T2, 0>>>>&& are_pointers<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>>&& same_cv_qualification_v<std::remove_pointer_t<fn_argument_t<T1, 0>>, std::remove_pointer_t<fn_argument_t<T2, 0>>>;
 		#endif
 
 		template <typename T1, typename T2>

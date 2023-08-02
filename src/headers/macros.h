@@ -33,6 +33,11 @@
 	#define __alterhook_fn_sfinae_templ
 	#define __alterhook_callable_trg_sfinae_nd_templ
 	#define __alterhook_callable_trg_sfinae_templ
+	#define __alterhook_fn_callable_pairs_sfinae_nd_templ
+	#define __alterhook_fn_callable_pairs_sfinae_templ
+	#define __alterhook_fn_callable2_pairs_sfinae_nd_templ
+	#define __alterhook_fn_callable2_pairs_sfinae_templ
+	#define __alterhook_requires_fn_callable_pairs requires utils::detour_and_storage_pairs<types...>
 #else
 	#define __alterhook_must_be_fn_t typename
 	#define __alterhook_must_be_callable_t typename
@@ -55,6 +60,17 @@
 
 	#define __alterhook_callable_trg_sfinae_nd_templ , std::enable_if_t<utils::callable_type<trg>, size_t>
 	#define __alterhook_callable_trg_sfinae_templ __alterhook_callable_trg_sfinae_nd_templ = 0
+
+	#define __alterhook_fn_callable_pairs_sfinae_nd_templ \
+		, std::enable_if_t<utils::callable_type<dtr> && utils::function_type<orig> && utils::detour_and_storage_pairs<types...>, size_t>
+	#define __alterhook_fn_callable_pairs_sfinae_templ __alterhook_fn_callable_pairs_sfinae_nd_templ = 0
+
+	#define __alterhook_fn_callable2_pairs_sfinae_nd_templ \
+		, std::enable_if_t<utils::callable_type<trg> && utils::callable_type<dtr> && utils::function_type<orig> && \
+			utils::detour_and_storage_pairs<types...>, size_t>
+	#define __alterhook_fn_callable2_pairs_sfinae_templ __alterhook_fn_callable2_pairs_sfinae_nd_templ = 0
+
+	#define __alterhook_requires_fn_callable_pairs
 #endif
 
 #if !utils_windows64

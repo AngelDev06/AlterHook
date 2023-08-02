@@ -21,7 +21,7 @@ namespace alterhook
 				csh handle,
 				const std::byte* orig_code,
 				size_t code_size
-			) : handle(handle), code(orig_code), size(code_size), address(reinterpret_cast<uintptr_t>(orig_code))
+			) : handle(handle), code(orig_code), address(reinterpret_cast<uintptr_t>(orig_code)), size(code_size)
 			{
 				if (!size)
 					return;
