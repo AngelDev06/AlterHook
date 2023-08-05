@@ -98,12 +98,12 @@ namespace alterhook
 		void disable();
 
 		using trampoline::get_target;
-		const std::byte* get_detour() const { return pdetour; }
-		size_t trampoline_size() const { return size(); }
-		size_t trampoline_count() const { return count(); }
+		const std::byte* get_detour() const noexcept { return pdetour; }
+		size_t trampoline_size() const noexcept { return size(); }
+		size_t trampoline_count() const noexcept { return count(); }
 		std::string trampoline_str() const { return str(); }
-		bool is_enabled() const { return enabled; }
-		operator bool() const { return enabled; }
+		bool is_enabled() const noexcept { return enabled; }
+		operator bool() const noexcept { return enabled; }
 
 		void set_target(std::byte* target);
 		template <__alterhook_must_be_callable_t trg __alterhook_callable_trg_sfinae_templ>
@@ -169,18 +169,40 @@ namespace alterhook
 		hook_chain() noexcept {}
 		~hook_chain() noexcept;
 
+		hook_chain& operator=(const hook_chain& other);
+		hook_chain& operator=(hook_chain&& other) noexcept;
+
 		// status update
 		void enable_all();
 		void disable_all();
 
 		// container modifiers
 		void clear();
+		void resize(size_t new_size);
+		void pop_back();
+		void pop_front();
+		void erase(list_iterator position);
+		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
+		void push_back(dtr&& detour, orig& original, bool enable_hook = true);
+		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
+		void push_front(dtr&& detour, orig& original, bool enable_hook = true);
+		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
+		hook& insert(list_iterator position, dtr&& detour, orig& original, bool enable_hook = true);
+		void swap(list_iterator left, list_iterator right);
+		void swap(const hook_chain& other);
+		void merge(const hook_chain& other);
+		void splice(list_iterator newpos, hook_chain& other, list_iterator oldpos);
+		void splice(list_iterator newpos, hook_chain&& other, list_iterator oldpos) { splice(newpos, other, oldpos); }
+		void splice(list_iterator newpos, hook_chain& other, list_iterator first, list_iterator last);
+		void splice(list_iterator newpos, hook_chain&& other, list_iterator first, list_iterator last) { splice(newpos, other, first, last); }
+		void splice(list_iterator newpos, hook_chain& other, iterator first, iterator last);
+		void splice(list_iterator newpos, hook_chain&& other, iterator first, iterator last);
+		void splice(list_iterator newpos, list_iterator oldpos) { splice(newpos, *this, oldpos); }
+		void splice(list_iterator newpos, list_iterator first, list_iterator last) { splice(newpos, *this, first, last); }
 
 		// getters
 		reference operator[](size_t n) noexcept;
 		const_reference operator[](size_t n) const noexcept;
-		iterator find(size_t n) noexcept;
-		const_iterator find(size_t n) const noexcept;
 		reference at(size_t n);
 		const_reference at(size_t n) const;
 		reference front() noexcept;
@@ -249,24 +271,35 @@ namespace alterhook
 			std::tuple<detour_t, original_t, types...>&& args
 		);
 		void init_chain();
+		void join_last();
 	};
 
 	class ALTERHOOK_API hook_chain::hook
 	{
 	public:
+		typedef std::list<hook>::iterator iterator;
+		typedef std::list<hook>::const_iterator const_iterator;
+
 		hook() noexcept {}
 
 		void enable();
 		void disable();
 
-		std::byte* get_target() const { return pchain->ptarget; }
-		const std::byte* get_detour() const { return pdetour; }
-		bool is_enabled() const { return enabled; }
-		operator bool() const { return enabled; }
+		iterator get_iterator() noexcept { return current; }
+		const_iterator get_iterator() const noexcept { return current; }
+		const_iterator get_const_iterator() const noexcept { return current; }
+		hook_chain& get_chain() const noexcept { return *pchain; }
+		std::byte* get_target() const noexcept { return pchain->ptarget; }
+		const std::byte* get_detour() const noexcept { return pdetour; }
+		bool is_enabled() const noexcept { return enabled; }
+		operator bool() const noexcept { return enabled; }
+
+		template <__alterhook_must_be_callable_t dtr __alterhook_callable_sfinae_templ>
+		void set_detour(dtr&& detour) { set_detour(get_target_address(std::forward<dtr>(detour))); }
+		template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_templ>
+		void set_original(orig& original);
 	private:
 		friend class hook_chain;
-		typedef std::list<hook>::iterator iterator;
-		typedef std::list<hook>::const_iterator const_iterator;
 		iterator current{};
 		iterator other{};
 		hook_chain* pchain = nullptr;
@@ -280,7 +313,39 @@ namespace alterhook
 		template <typename orig>
 		void init(hook_chain& chain, iterator curr, const std::byte* detour, const std::byte* original, orig& origref, bool should_enable);
 		void init(hook_chain& chain, iterator curr, const std::byte* detour, const std::byte* original, const helpers::orig_buff_t& buffer);
+		void init(hook_chain& chain, iterator curr, const std::byte* detour, const helpers::orig_buff_t& buffer);
+		void set_detour(std::byte* detour);
 		hook(const hook&) = default;
+	};
+
+	class hook_chain::iterator
+	{
+	public:
+		typedef const_iterator __base;
+		#if utils_cpp20
+		typedef std::forward_iterator_tag iterator_concept;
+		#endif
+		typedef std::forward_iterator_tag iterator_category;
+		typedef hook value_type;
+		typedef ptrdiff_t difference_type;
+		typedef hook* pointer;
+		typedef hook& reference;
+
+		iterator() noexcept {}
+		reference operator*() const noexcept { return *itrs[enabled]; }
+		pointer operator->() const noexcept { return itrs[enabled].operator->(); }
+		iterator& operator++() noexcept;
+		iterator operator++(int) noexcept;
+		bool operator==(const iterator& other) const noexcept { return enabled == other.enabled && itrs[enabled] == other.itrs[enabled]; }
+		bool operator!=(const iterator& other) const noexcept { return enabled != other.enabled || itrs[enabled] != other.itrs[enabled]; }
+		operator list_iterator() const noexcept { return itrs[enabled]; }
+	private:
+		friend class hook_chain;
+		std::array<list_iterator, 2> itrs{};
+		bool enabled = false;
+
+		explicit iterator(list_iterator ditr, list_iterator eitr, bool enabled) noexcept
+			: itrs({ ditr, eitr }), enabled(enabled) {}
 	};
 
 	class hook_chain::const_iterator
@@ -296,43 +361,22 @@ namespace alterhook
 		typedef const hook& reference;
 
 		const_iterator() noexcept {}
-		reference operator*() const noexcept;
-		pointer operator->() const noexcept;
+		const_iterator(const iterator& other) : itrs({ other.itrs[0], other.itrs[1] }), enabled(other.enabled) {}
+		reference operator*() const noexcept { return *itrs[enabled]; }
+		pointer operator->() const noexcept { return itrs[enabled].operator->(); }
 		const_iterator& operator++() noexcept;
 		const_iterator operator++(int) noexcept;
-		bool operator==(const const_iterator& other) const noexcept;
-		bool operator!=(const const_iterator& other) const noexcept;
+		bool operator==(const const_iterator& other) const noexcept { return enabled == other.enabled && itrs[enabled] == other.itrs[enabled]; }
+		bool operator!=(const const_iterator& other) const noexcept { return enabled != other.enabled || itrs[enabled] != other.itrs[enabled]; }
+		operator const_list_iterator() const noexcept { return itrs[enabled]; }
 	private:
 		friend class hook_chain;
 		friend class iterator;
-		std::array<hook::const_iterator, 2> itrs{};
+		std::array<const_list_iterator, 2> itrs{};
 		bool enabled = false;
 
-		explicit const_iterator(hook::const_iterator ditr, hook::const_iterator eitr, bool enabled) noexcept
+		explicit const_iterator(const_list_iterator ditr, const_list_iterator eitr, bool enabled) noexcept
 			: itrs({ ditr, eitr }), enabled(enabled) {}
-	};
-
-	class hook_chain::iterator : public hook_chain::const_iterator
-	{
-	public:
-		typedef const_iterator __base;
-		#if utils_cpp20
-		typedef std::forward_iterator_tag iterator_concept;
-		#endif
-		typedef std::forward_iterator_tag iterator_category;
-		typedef hook value_type;
-		typedef ptrdiff_t difference_type;
-		typedef hook* pointer;
-		typedef hook& reference;
-
-		reference operator*() const noexcept { return const_cast<reference>(__base::operator*()); }
-		pointer operator->() const noexcept { return const_cast<pointer>(__base::operator->()); }
-		iterator& operator++() noexcept;
-		iterator operator++(int) noexcept;
-	private:
-		friend class hook_chain;
-		explicit iterator(hook::iterator ditr, hook::iterator eitr, bool enabled) noexcept
-			: __base(ditr, eitr, enabled) {}
 	};
 
 	/*
@@ -377,17 +421,16 @@ namespace alterhook
 	template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_nd_templ>
 	void hook::set_original(orig& original)
 	{
-		const bool should_enable = enabled;
+		if (original_wrap->contains_ref(original))
+			return;
 		__alterhook_def_thumb_var(ptarget);
-		if (enabled)
-			disable();
-		if (original_wrap)
-			*original_wrap = nullptr;
+		bool has_orig_wrap = original_wrap;
+		helpers::orig_buff_t tmp = original_buffer;
 		new (&original_buffer) helpers::original_wrapper(original);
 		original_wrap = std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
 		original = function_cast<orig>(__alterhook_add_thumb_bit(ptrampoline.get()));
-		if (should_enable)
-			enable();
+		if (has_orig_wrap)
+			*std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
 	}
 
 	template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig, typename... types __alterhook_fn_callable_pairs_sfinae_nd_templ>
@@ -456,24 +499,23 @@ namespace alterhook
 			std::get<1>(args),
 			true
 		);
-		fentry.enabled = true;
-		fentry.current = enabled.begin();
 		starts_enabled = true;
 		if constexpr (sizeof...(types) > 0)
 		{
 			hook::iterator iter = enabled.begin();
-			hook& entry = fentry;
-			const std::byte* pdetour = entry.pdetour;
+			hook* entry = &fentry;
+			const std::byte* pdetour = entry->pdetour;
 			(
 				(
-					entry = enabled.emplace_back(),
-					entry.init(
+					entry = &enabled.emplace_back(),
+					entry->init(
 						*this, ++iter,
-						get_target_address(std::forward<utils::type_at_t<d_indexes, seq>>(std::get<d_indexes>(args))),
-						std::exchange(pdetour, entry.pdetour),
+						get_target_address(std::get<d_indexes>(args)),
+						pdetour,
 						std::get<o_indexes>(args),
 						true
-					)
+					),
+					pdetour = entry->pdetour
 				), ...
 			);
 		}
@@ -498,6 +540,17 @@ namespace alterhook
 		new (&origbuff) helpers::original_wrapper(origref);
 		origwrap = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
 		origref = function_cast<orig>(original);
+	}
+
+	template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_nd_templ>
+	void hook_chain::hook::set_original(orig& original)
+	{
+		if (origwrap->contains_ref(original))
+			return;
+		helpers::orig_buff_t tmp = origbuff;
+		new (&origbuff) helpers::original_wrapper(original);
+		original = function_cast<orig>(poriginal);
+		*std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
 	}
 
 	/*
@@ -562,26 +615,6 @@ namespace alterhook
 		}
 		utils_assert(false, "hook_chain::operator[]: position passed is out of range");
 	}
-	inline hook_chain::iterator hook_chain::find(size_t n) noexcept
-	{
-		size_t i = 0;
-		for (iterator b = begin(), e = end(); b != e; ++b, ++i)
-		{
-			if (i == n)
-				return b;
-		}
-		utils_assert(false, "hook_chain::find: position passed is out of range");
-	}
-	inline hook_chain::const_iterator hook_chain::find(size_t n) const noexcept
-	{
-		size_t i = 0;
-		for (const_iterator b = begin(), e = end(); b != e; ++b, ++i)
-		{
-			if (i == n)
-				return b;
-		}
-		utils_assert(false, "hook_chain::find: position passed is out of range");
-	}
 	inline hook_chain::reference hook_chain::at(size_t n)
 	{
 		size_t i = 0;
@@ -631,14 +664,6 @@ namespace alterhook
 	inline hook_chain::reference hook_chain::dback() noexcept { return disabled.back(); }
 	inline hook_chain::const_reference hook_chain::dback() const noexcept { return disabled.back(); }
 
-	inline hook_chain::const_iterator::reference hook_chain::const_iterator::operator*() const noexcept
-	{
-		return *itrs[enabled];
-	}
-	inline hook_chain::const_iterator::pointer hook_chain::const_iterator::operator->() const noexcept
-	{
-		return itrs[enabled].operator->();
-	}
 	inline hook_chain::const_iterator& hook_chain::const_iterator::operator++() noexcept
 	{
 		if (itrs[enabled]->has_other)
@@ -650,30 +675,30 @@ namespace alterhook
 			++itrs[enabled];
 		return *this;
 	}
+
 	inline hook_chain::const_iterator hook_chain::const_iterator::operator++(int) noexcept
 	{
 		const_iterator tmp = *this;
 		operator++();
 		return tmp;
 	}
-	inline bool hook_chain::const_iterator::operator==(const const_iterator& other) const noexcept
-	{
-		return enabled == other.enabled && itrs[enabled] == other.itrs[enabled];
-	}
-	inline bool hook_chain::const_iterator::operator!=(const const_iterator& other) const noexcept
-	{
-		return enabled != other.enabled || itrs[enabled] != other.itrs[enabled];
-	}
-
+	
 	inline hook_chain::iterator& hook_chain::iterator::operator++() noexcept
 	{
-		__base::operator++();
+		if (itrs[enabled]->has_other)
+		{
+			itrs[!enabled] = itrs[enabled]->other;
+			enabled = !enabled;
+		}
+		else
+			++itrs[enabled];
 		return *this;
 	}
+	
 	inline hook_chain::iterator hook_chain::iterator::operator++(int) noexcept
 	{
 		iterator tmp = *this;
-		__base::operator++();
+		operator++();
 		return tmp;
 	}
 
@@ -692,5 +717,19 @@ namespace alterhook
 		origbuff = buffer;
 		origwrap = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
 		*origwrap = original;
+	}
+
+	inline void hook_chain::hook::init(
+		hook_chain& chain,
+		iterator curr,
+		const std::byte* detour,
+		const helpers::orig_buff_t& buffer
+	)
+	{
+		pchain = &chain;
+		current = curr;
+		pdetour = detour;
+		origbuff = buffer;
+		origwrap = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
 	}
 }

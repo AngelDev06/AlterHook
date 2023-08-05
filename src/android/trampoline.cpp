@@ -1229,7 +1229,7 @@ namespace alterhook
 		size_t i = 0;
 		disassembler arm{ ptrampoline.get(), uses_thumb, false };
 
-		for (const cs_insn& instr : arm.disasm(tramp_size + 1))
+		for (const cs_insn& instr : arm.disasm(tramp_size))
 		{
 			if (instr.address != reinterpret_cast<uintptr_t>(ptrampoline.get()))
 				stream << '\n';

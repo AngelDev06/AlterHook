@@ -125,8 +125,13 @@ namespace utils
 		#endif
 	}
 
+	template <typename T, bool = std::is_function_v<std::remove_pointer_t<T>>>
+	struct clean_type
+	{
+		typedef T type;
+	};
 	template <typename T>
-	struct clean_type : std::remove_pointer<T> {};
+	struct clean_type<T, true> : std::remove_pointer<T> {};
 	#if utils_cc_assertions
 	template <typename R, typename... args>
 	struct clean_type<R(__thiscall*)(args...)>

@@ -110,6 +110,9 @@ namespace alterhook
 		{
 			virtual original& operator=(std::nullptr_t null) = 0;
 			virtual original& operator=(const std::byte* address) = 0;
+
+			template <typename T>
+			bool contains_ref(T& orig);
 		};
 		template <typename T>
 		struct original_wrapper : original
@@ -129,5 +132,13 @@ namespace alterhook
 			}
 		};
 		typedef std::aligned_storage_t<sizeof(original_wrapper<std::function<void()>>), alignof(original_wrapper<std::function<void()>>)> orig_buff_t;
+
+		template <typename T>
+		bool original::contains_ref(T& orig)
+		{
+			if (auto* wrapper = dynamic_cast<original_wrapper<T>*>(this))
+				return &wrapper->val == &orig;
+			return false;
+		}
 	}
 }

@@ -180,6 +180,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;_LIBCPP_DEBUG=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -191,6 +194,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <ClCompile>
@@ -202,6 +208,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;_LIBCPP_DEBUG=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
     <ClCompile>
@@ -213,6 +222,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
@@ -224,6 +236,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;_LIBCPP_DEBUG=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -235,6 +250,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>
@@ -246,6 +264,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;_LIBCPP_DEBUG=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
     <ClCompile>
@@ -257,6 +278,9 @@
       <ExceptionHandling>Enabled</ExceptionHandling>
       <PreprocessorDefinitions>ALTERHOOK_SHARED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>$(StlLibraryName)</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
