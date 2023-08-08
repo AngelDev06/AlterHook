@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #define utils_assert(expr, msg) assert(((void)msg, expr))
+#define utils_underlying(enumval) static_cast<std::underlying_type_t<decltype(enumval)>>(enumval)
 
 namespace utils
 {

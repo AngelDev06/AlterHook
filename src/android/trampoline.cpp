@@ -126,21 +126,27 @@ namespace alterhook
 					(encoding.operand_pieces_count == 2 && (encoding.sizes[0] + encoding.sizes[1]) == 4),
 					"(unreachable) register field has more or less than 4 bits"
 				);
-				// note that for thumb2 if index is greater than 16 we want its distance from end and add 16 to it so we hardcoded 48
-				uint8_t i = thumb ? encoding.indexes[0] >= 16 ? 48 : 16 : 32;
+				// note that for thumb2 if index is smaller than 6 we add 16 otherwise we subtract 16
+				// the reason is that thumb2 instructions are not of type uint32_t by instead are of type
+				// struct { uint16_t first, second; }
+				const uint8_t index0 = thumb && size == 4 ? 
+					encoding.indexes[0] < 16 ? encoding.indexes[0] + 16 : encoding.indexes[0] - 16 
+					: encoding.indexes[0];
 				const std::array bitseq = { 0b1, 0b11, 0b111, 0b1111 };
-				unsigned reg_part1 = reg >> (4 - encoding.sizes[0]);
+				const uint32_t reg_part1 = reg >> (4 - encoding.sizes[0]);
 
-				*reinterpret_cast<uint32_t*>(instr) &= ~(bitseq[encoding.sizes[0] - 1] << (i - (encoding.indexes[0] + encoding.sizes[0])));
-				*reinterpret_cast<uint32_t*>(instr) |= reg_part1 << (i - (encoding.indexes[0] + encoding.sizes[0]));
+				*reinterpret_cast<uint32_t*>(instr) &= ~(bitseq[encoding.sizes[0] - 1] << index0);
+				*reinterpret_cast<uint32_t*>(instr) |= reg_part1 << index0;
 
 				if (encoding.operand_pieces_count == 2)
 				{
-					uint8_t j = thumb ? encoding.indexes[1] >= 16 ? 48 : 16 : 32;
-					unsigned reg_part2 = reg & bitseq[encoding.sizes[1] - 1];
+					const uint8_t index1 = thumb && size == 4 ?
+						encoding.indexes[1] < 16 ? encoding.indexes[1] + 16 : encoding.indexes[1] - 16
+						: encoding.indexes[1];
+					const uint32_t reg_part2 = reg & bitseq[encoding.sizes[1] - 1];
 					
-					*reinterpret_cast<uint32_t*>(instr) &= ~(bitseq[encoding.sizes[1] - 1] << (j - (encoding.indexes[1] + encoding.sizes[1])));
-					*reinterpret_cast<uint32_t*>(instr) |= reg_part2 << (j - (encoding.indexes[1] + encoding.sizes[1]));
+					*reinterpret_cast<uint32_t*>(instr) &= ~(bitseq[encoding.sizes[1] - 1] << index1);
+					*reinterpret_cast<uint32_t*>(instr) |= reg_part2 << index1;
 				}
 			}
 

@@ -133,6 +133,10 @@ namespace alterhook
 		class ALTERHOOK_API hook;
 		class const_iterator;
 		class iterator;
+		enum class transfer
+		{
+			disabled, enabled, both
+		};
 		typedef std::list<hook>::const_iterator const_list_iterator;
 		typedef std::list<hook>::iterator list_iterator;
 		typedef std::list<hook>::const_reverse_iterator const_reverse_list_iterator;
@@ -191,6 +195,8 @@ namespace alterhook
 		void swap(list_iterator left, list_iterator right);
 		void swap(const hook_chain& other);
 		void merge(const hook_chain& other);
+		void splice(list_iterator newpos, hook_chain& other, transfer flag = transfer::both);
+		void splice(list_iterator newpos, hook_chain&& other, transfer flag = transfer::both) { splice(newpos, other, flag); }
 		void splice(list_iterator newpos, hook_chain& other, list_iterator oldpos);
 		void splice(list_iterator newpos, hook_chain&& other, list_iterator oldpos) { splice(newpos, other, oldpos); }
 		void splice(list_iterator newpos, hook_chain& other, list_iterator first, list_iterator last);
@@ -199,6 +205,7 @@ namespace alterhook
 		void splice(list_iterator newpos, hook_chain&& other, iterator first, iterator last);
 		void splice(list_iterator newpos, list_iterator oldpos) { splice(newpos, *this, oldpos); }
 		void splice(list_iterator newpos, list_iterator first, list_iterator last) { splice(newpos, *this, first, last); }
+		void splice(list_iterator newpos, iterator first, iterator last);
 
 		// getters
 		reference operator[](size_t n) noexcept;
@@ -339,6 +346,7 @@ namespace alterhook
 		bool operator==(const iterator& other) const noexcept { return enabled == other.enabled && itrs[enabled] == other.itrs[enabled]; }
 		bool operator!=(const iterator& other) const noexcept { return enabled != other.enabled || itrs[enabled] != other.itrs[enabled]; }
 		operator list_iterator() const noexcept { return itrs[enabled]; }
+		operator const_list_iterator() const noexcept { return itrs[enabled]; }
 	private:
 		friend class hook_chain;
 		std::array<list_iterator, 2> itrs{};
@@ -556,6 +564,9 @@ namespace alterhook
 	/*
 	* NON-TEMPLATE DEFINITIONS (ignore them)
 	*/
+	inline void hook_chain::splice(list_iterator newpos, hook_chain&& other, iterator first, iterator last) { splice(newpos, other, first, last); }
+	inline void hook_chain::splice(list_iterator newpos, iterator first, iterator last) { splice(newpos, *this, first, last); }
+
 	inline hook_chain::iterator hook_chain::begin() noexcept { return iterator(disabled.begin(), enabled.begin(), starts_enabled); }
 	inline hook_chain::iterator hook_chain::end() noexcept 
 	{
