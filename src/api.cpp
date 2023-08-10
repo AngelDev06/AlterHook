@@ -524,6 +524,9 @@ namespace alterhook
 			}
 			for (hook& h : other.enabled)
 				h.has_other = false;
+
+			if (empty())
+				starts_enabled = false;
 			trg.splice(newpos, src);
 			break;
 		}
@@ -598,6 +601,8 @@ namespace alterhook
 			}
 			for (hook& h : other.disabled)
 				h.has_other = false;
+			if (empty())
+				starts_enabled = true;
 			trg.splice(newpos, src);
 		}
 		case transfer::both:
@@ -1587,7 +1592,17 @@ namespace alterhook
 				*enablednewpos->origwrap = otherback.pdetour;
 			}
 		}
+		else
+		{
+			for (list_iterator itr = first, next = list_iterator(); itr != disabledoldtrgpos; itr = next)
+			{
+				next = std::next(itr);
+				itr->pchain = this;
+				disabled.splice(disablednewpos, other.disabled, itr);
+			}
+		}
 
+		// bind first to new position
 		if (!to_enabled && newpos == disabled.begin())
 		{
 			if (starts_enabled && !first.enabled)
@@ -1620,6 +1635,46 @@ namespace alterhook
 			}
 		}
 
+		if (!other.empty())
+		{
+			// rebind previous old position
+			list_iterator oldother{};
+			bool has_old_other = true;
+			if (disabledoldtrgpos == other.disabled.begin() && enabledoldtrgpos == other.enabled.begin())
+			{
+				other.starts_enabled = last.enabled;
+				has_old_other = false;
+			}
+			else if (disabledoldtrgpos == other.disabled.begin())
+				oldother = std::prev(enabledoldtrgpos);
+			else if (enabledoldtrgpos == other.enabled.begin())
+				oldother = std::prev(disabledoldtrgpos);
+			else if (first.enabled)
+			{
+				oldother = std::prev(enabledoldtrgpos);
+				if (oldother->has_other)
+					oldother = std::prev(disabledoldtrgpos);
+			}
+			else
+			{
+				oldother = std::prev(disabledoldtrgpos);
+				if (oldother->has_other)
+					oldother = std::prev(enabledoldtrgpos);
+			}
+
+			if (has_old_other)
+			{
+				if (last == iterator(other.disabled.end(), other.enabled.end(), last.enabled) || last.enabled == oldother->enabled)
+					oldother->has_other = false;
+				else
+				{
+					oldother->has_other = true;
+					oldother->other = last;
+				}
+			}
+		}
+
+		// bind last to new position
 		lastprev->has_other = false;
 		if (to_enabled != lastprev->enabled && (!to_enabled || newpos != enabled.end()) && (to_enabled || newpos != disabled.end()))
 		{
