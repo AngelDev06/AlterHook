@@ -195,17 +195,159 @@ namespace alterhook
 		void swap(list_iterator left, list_iterator right);
 		void swap(const hook_chain& other);
 		void merge(const hook_chain& other);
-		void splice(list_iterator newpos, hook_chain& other, transfer flag = transfer::both);
-		void splice(list_iterator newpos, hook_chain&& other, transfer flag = transfer::both) { splice(newpos, other, flag); }
-		void splice(list_iterator newpos, hook_chain& other, list_iterator oldpos);
-		void splice(list_iterator newpos, hook_chain&& other, list_iterator oldpos) { splice(newpos, other, oldpos); }
-		void splice(list_iterator newpos, hook_chain& other, list_iterator first, list_iterator last);
-		void splice(list_iterator newpos, hook_chain&& other, list_iterator first, list_iterator last) { splice(newpos, other, first, last); }
-		void splice(list_iterator newpos, hook_chain& other, iterator first, iterator last);
-		void splice(list_iterator newpos, hook_chain&& other, iterator first, iterator last);
-		void splice(list_iterator newpos, list_iterator oldpos) { splice(newpos, *this, oldpos); }
-		void splice(list_iterator newpos, list_iterator first, list_iterator last) { splice(newpos, *this, first, last); }
-		void splice(list_iterator newpos, iterator first, iterator last);
+
+		void splice(
+			list_iterator newpos, 
+			hook_chain& other, 
+			transfer to = transfer::enabled, 
+			transfer from = transfer::both
+		);
+
+		void splice(
+			list_iterator newpos, 
+			hook_chain&& other, 
+			transfer to = transfer::enabled, 
+			transfer from = transfer::both
+		) { splice(newpos, other, to, from); }
+
+		void splice(
+			iterator newpos,
+			hook_chain& other,
+			transfer from = transfer::both
+		);
+
+		void splice(
+			iterator newpos,
+			hook_chain&& other,
+			transfer from = transfer::both
+		);
+
+
+		void splice(
+			list_iterator newpos,
+			hook_chain& other,
+			list_iterator oldpos,
+			transfer to = transfer::enabled
+		);
+
+		void splice(
+			list_iterator newpos,
+			hook_chain&& other,
+			list_iterator oldpos,
+			transfer to = transfer::enabled
+		) { splice(newpos, other, oldpos, to); }
+
+		void splice(
+			iterator newpos,
+			hook_chain& other,
+			list_iterator oldpos
+		);
+
+		void splice(
+			iterator newpos,
+			hook_chain&& other,
+			list_iterator oldpos
+		);
+
+
+		void splice(
+			list_iterator newpos,
+			hook_chain& other,
+			list_iterator first,
+			list_iterator last,
+			transfer to = transfer::enabled
+		);
+
+		void splice(
+			list_iterator newpos,
+			hook_chain&& other,
+			list_iterator first,
+			list_iterator last,
+			transfer to = transfer::enabled
+		) { splice(newpos, other, first, last, to); }
+
+		void splice(
+			iterator newpos,
+			hook_chain& other,
+			list_iterator first,
+			list_iterator last
+		);
+
+		void splice(
+			iterator newpos,
+			hook_chain&& other,
+			list_iterator first,
+			list_iterator last
+		);
+
+
+		void splice(
+			list_iterator newpos,
+			hook_chain& other,
+			iterator first,
+			iterator last,
+			transfer to = transfer::enabled
+		);
+
+		void splice(
+			list_iterator newpos,
+			hook_chain&& other,
+			iterator first,
+			iterator last,
+			transfer to = transfer::enabled
+		);
+
+		void splice(
+			iterator newpos,
+			hook_chain& other,
+			iterator first,
+			iterator last
+		);
+
+		void splice(
+			iterator newpos,
+			hook_chain&& other,
+			iterator first,
+			iterator last
+		);
+
+
+		void splice(
+			list_iterator newpos,
+			list_iterator oldpos,
+			transfer to = transfer::enabled
+		) { splice(newpos, *this, oldpos, to); }
+
+		void splice(
+			iterator newpos,
+			list_iterator oldpos
+		);
+
+		void splice(
+			list_iterator newpos,
+			list_iterator first,
+			list_iterator last,
+			transfer to = transfer::enabled
+		) { splice(newpos, *this, first, last, to); }
+
+		void splice(
+			iterator newpos,
+			list_iterator first,
+			list_iterator last
+		);
+
+		void splice(
+			list_iterator newpos,
+			iterator first,
+			iterator last,
+			transfer to = transfer::enabled
+		);
+
+		void splice(
+			iterator newpos,
+			iterator first,
+			iterator last
+		);
 
 		// getters
 		reference operator[](size_t n) noexcept;
@@ -564,8 +706,46 @@ namespace alterhook
 	/*
 	* NON-TEMPLATE DEFINITIONS (ignore them)
 	*/
-	inline void hook_chain::splice(list_iterator newpos, hook_chain&& other, iterator first, iterator last) { splice(newpos, other, first, last); }
-	inline void hook_chain::splice(list_iterator newpos, iterator first, iterator last) { splice(newpos, *this, first, last); }
+	inline void hook_chain::splice(iterator newpos, hook_chain& other, transfer from)
+	{
+		splice(static_cast<list_iterator>(newpos), other, newpos.enabled ? transfer::enabled : transfer::disabled, from);
+	}
+	inline void hook_chain::splice(iterator newpos, hook_chain&& other, transfer from) { splice(newpos, other, from); }
+	inline void hook_chain::splice(iterator newpos, hook_chain& other, list_iterator oldpos)
+	{
+		splice(static_cast<list_iterator>(newpos), other, oldpos, newpos.enabled ? transfer::enabled : transfer::disabled);
+	}
+	inline void hook_chain::splice(iterator newpos, hook_chain&& other, list_iterator oldpos) { splice(newpos, other, oldpos); }
+	inline void hook_chain::splice(iterator newpos, hook_chain& other, list_iterator first, list_iterator last)
+	{
+		splice(static_cast<list_iterator>(newpos), other, first, last, newpos.enabled ? transfer::enabled : transfer::disabled);
+	}
+	inline void hook_chain::splice(iterator newpos, hook_chain&& other, list_iterator first, list_iterator last) { splice(newpos, other, first, last); }
+	inline void hook_chain::splice(list_iterator newpos, hook_chain&& other, iterator first, iterator last, transfer to)
+	{
+		splice(newpos, other, first, last, to);
+	}
+	inline void hook_chain::splice(iterator newpos, hook_chain& other, iterator first, iterator last)
+	{
+		splice(static_cast<list_iterator>(newpos), other, first, last, newpos.enabled ? transfer::enabled : transfer::disabled);
+	}
+	inline void hook_chain::splice(iterator newpos, hook_chain&& other, iterator first, iterator last) { splice(newpos, other, first, last); }
+	inline void hook_chain::splice(iterator newpos, list_iterator oldpos)
+	{
+		splice(static_cast<list_iterator>(newpos), oldpos, newpos.enabled ? transfer::enabled : transfer::disabled);
+	}
+	inline void hook_chain::splice(iterator newpos, list_iterator first, list_iterator last)
+	{
+		splice(static_cast<list_iterator>(newpos), first, last, newpos.enabled ? transfer::enabled : transfer::disabled);
+	}
+	inline void hook_chain::splice(list_iterator newpos, iterator first, iterator last, transfer to)
+	{
+		splice(newpos, *this, first, last, to);
+	}
+	inline void hook_chain::splice(iterator newpos, iterator first, iterator last)
+	{
+		splice(static_cast<list_iterator>(newpos), first, last, newpos.enabled ? transfer::enabled : transfer::disabled);
+	}
 
 	inline hook_chain::iterator hook_chain::begin() noexcept { return iterator(disabled.begin(), enabled.begin(), starts_enabled); }
 	inline hook_chain::iterator hook_chain::end() noexcept 
