@@ -192,9 +192,11 @@ namespace alterhook
 		void push_front(dtr&& detour, orig& original, bool enable_hook = true);
 		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
 		hook& insert(list_iterator position, dtr&& detour, orig& original, bool enable_hook = true);
-		void swap(list_iterator left, list_iterator right);
-		void swap(const hook_chain& other);
-		void merge(const hook_chain& other);
+		void swap(list_iterator left, hook_chain& other, list_iterator right);
+		void swap(list_iterator left, list_iterator right) { swap(left, *this, right); }
+		void swap(hook_chain& other);
+		void merge(hook_chain& other, bool at_back = false);
+		void merge(hook_chain&& other, bool at_back = false) { merge(other, at_back); }
 
 		void splice(
 			list_iterator newpos, 
@@ -706,6 +708,12 @@ namespace alterhook
 	/*
 	* NON-TEMPLATE DEFINITIONS (ignore them)
 	*/
+	inline void hook_chain::merge(hook_chain& other, bool at_back)
+	{
+		iterator where = at_back ? end() : begin();
+		splice(where, other, other.begin(), other.end());
+	}
+
 	inline void hook_chain::splice(iterator newpos, hook_chain& other, transfer from)
 	{
 		splice(static_cast<list_iterator>(newpos), other, newpos.enabled ? transfer::enabled : transfer::disabled, from);

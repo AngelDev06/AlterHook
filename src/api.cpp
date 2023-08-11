@@ -271,9 +271,9 @@ namespace alterhook
 			__alterhook_def_thumb_var(ptarget);
 			rbegin->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
 			*rbegin->origwrap = rbegin->poriginal;
+			thread_freezer freeze{ *this, true };
 			{
 				std::unique_lock lock{ hook_lock };
-				thread_freezer freeze{ *this, true };
 				__alterhook_inject(rbegin->pdetour, true);
 			}
 			rbegin->enabled = true;
@@ -308,6 +308,7 @@ namespace alterhook
 				enabled.splice(enabled.end(), disabled, previtr);
 			}
 
+			thread_freezer freeze{ nullptr };
 			while (!disabled.empty())
 			{
 				list_iterator curritr = std::prev(disabled.end());
@@ -368,6 +369,48 @@ namespace alterhook
 		} while (!enabled.empty());
 	}
 
+	void hook_chain::swap(list_iterator left, hook_chain& other, list_iterator right)
+	{
+		if (&other == this && left->enabled == right->enabled && left == right)
+			return;
+		std::list<hook>& lefttrg = left->enabled ? enabled : disabled;
+		std::list<hook>& righttrg = right->enabled ? other.enabled : other.disabled;
+		list_iterator leftnext = std::next(left);
+		list_iterator rightnext = std::next(right);
+		right->pchain = this;
+		left->pchain = &other;
+		std::swap(left->poriginal, right->poriginal);
+		lefttrg.splice(leftnext, righttrg, right);
+		righttrg.splice(rightnext, lefttrg, left);
+
+		if (left->enabled || right->enabled)
+		{
+			bool injected_first = false;
+			try
+			{
+				std::unique_lock lock{ hook_lock };
+				thread_freezer freeze{ *this, true };
+
+			}
+			catch (...)
+			{
+
+			}
+		}
+	}
+
+	void hook_chain::swap(hook_chain& other)
+	{
+		enabled.swap(other.enabled);
+		disabled.swap(other.disabled);
+		std::swap(starts_enabled, other.starts_enabled);
+
+		for (hook& h : *this)
+			h.pchain = this;
+		for (hook& h : other)
+			h.pchain = &other;
+	}
+
 	void hook_chain::splice(list_iterator newpos, hook_chain& other, transfer to, transfer from)
 	{
 		utils_assert(&other != this, "hook_chain::splice: other needs to be a different hook_chain instance");
@@ -395,9 +438,9 @@ namespace alterhook
 				*otherfront.origwrap = enabledprev->pdetour;
 			}
 
-			if (enablednewpos == enabled.end())
+			try
 			{
-				try
+				if (enablednewpos == enabled.end())
 				{
 					std::unique_lock lock{ hook_lock };
 					if (enabled.empty())
@@ -408,53 +451,54 @@ namespace alterhook
 					else
 						__alterhook_patch_jmp(otherback.pdetour);
 				}
-				catch (...)
+				else
 				{
-					if (from != transfer::disabled)
-					{
-						__alterhook_def_thumb_var(other.ptarget);
-						otherfront.poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
-						*otherfront.origwrap = otherfront.poriginal;
-
-						try
-						{
-							std::unique_lock lock{ hook_lock };
-							thread_freezer freeze{ other, true };
-							__alterhook_inject_other(other, otherback.pdetour, true);
-						}
-						catch (...)
-						{
-							if (!other.disabled.empty())
-								other.disabled.back().has_other = false;
-							list_iterator previtr = other.disabled.end();
-							do
-							{
-								list_iterator curritr = std::prev(other.enabled.end());
-								list_iterator trgitr = previtr;
-								hook& curr = *curritr;
-
-								if (curr.has_other)
-								{
-									if (curr.other != other.disabled.begin())
-										std::prev(curr.other)->has_other = false;
-									trgitr = curr.other;
-									curr.has_other = false;
-								}
-
-								curr.enabled = false;
-								other.disabled.splice(trgitr, other.enabled, curritr);
-								previtr = curritr;
-							} while (!other.enabled.empty());
-							throw;
-						}
-					}
-					throw;
+					thread_freezer freeze{ nullptr };
+					enablednewpos->poriginal = otherback.pdetour;
+					*enablednewpos->origwrap = otherback.pdetour;
 				}
 			}
-			else
+			catch (...)
 			{
-				enablednewpos->poriginal = otherback.pdetour;
-				*enablednewpos->origwrap = otherback.pdetour;
+				if (from != transfer::disabled)
+				{
+					__alterhook_def_thumb_var(other.ptarget);
+					otherfront.poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
+					*otherfront.origwrap = otherfront.poriginal;
+
+					try
+					{
+						std::unique_lock lock{ hook_lock };
+						thread_freezer freeze{ other, true };
+						__alterhook_inject_other(other, otherback.pdetour, true);
+					}
+					catch (...)
+					{
+						if (!other.disabled.empty())
+							other.disabled.back().has_other = false;
+						list_iterator previtr = other.disabled.end();
+						do
+						{
+							list_iterator curritr = std::prev(other.enabled.end());
+							list_iterator trgitr = previtr;
+							hook& curr = *curritr;
+
+							if (curr.has_other)
+							{
+								if (curr.other != other.disabled.begin())
+									std::prev(curr.other)->has_other = false;
+								trgitr = curr.other;
+								curr.has_other = false;
+							}
+
+							curr.enabled = false;
+							other.disabled.splice(trgitr, other.enabled, curritr);
+							previtr = curritr;
+						} while (!other.enabled.empty());
+						throw;
+					}
+				}
+				throw;
 			}
 		};
 
@@ -722,7 +766,6 @@ namespace alterhook
 			return;
 
 		// covers transfer from enabled
-		bool should_handle = false;
 		if (oldpos->enabled)
 		{
 			// covers transfer from enabled end
@@ -739,16 +782,16 @@ namespace alterhook
 			}
 			else
 			{
+				thread_freezer freeze{ nullptr };
 				oldnext->poriginal = oldpos->poriginal;
 				*oldnext->origwrap = oldpos->poriginal;
 			}
-			should_handle = true;
 		}
 
-		// covers transfer to enabled end
-		if (to_enabled && newpos == enabled.end())
+		try
 		{
-			try
+			// transfer to enabled end
+			if (to_enabled && newpos == enabled.end())
 			{
 				std::unique_lock lock{ hook_lock };
 				if (enabled.empty())
@@ -767,86 +810,92 @@ namespace alterhook
 					__alterhook_patch_jmp(oldpos->pdetour);
 				}
 			}
-			catch (...)
+			// transfer to enabled
+			else if (to_enabled)
 			{
-				// provide strong guarantee
-				// so we attempt to rebind the old node back to where it was before exiting
-				if (should_handle)
+				thread_freezer freeze{ nullptr };
+				oldpos->poriginal = oldnext->poriginal;
+				*oldpos->origwrap = oldnext->poriginal;
+				oldnext->poriginal = oldpos->pdetour;
+				*oldnext->origwrap = oldpos->pdetour;
+			}
+		}
+		catch (...)
+		{
+			// provide strong guarantee
+			// so we attempt to rebind the old node back to where it was before exiting
+			if (oldpos->enabled)
+			{
+				try
 				{
-					if (oldpos->enabled && oldnext == other.enabled.end())
+					if (oldnext == other.enabled.end())
 					{
-						// if an attempt to rebind old at enabled end fails with exception
-						// then provide basic guarantee by disabling the old one
-						try
+						std::unique_lock lock{ hook_lock };
+						if (other.enabled.size() == 1)
 						{
-							std::unique_lock lock{ hook_lock };
-							if (other.enabled.size() == 1)
-							{
-								__alterhook_def_thumb_var(other.ptarget);
-								oldpos->poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
-								*oldpos->origwrap = oldpos->poriginal;
-								thread_freezer freeze{ other, true };
-								__alterhook_inject_other(other, oldpos->pdetour, true);
-							}
-							else
-							{
-								hook& elast = other.enabled.back();
-								oldpos->poriginal = elast.pdetour;
-								*oldpos->origwrap = elast.pdetour;
-								__alterhook_patch_other_jmp(other, oldpos->pdetour);
-							}
+							__alterhook_def_thumb_var(other.ptarget);
+							oldpos->poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
+							*oldpos->origwrap = oldpos->poriginal;
+							thread_freezer freeze{ other, true };
+							__alterhook_inject_other(other, oldpos->pdetour, true);
 						}
-						catch (...)
+						else
 						{
-							if (oldpos != other.enabled.begin())
-							{
-								auto oldprev = std::prev(oldpos);
-								if (!oldprev->has_other)
-								{
-									oldprev->has_other = true;
-									oldprev->other = oldpos;
-								}
-							}
-							else
-								other.starts_enabled = false;
-
-							if (!other.disabled.empty())
-							{
-								hook& dlast = other.disabled.back();
-								if (dlast.has_other && dlast.other == oldpos)
-									dlast.has_other = false;
-							}
-
-							list_iterator target = other.disabled.end();
-							if (oldpos->has_other)
-							{
-								oldpos->has_other = false;
-								target = oldpos->other;
-							}
-
-							oldpos->enabled = false;
-							other.disabled.splice(target, other.enabled, oldpos);
-							throw;
+							hook& elast = other.enabled.back();
+							oldpos->poriginal = elast.pdetour;
+							*oldpos->origwrap = elast.pdetour;
+							__alterhook_patch_other_jmp(other, oldpos->pdetour);
 						}
 					}
 					else
 					{
+						thread_freezer freeze{ nullptr };
 						oldpos->poriginal = oldnext->poriginal;
 						*oldpos->origwrap = oldnext->poriginal;
 						oldnext->poriginal = oldpos->pdetour;
 						*oldnext->origwrap = oldpos->pdetour;
 					}
 				}
-				throw;
+				catch (...)
+				{
+					if (oldpos != other.enabled.begin())
+					{
+						auto oldprev = std::prev(oldpos);
+						if (!oldprev->has_other)
+						{
+							oldprev->has_other = true;
+							oldprev->other = oldpos;
+						}
+						else if (oldnext != other.enabled.end())
+						{
+							oldprev = oldprev->other;
+							while (!oldprev->has_other)
+								++oldprev;
+							oldprev->has_other = false;
+						}
+						else
+						{
+							hook& dlast = other.disabled.back();
+							if (dlast.has_other && dlast.other == oldpos)
+								dlast.has_other = false;
+						}
+					}
+					else
+						other.starts_enabled = false;
+
+					list_iterator target = other.disabled.end();
+					if (oldpos->has_other)
+					{
+						oldpos->has_other = false;
+						target = oldpos->other;
+					}
+
+					oldpos->enabled = false;
+					other.disabled.splice(target, other.enabled, oldpos);
+					throw;
+				}
 			}
-		}
-		// covers transfer to enabled
-		else if (to_enabled)
-		{
-			oldpos->poriginal = newpos->poriginal;
-			*oldpos->origwrap = newpos->poriginal;
-			newpos->poriginal = oldpos->pdetour;
-			*newpos->origwrap = oldpos->pdetour;
+			throw;
 		}
 
 		bool should_search = false;
@@ -1023,16 +1072,18 @@ namespace alterhook
 			}
 			else
 			{
+				thread_freezer freeze{ nullptr };
 				last->poriginal = first->poriginal;
 				*last->origwrap = first->poriginal;
 			}
 		}
 
 		auto lastprev = std::prev(last);
-		// covers transfer to enabled end
-		if (newpos == enabled.end())
+
+		try
 		{
-			try
+			// covers transfer to enabled end
+			if (newpos == enabled.end())
 			{
 				std::unique_lock lock{ hook_lock };
 				if (enabled.empty())
@@ -1051,88 +1102,110 @@ namespace alterhook
 					__alterhook_patch_jmp(lastprev->pdetour);
 				}
 			}
-			catch (...)
+			// covers transfer to enabled
+			else if (newpos != disabled.end() && newpos->enabled)
 			{
-				if (first->enabled)
+				thread_freezer freeze{ nullptr };
+				first->poriginal = newpos->poriginal;
+				*first->origwrap = newpos->poriginal;
+				newpos->poriginal = lastprev->pdetour;
+				*newpos->origwrap = lastprev->pdetour;
+			}
+		}
+		catch (...)
+		{
+			if (first->enabled)
+			{
+				try
 				{
 					if (last == other.enabled.end())
 					{
-						try
+						std::unique_lock lock{ hook_lock };
+						if (first == other.enabled.begin())
 						{
-							std::unique_lock lock{ hook_lock };
-							if (first == other.enabled.begin())
-							{
-								__alterhook_def_thumb_var(other.ptarget);
-								first->poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
-								*first->origwrap = first->poriginal;
-								thread_freezer freeze{ other, true };
-								__alterhook_inject_other(other, lastprev->pdetour, true);
-							}
-							else
-							{
-								hook& elast = other.enabled.back();
-								first->poriginal = elast.pdetour;
-								*first->origwrap = elast.pdetour;
-								__alterhook_patch_other_jmp(other, lastprev->pdetour);
-							}
+							__alterhook_def_thumb_var(other.ptarget);
+							first->poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
+							*first->origwrap = first->poriginal;
+							thread_freezer freeze{ other, true };
+							__alterhook_inject_other(other, lastprev->pdetour, true);
 						}
-						catch (...)
+						else
 						{
-							if (first != other.enabled.begin())
-							{
-								auto firstprev = std::prev(first);
-								if (!firstprev->has_other)
-								{
-									firstprev->has_other = true;
-									firstprev->other = first;
-								}
-							}
-							else
-								other.starts_enabled = false;
-							if (!other.disabled.empty())
-								other.disabled.back().has_other = false;
-
-							list_iterator previtr = other.disabled.end();
-							do
-							{
-								auto curritr = std::prev(last);
-								auto trgitr = previtr;
-								hook& curr = *curritr;
-
-								if (curr.has_other)
-								{
-									if (curr.other != other.disabled.begin())
-										std::prev(curr.other)->has_other = false;
-									trgitr = curr.other;
-									curr.has_other = false;
-								}
-
-								curr.enabled = false;
-								other.disabled.splice(trgitr, other.enabled, curritr);
-								previtr = curritr;
-							} while (first->enabled);
-
-							throw;
+							hook& elast = other.enabled.back();
+							first->poriginal = elast.pdetour;
+							*first->origwrap = elast.pdetour;
+							__alterhook_patch_other_jmp(other, lastprev->pdetour);
 						}
 					}
 					else
 					{
+						thread_freezer freeze{ nullptr };
 						first->poriginal = last->poriginal;
 						*first->origwrap = last->poriginal;
 						last->poriginal = lastprev->pdetour;
 						*last->origwrap = lastprev->pdetour;
 					}
 				}
-				throw;
+				catch (...)
+				{
+					if (first != other.enabled.begin())
+					{
+						auto firstprev = std::prev(first);
+						if (!firstprev->has_other)
+						{
+							firstprev->has_other = true;
+							firstprev->other = first;
+						}
+					}
+					else
+						other.starts_enabled = false;
+					list_iterator trg = lastprev;
+					list_iterator previtr = other.disabled.end();
+					list_iterator firstbind{};
+					bool has_first_bind = false;
+					bool lastprev_has_other = lastprev->has_other;
+					
+					while (!trg->has_other && trg != other.enabled.end())
+						++trg;
+					if (trg != other.enabled.end())
+						previtr = trg->other;
+					if (!other.disabled.empty())
+						other.disabled.back().has_other = false;
+					
+					do
+					{
+						auto curritr = std::prev(last);
+						auto trgitr = previtr;
+						hook& curr = *curritr;
+
+						if (curr.has_other)
+						{
+							if (curr.other != other.disabled.begin())
+								std::prev(curr.other)->has_other = false;
+							if (!has_first_bind)
+							{
+								has_first_bind = true;
+								firstbind = curr.other;
+							}
+							trgitr = curr.other;
+							curr.has_other = false;
+						}
+
+						curr.enabled = false;
+						other.disabled.splice(trgitr, other.enabled, curritr);
+						previtr = curritr;
+					} while (first->enabled);
+
+					if (has_first_bind && !lastprev_has_other)
+					{
+						while (!firstbind->has_other)
+							++firstbind;
+						firstbind->has_other = false;
+					}
+					throw;
+				}
 			}
-		}
-		// covers transfer to enabled
-		else if (newpos != disabled.end() && newpos->enabled)
-		{
-			first->poriginal = newpos->poriginal;
-			*first->origwrap = newpos->poriginal;
-			newpos->poriginal = lastprev->pdetour;
-			*newpos->origwrap = lastprev->pdetour;
+			throw;
 		}
 
 		list_iterator newsearchitr{};
@@ -1438,9 +1511,9 @@ namespace alterhook
 				}
 			}
 
-			if (enabledoldtrgpos == other.enabled.end())
+			try
 			{
-				try
+				if (enabledoldtrgpos == other.enabled.end())
 				{
 					std::unique_lock lock{ hook_lock };
 					if (other.enabled.empty())
@@ -1451,35 +1524,36 @@ namespace alterhook
 					else
 						__alterhook_patch_other_jmp(other, first_enabled->pdetour);
 				}
-				catch (...)
+				else
 				{
-					for (
-						auto itr = iterator(first, first, first.enabled),
-						itrend = iterator(lastprev, lastprev, lastprev->enabled),
-						next = iterator();
-						itr != itrend;
-						itr = next
-					)
-					{
-						next = std::next(itr);
-						itr->pchain = &other;
-						if (itr.enabled)
-							other.enabled.splice(enabledoldtrgpos, enabled, itr);
-						else
-							other.disabled.splice(disabledoldtrgpos, disabled, itr);
-					}
-					lastprev->pchain = &other;
-					if (lastprev->enabled)
-						other.enabled.splice(enabledoldtrgpos, enabled, lastprev);
-					else
-						other.disabled.splice(disabledoldtrgpos, disabled, lastprev);
-					throw;
+					thread_freezer freeze{ nullptr };
+					enabledoldtrgpos->poriginal = first_enabled->poriginal;
+					*enabledoldtrgpos->origwrap = first_enabled->poriginal;
 				}
 			}
-			else
+			catch (...)
 			{
-				enabledoldtrgpos->poriginal = first_enabled->poriginal;
-				*enabledoldtrgpos->origwrap = first_enabled->poriginal;
+				for (
+					auto itr = iterator(first, first, first.enabled),
+					itrend = iterator(lastprev, lastprev, lastprev->enabled),
+					next = iterator();
+					itr != itrend;
+					itr = next
+				)
+				{
+					next = std::next(itr);
+					itr->pchain = &other;
+					if (itr.enabled)
+						other.enabled.splice(enabledoldtrgpos, enabled, itr);
+					else
+						other.disabled.splice(disabledoldtrgpos, disabled, itr);
+				}
+				lastprev->pchain = &other;
+				if (lastprev->enabled)
+					other.enabled.splice(enabledoldtrgpos, enabled, lastprev);
+				else
+					other.disabled.splice(disabledoldtrgpos, disabled, lastprev);
+				throw;
 			}
 
 			hook& otherfront = *first_enabled;
@@ -1499,9 +1573,9 @@ namespace alterhook
 				*otherfront.origwrap = enabledprev->pdetour;
 			}
 
-			if (enablednewpos == enabled.end())
+			try
 			{
-				try
+				if (enablednewpos == enabled.end())
 				{
 					std::unique_lock lock{ hook_lock };
 					if (enabled.empty())
@@ -1512,84 +1586,121 @@ namespace alterhook
 					else
 						__alterhook_patch_jmp(otherback.pdetour);
 				}
-				catch (...)
+				else
 				{
-					otherfront.poriginal = oldporiginal;
-					*otherfront.origwrap = oldporiginal;
+					thread_freezer freeze{ nullptr };
+					enablednewpos->poriginal = otherback.pdetour;
+					*enablednewpos->origwrap = otherback.pdetour;
+				}
+			}
+			catch (...)
+			{
+				otherfront.poriginal = oldporiginal;
+				*otherfront.origwrap = oldporiginal;
 
-					for (
-						auto itr = iterator(first, first, first.enabled),
-						itrend = iterator(lastprev, lastprev, lastprev->enabled),
-						next = iterator();
-						itr != itrend;
-						itr = next
+				for (
+					auto itr = iterator(first, first, first.enabled),
+					itrend = iterator(lastprev, lastprev, lastprev->enabled),
+					next = iterator();
+					itr != itrend;
+					itr = next
 					)
-					{
-						next = std::next(itr);
-						itr->pchain = &other;
-						if (itr.enabled)
-							other.enabled.splice(enabledoldtrgpos, enabled, itr);
-						else
-							other.disabled.splice(disabledoldtrgpos, disabled, itr);
-					}
-					lastprev->pchain = &other;
-					if (lastprev->enabled)
-						other.enabled.splice(enabledoldtrgpos, enabled, lastprev);
+				{
+					next = std::next(itr);
+					itr->pchain = &other;
+					if (itr.enabled)
+						other.enabled.splice(enabledoldtrgpos, enabled, itr);
 					else
-						other.disabled.splice(disabledoldtrgpos, disabled, lastprev);
+						other.disabled.splice(disabledoldtrgpos, disabled, itr);
+				}
+				lastprev->pchain = &other;
+				if (lastprev->enabled)
+					other.enabled.splice(enabledoldtrgpos, enabled, lastprev);
+				else
+					other.disabled.splice(disabledoldtrgpos, disabled, lastprev);
 
+				try
+				{
 					if (enabledoldtrgpos == other.enabled.end())
 					{
-						try
+						std::unique_lock lock{ hook_lock };
+						if (other.enabled.empty())
 						{
-							std::unique_lock lock{ hook_lock };
-							if (other.enabled.empty())
-							{
-								thread_freezer freeze{ other, true };
-								__alterhook_inject_other(other, last_enabled->pdetour, true);
-							}
-							else
-								__alterhook_patch_other_jmp(other, last_enabled->pdetour);
+							thread_freezer freeze{ other, true };
+							__alterhook_inject_other(other, last_enabled->pdetour, true);
 						}
-						catch (...)
-						{
-							if (!other.disabled.empty())
-								other.disabled.back().has_other = false;
-
-							list_iterator previtr = other.disabled.end();
-							do
-							{
-								list_iterator curritr = std::prev(other.enabled.end());
-								list_iterator trgitr = previtr;
-								hook& curr = *curritr;
-
-								if (curr.has_other)
-								{
-									if (curr.other != other.disabled.begin())
-										std::prev(curr.other)->has_other = false;
-									trgitr = curr.other;
-									curr.has_other = false;
-								}
-
-								curr.enabled = false;
-								other.disabled.splice(trgitr, other.enabled, curritr);
-								previtr = curritr;
-							} while (first_enabled->enabled);
-							throw;
-						}
+						else
+							__alterhook_patch_other_jmp(other, last_enabled->pdetour);
 					}
 					else
 					{
+						thread_freezer freeze{ nullptr };
 						enabledoldtrgpos->poriginal = last_enabled->pdetour;
 						*enabledoldtrgpos->origwrap = last_enabled->pdetour;
 					}
+				}
+				catch (...)
+				{
+					if (first.enabled)
+					{
+						if (first != other.enabled.begin())
+						{
+							auto firstprev = std::prev(first_enabled);
+							if (!firstprev->has_other)
+							{
+								firstprev->has_other = true;
+								firstprev->other = first_enabled;
+							}
+						}
+						else
+							other.starts_enabled = false;
+					}
+
+					list_iterator trg = last_enabled;
+					list_iterator previtr = other.disabled.end();
+					list_iterator last_enabled_next = std::next(last_enabled);
+					list_iterator firstbind{};
+					bool has_first_bind = false;
+					bool last_enabled_has_other = last_enabled->has_other;
+
+					while (!trg->has_other && trg != other.enabled.end())
+						++trg;
+					if (trg != other.enabled.end())
+						previtr = trg->other;
+
+					do
+					{
+						auto curritr = std::prev(last_enabled_next);
+						auto trgitr = previtr;
+						hook& curr = *curritr;
+
+						if (curr.has_other)
+						{
+							if (curr.other != other.disabled.begin())
+								std::prev(curr.other)->has_other = false;
+							if (!has_first_bind)
+							{
+								has_first_bind = true;
+								firstbind = curr.other;
+							}
+							trgitr = curr.other;
+							curr.has_other = false;
+						}
+
+						curr.enabled = false;
+						other.disabled.splice(trgitr, other.enabled, curritr);
+						previtr = curritr;
+					} while (first_enabled->enabled);
+
+					if (has_first_bind && !last_enabled_has_other)
+					{
+						while (!firstbind->has_other)
+							++firstbind;
+						firstbind->has_other = false;
+					}
 					throw;
 				}
-			}
-			else
-			{
-				enablednewpos->poriginal = otherback.pdetour;
-				*enablednewpos->origwrap = otherback.pdetour;
+				throw;
 			}
 		}
 		else
@@ -1736,6 +1847,7 @@ namespace alterhook
 			}
 			else
 			{
+				thread_freezer freeze{ nullptr };
 				poriginal = target->poriginal;
 				*origwrap = target->poriginal;
 				target->poriginal = pdetour;
@@ -1814,6 +1926,7 @@ namespace alterhook
 			}
 			else
 			{
+				thread_freezer freeze{ nullptr };
 				next->poriginal = poriginal;
 				*next->origwrap = poriginal;
 			}

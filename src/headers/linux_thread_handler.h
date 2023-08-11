@@ -26,7 +26,7 @@ namespace alterhook
 		static struct sigaction old_action;
 		static std::pair<const trampoline*, bool> args;
 		static std::pair<std::atomic_bool, std::tuple<std::byte*, std::byte*, size_t>> result;
-		// those are tids and not pids. pids & tids just share the same type underlying
+		// these are tids and not pids. pids & tids just share the same type underlying
 		std::vector<pid_t> tids;
 
 		// gets all the current active threads
@@ -39,7 +39,9 @@ namespace alterhook
 		static void thread_control_handler(int sig, siginfo_t* siginfo, void* sigcontext);
 	public:
 		void init(const trampoline& tramp, bool enable_hook);
+		void init(std::nullptr_t);
 		thread_freezer(const trampoline& tramp, bool enable_hook) { init(tramp, enable_hook); }
+		thread_freezer(std::nullptr_t) { init(nullptr); }
 		thread_freezer() {}
 		~thread_freezer() noexcept;
 	};
