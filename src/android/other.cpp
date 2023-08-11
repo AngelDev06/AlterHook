@@ -244,10 +244,11 @@ namespace alterhook
 	{
 		if (should_suspend)
 		{
-			process_frozen_threads(
-				*args.first, args.second,
-				static_cast<ucontext_t*>(sigcontext)->uc_mcontext.arm_pc
-			);
+			if (args.first)
+				process_frozen_threads(
+					*args.first, args.second,
+					static_cast<ucontext_t*>(sigcontext)->uc_mcontext.arm_pc
+				);
 			processed_threads_count.fetch_add(1, std::memory_order_acq_rel);
 			pause();
 		}
@@ -291,6 +292,27 @@ namespace alterhook
 			auto [tramp_addr, target_addr, pos] = result.second;
 			throw(exceptions::thread_process_fail(tramp_addr, target_addr, pos));
 		}
+	}
+
+	void thread_freezer::init(std::nullptr_t)
+	{
+		scan_threads();
+		{
+			std::scoped_lock lock{ ref_count_lock };
+			if (!ref_count)
+				set_signal_handler();
+			++ref_count;
+		}
+		std::unique_lock lock{ freezer_lock };
+		args = { nullptr, 0 };
+
+		for (size_t i = 0; i != tids.size(); ++i)
+		{
+			if (!suspend(tids[i]))
+				tids.erase(tids.begin() + i);
+		}
+
+		wait_until_threads_are_processed();
 	}
 
 	thread_freezer::~thread_freezer() noexcept
