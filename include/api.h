@@ -432,17 +432,17 @@ namespace alterhook
 	class ALTERHOOK_API hook_chain::hook
 	{
 	public:
-		typedef std::list<hook>::iterator iterator;
-		typedef std::list<hook>::const_iterator const_iterator;
-
 		hook() noexcept {}
 
 		void enable();
 		void disable();
 
-		iterator get_iterator() noexcept { return current; }
-		const_iterator get_iterator() const noexcept { return current; }
-		const_iterator get_const_iterator() const noexcept { return current; }
+		iterator get_iterator() noexcept;
+		const_iterator get_iterator() const noexcept;
+		const_iterator get_const_iterator() const noexcept;
+		list_iterator get_list_iterator() noexcept { return current; }
+		const_list_iterator get_list_iterator() const noexcept { return current; }
+		const_list_iterator get_const_list_iterator() const noexcept { return current; }
 		hook_chain& get_chain() const noexcept { return *pchain; }
 		std::byte* get_target() const noexcept { return pchain->ptarget; }
 		const std::byte* get_detour() const noexcept { return pdetour; }
@@ -455,8 +455,8 @@ namespace alterhook
 		void set_original(orig& original);
 	private:
 		friend class hook_chain;
-		iterator current{};
-		iterator other{};
+		list_iterator current{};
+		list_iterator other{};
 		hook_chain* pchain = nullptr;
 		const std::byte* pdetour = nullptr;
 		const std::byte* poriginal = nullptr;
@@ -466,11 +466,11 @@ namespace alterhook
 		bool has_other = false;
 
 		template <typename orig>
-		void init(hook_chain& chain, iterator curr, const std::byte* detour, const std::byte* original, orig& origref, bool should_enable);
+		void init(hook_chain& chain, list_iterator curr, const std::byte* detour, const std::byte* original, orig& origref, bool should_enable);
 		template <typename orig>
-		void init(hook_chain& chain, iterator curr, const std::byte* detour, orig& origref);
-		void init(hook_chain& chain, iterator curr, const std::byte* detour, const std::byte* original, const helpers::orig_buff_t& buffer);
-		void init(hook_chain& chain, iterator curr, const std::byte* detour, const helpers::orig_buff_t& buffer);
+		void init(hook_chain& chain, list_iterator curr, const std::byte* detour, orig& origref);
+		void init(hook_chain& chain, list_iterator curr, const std::byte* detour, const std::byte* original, const helpers::orig_buff_t& buffer);
+		void init(hook_chain& chain, list_iterator curr, const std::byte* detour, const helpers::orig_buff_t& buffer);
 		void set_detour(std::byte* detour);
 		hook(const hook&) = default;
 	};
@@ -612,7 +612,7 @@ namespace alterhook
 	{
 		memcpy(backup.data(), other.backup.data(), backup.size());
 		__alterhook_def_thumb_var(ptarget);
-		hook::iterator itr = disabled.emplace(disabled.end());
+		list_iterator itr = disabled.emplace(disabled.end());
 		itr->init(*this, itr, other.pdetour, __alterhook_add_thumb_bit(ptrampoline.get()), original, false);
 	}
 
@@ -660,7 +660,7 @@ namespace alterhook
 		starts_enabled = true;
 		if constexpr (sizeof...(types) > 0)
 		{
-			hook::iterator iter = enabled.begin();
+			list_iterator iter = enabled.begin();
 			hook* entry = &fentry;
 			const std::byte* pdetour = entry->pdetour;
 			(
@@ -683,7 +683,7 @@ namespace alterhook
 	template <typename orig>
 	void hook_chain::hook::init(
 		hook_chain& chain, 
-		iterator curr, 
+		list_iterator curr, 
 		const std::byte* detour, 
 		const std::byte* original, 
 		orig& origref, 
@@ -703,7 +703,7 @@ namespace alterhook
 	template <typename orig>
 	void hook_chain::hook::init(
 		hook_chain& chain,
-		iterator curr,
+		list_iterator curr,
 		const std::byte* detour,
 		orig& origref
 	)
@@ -1118,9 +1118,13 @@ namespace alterhook
 		return tmp;
 	}
 
+	inline hook_chain::iterator hook_chain::hook::get_iterator() noexcept { return iterator(current, current, enabled); }
+	inline hook_chain::const_iterator hook_chain::hook::get_iterator() const noexcept { return const_iterator(current, current, enabled); }
+	inline hook_chain::const_iterator hook_chain::hook::get_const_iterator() const noexcept { return get_iterator(); }
+
 	inline void hook_chain::hook::init(
 		hook_chain& chain, 
-		iterator curr, 
+		list_iterator curr, 
 		const std::byte* detour, 
 		const std::byte* original, 
 		const helpers::orig_buff_t& buffer
@@ -1137,7 +1141,7 @@ namespace alterhook
 
 	inline void hook_chain::hook::init(
 		hook_chain& chain,
-		iterator curr,
+		list_iterator curr,
 		const std::byte* detour,
 		const helpers::orig_buff_t& buffer
 	)
