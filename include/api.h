@@ -191,7 +191,9 @@ namespace alterhook
 		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
 		void push_front(dtr&& detour, orig& original, bool enable_hook = true);
 		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
-		hook& insert(list_iterator position, dtr&& detour, orig& original, bool enable_hook = true);
+		hook& insert(list_iterator position, dtr&& detour, orig& original, base trg = base::enabled);
+		template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_templ>
+		hook& insert(iterator position, dtr&& detour, orig& original);
 		void swap(list_iterator left, hook_chain& other, list_iterator right);
 		void swap(list_iterator left, list_iterator right) { swap(left, *this, right); }
 		void swap(hook_chain& other);
@@ -424,6 +426,7 @@ namespace alterhook
 		void init_chain();
 		void join_last();
 		void join_first();
+		void join(list_iterator itr);
 	};
 
 	class ALTERHOOK_API hook_chain::hook
@@ -722,6 +725,88 @@ namespace alterhook
 		new (&origbuff) helpers::original_wrapper(original);
 		original = function_cast<orig>(poriginal);
 		*std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
+	}
+
+	template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_nd_templ>
+	hook_chain::hook& hook_chain::insert(list_iterator position, dtr&& detour, orig& original, base trg)
+	{
+		utils_assert(trg != base::both, "hook_chain::insert: base cannot be the both flag");
+		std::list<hook>* to = nullptr;
+		std::list<hook>* other = nullptr;
+		list_iterator itr{};
+		list_iterator itrprev{};
+
+		if (trg == base::enabled)
+		{
+			to = &enabled;
+			other = &disabled;
+			itr = enabled.emplace(position);
+			
+			if (itr == enabled.begin())
+			{
+				__alterhook_def_thumb_var(ptarget);
+				itr->init(
+					*this, itr,
+					get_target_address(std::forward<dtr>(detour)),
+					__alterhook_add_thumb_bit(ptrampoline.get()),
+					original,
+					true
+				);
+			}
+			else
+			{
+				itrprev = std::prev(itr);
+				itr->init(
+					*this, itr,
+					get_target_address(std::forward<dtr>(detour)),
+					itrprev->pdetour,
+					original,
+					true
+				);
+			}
+			join(itr);
+		}
+		else
+		{
+			to = &disabled;
+			other = &enabled;
+			itr = disabled.emplace(position);
+			itr->init(
+				*this, itr,
+				get_target_address(std::forward<dtr>(detour)),
+				original
+			);
+		}
+
+		if (itr == to->begin())
+		{
+			if (starts_enabled != itr->enabled)
+			{
+				list_iterator i = other->begin();
+				while (!i->has_other)
+					++i;
+				i->other = itr;
+			}
+		}
+		else
+		{
+			itrprev = std::prev(itr);
+			if (itrprev->has_other)
+			{
+				list_iterator i = itrprev->other;
+				while (!i->has_other)
+					++i;
+				i->other = itr;
+			}
+		}
+
+		return *itr;
+	}
+
+	template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_nd_templ>
+	hook_chain::hook& hook_chain::insert(iterator position, dtr&& detour, orig& original)
+	{
+		return insert(static_cast<list_iterator>(position), std::forward<dtr>(detour), original, position.enabled ? base::enabled : base::disabled);
 	}
 
 	template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig __alterhook_fn_callable_sfinae_nd_templ>
