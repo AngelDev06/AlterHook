@@ -423,7 +423,10 @@ namespace alterhook
 			if (enabled.size() == 1)
 				uninject();
 			else
+			{
+				std::unique_lock lock{ hook_lock };
 				__alterhook_patch_jmp(itr->poriginal);
+			}
 			break;
 		case base::both:
 			itr = std::prev(std::array{disabled.end(), enabled.end()}[disabled.empty() || disabled.back().has_other]);
@@ -434,7 +437,10 @@ namespace alterhook
 				if (enabled.size() == 1)
 					uninject();
 				else
+				{
+					std::unique_lock lock{ hook_lock };
 					__alterhook_patch_jmp(itr->poriginal);
+				}
 
 				if (!disabled.empty())
 				{
@@ -567,9 +573,9 @@ namespace alterhook
 
 		if (position->enabled)
 		{
+			std::unique_lock lock{ hook_lock };
 			if (enabled.size() == 1)
 			{
-				std::unique_lock lock{ hook_lock };
 				thread_freezer freeze{ *this, false };
 				__alterhook_inject(backup.data(), false);
 			}
@@ -2148,9 +2154,9 @@ namespace alterhook
 		list_iterator itr = std::prev(enabled.end());
 		try
 		{
+			std::unique_lock lock{ hook_lock };
 			if (itr == enabled.begin())
 			{
-				std::unique_lock lock{ hook_lock };
 				thread_freezer freeze{ *this, true };
 				__alterhook_inject(itr->pdetour, true);
 			}
@@ -2187,6 +2193,36 @@ namespace alterhook
 		catch (...)
 		{
 			enabled.pop_front();
+			throw;
+		}
+	}
+
+	void hook_chain::join(list_iterator itr)
+	{
+		list_iterator itrnext = std::next(itr);
+		try
+		{
+			if (itrnext == enabled.end())
+			{
+				std::unique_lock lock{ hook_lock };
+				if (enabled.size() == 1)
+				{
+					thread_freezer freeze{ *this, true };
+					__alterhook_inject(itr->pdetour, true);
+				}
+				else
+					__alterhook_patch_jmp(itr->pdetour);
+			}
+			else
+			{
+				thread_freezer freeze{ nullptr };
+				itrnext->poriginal = itr->pdetour;
+				*itrnext->origwrap = itr->pdetour;
+			}
+		}
+		catch (...)
+		{
+			enabled.erase(itr);
 			throw;
 		}
 	}
