@@ -1,0 +1,44 @@
+BasedOnStyle: LLVM
+Language: Cpp
+AlignArrayOfStructures: Left
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+  AlignCompound: true
+  PadOperators: true
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+AllowShortCaseLabelsOnASingleLine: true
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Allman
+BreakBeforeInlineASMColon: Always
+BreakInheritanceList: AfterComma
+Cpp11BracedListStyle: false
+IndentPPDirectives: BeforeHash
+IndentWrappedFunctionNames: true
+IntegerLiteralSeparator:
+  Binary: 4
+  BinaryMinDigits: 8
+  Decimal: 3
+  DecimalMinDigits: 6
+  Hex: 2
+  HexMinDigits: 4
+KeepEmptyLinesAtTheStartOfBlocks: false
+NamespaceIndentation: All
+PointerAlignment: Left
+QualifierAlignment: Custom
+QualifierOrder: ['friend', 'inline', 'static', 'constexpr', 'const', 'volatile', 'type', 'restrict']
+RequiresClausePosition: WithPreceding
+SeparateDefinitionBlocks: Always
+SortIncludes: false
