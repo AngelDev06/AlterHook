@@ -122,7 +122,7 @@ namespace alterhook
     return reinterpret_cast<addresser::multiple_inheritance*>(&vpointer_array);
   }
 
-#if !defined(NDEBUG) && utils_msvc
+#if !defined(NDEBUG)
   uintptr_t addresser::follow_msvc_debug_jmp(uintptr_t address) noexcept
   {
     intptr_t result = address;
@@ -158,10 +158,11 @@ namespace alterhook
     };
     enum class instr_opcodes : uint8_t
     {
-      MOV       = 0x8B,
-      JMP_ABS   = 0xFF,
-      JMP_SHORT = 0xEB,
-      JMP       = 0xE9
+      MOV        = 0x8B,
+      JMP_ABS    = 0xFF,
+      JMP_SHORT  = 0xEB,
+      JMP        = 0xE9,
+      X64_PREFIX = 0x48
     };
 
     while (true)
@@ -198,12 +199,12 @@ namespace alterhook
       case instr_opcodes::JMP:
         update_ip(*reinterpret_cast<int32_t*>(ip + 1) + 5);
         continue;
+      case instr_opcodes::X64_PREFIX: ++ip; continue;
       default: return false;
       }
     }
   }
-#endif
-
+#else
   bool addresser::is_virtual_impl(void* address) noexcept
   {
     auto memfunc =
@@ -215,4 +216,5 @@ namespace alterhook
     }
     return false;
   }
+#endif
 } // namespace alterhook

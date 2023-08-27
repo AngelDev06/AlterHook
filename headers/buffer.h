@@ -1,7 +1,6 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "macros.h"
 
 namespace alterhook
 {
@@ -17,7 +16,7 @@ namespace alterhook
   #define __alterhook_alloc_arg
 #endif
 
-  struct memory_block
+  struct ALTERHOOK_HIDDEN memory_block
   {
     memory_block* next;
     size_t        used_count;
@@ -38,7 +37,7 @@ namespace alterhook
   };
 
   // the allocator for trampolines
-  class trampoline_buffer
+  class ALTERHOOK_HIDDEN trampoline_buffer
   {
   private:
     friend struct memory_block;

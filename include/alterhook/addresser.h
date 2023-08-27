@@ -1,8 +1,10 @@
+/* Part of the AlterHook project */
+/* Designed & implemented by AngelDev06 */
 #pragma once
 #include <concepts>
 #include "macros.h"
 #include "utilities/utils.h"
-#if utils_msvc
+#if utils_windows
   #define __alterhook_is_virtual(memfunc)                                      \
     is_virtual_msvc_impl(reinterpret_cast<void*>(&memfunc))
 #else
@@ -103,17 +105,18 @@ namespace alterhook
     template <typename cls>
     static cls* get_instance();
 
+#if utils_windows
     static uintptr_t follow_thunk_function(uintptr_t address) noexcept;
-#if !defined(NDEBUG) && utils_msvc
+  #if !defined(NDEBUG)
     // msvc adds an extra jump when calling functions on debug builds
     static uintptr_t follow_msvc_debug_jmp(uintptr_t address) noexcept;
-#endif
-
-    // include the msvc specific implementation in the dll when targeting windows
-#if utils_windows
+  #endif
+    // include the msvc specific implementation in the dll when targeting
+    // windows
     static bool is_virtual_msvc_impl(void* address) noexcept;
-#endif
+#else
     static bool is_virtual_impl(void* address) noexcept;
+#endif
   };
 
   /*
@@ -122,7 +125,14 @@ namespace alterhook
   template <__alterhook_must_be_memfuncptr_nd(T)>
   bool addresser::is_virtual(T memfuncptr)
   {
+#if utils_clang && utils_windows
+    static_assert(utils::always_false<T>,
+                  "`addresser::is_virtual` doesn't work for windows builds "
+                  "using the clang compiler due to ABI issues, use "
+                  "`address_of_virtual` ahead of time");
+#else
     return __alterhook_is_virtual(memfuncptr);
+#endif
   }
 
   template <__alterhook_must_be_memfuncptr_nd(T)>
