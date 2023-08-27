@@ -3,8 +3,7 @@
 #pragma once
 
 // macro definitions
-#include "../src/headers/utilities/utils_macros.h"
-#include "../src/headers/macros.h"
+#include "macros.h"
 
 // standard headers
 #include <cstddef>
@@ -26,12 +25,7 @@
 #endif
 
 // utilities
-#include "../src/headers/utilities/other.h"
-#include "../src/headers/utilities/type_sequence.h"
-#include "../src/headers/utilities/calling_conventions.h"
-#include "../src/headers/utilities/function_traits.h"
-#include "../src/headers/utilities/static_vector.h"
-#include "../src/headers/utilities/template_string.h"
+#include "utilities/utils.h"
 
 // api
 #include "addresser.h"
