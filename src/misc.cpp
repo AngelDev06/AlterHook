@@ -2,7 +2,6 @@
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
 #include "exceptions.h"
-#include "linux_thread_handler.h"
 
 namespace alterhook
 {
