@@ -172,13 +172,13 @@ namespace utils
   };
 #if utils_cc_assertions
   template <typename R, typename... args>
-  struct clean_type<R(__thiscall*)(args...)>
+  struct clean_type<R(__thiscall*)(args...), false>
   {
     typedef helpers::thiscall_pfn_tag<R> type(args...);
   };
 
   template <typename R, typename... args>
-  struct clean_type<R(__thiscall*)(args...) noexcept>
+  struct clean_type<R(__thiscall*)(args...) noexcept, false>
   {
     typedef helpers::thiscall_pfn_tag<R> type(args...) noexcept;
   };

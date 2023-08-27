@@ -1,6 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
+#include "macros.h"
 #include "buffer.h"
 #include "exceptions.h"
 

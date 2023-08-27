@@ -53,7 +53,7 @@ namespace alterhook::exceptions
 #if utils_windows
   #define __alterhook_add_buffer                                               \
   private:                                                                     \
-    mutable char buffer[94];
+    mutable char buffer[94]{};
 #else
   #define __alterhook_add_buffer
 #endif
@@ -314,6 +314,22 @@ namespace alterhook::exceptions
         {
           return "An exception occurred when trying to allocate a memory block";
         } 
+        std::string error_function() const override;
+    )
+
+    utils_generate_exception(
+        thread_list_traversal_fail, os_exception,
+        (
+            (const void*, handle),
+            (uintptr_t, thread_entry_address)
+        ),
+        (
+            (uint64_t, flag)
+        ),
+        const char* what() const noexcept override
+        {
+          return "Failed to traverse over the thread list of the current process";
+        }
         std::string error_function() const override;
     )
 #else

@@ -3,7 +3,9 @@
 #pragma once
 #include <utilities/utils.h>
 #include <Windows.h>
+#include <TlHelp32.h>
 #include <array>
+#include <vector>
 #include <mutex>
 #include <sstream>
 #include <iomanip>
