@@ -1,6 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include <iterator>
+#include <algorithm>
+#include <sstream>
+#include "other.h"
 
 #if utils_cpp20
   #define __utils_mustbefwditr std::forward_iterator

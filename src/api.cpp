@@ -623,8 +623,8 @@ namespace alterhook
     }
 
     // unbind
-    if (position->enabled && position == enabled.begin() ||
-        !position->enabled && position == disabled.begin())
+    if ((position->enabled && position == enabled.begin()) ||
+        (!position->enabled && position == disabled.begin()))
     {
       if (starts_enabled != position->enabled)
       {

@@ -19,25 +19,25 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\include\addresser.h" />
-    <ClInclude Include="..\..\..\include\alterhook.h" />
-    <ClInclude Include="..\..\..\include\api.h" />
-    <ClInclude Include="..\..\..\include\exceptions.h" />
-    <ClInclude Include="..\..\..\include\tools.h" />
+    <ClInclude Include="..\..\..\headers\arm_instructions.h" />
+    <ClInclude Include="..\..\..\headers\buffer.h" />
+    <ClInclude Include="..\..\..\headers\disassembler.h" />
+    <ClInclude Include="..\..\..\headers\linux_thread_handler.h" />
+    <ClInclude Include="..\..\..\include\alterhook\addresser.h" />
+    <ClInclude Include="..\..\..\include\alterhook\alterhook.h" />
+    <ClInclude Include="..\..\..\include\alterhook\api.h" />
+    <ClInclude Include="..\..\..\include\alterhook\exceptions.h" />
+    <ClInclude Include="..\..\..\include\alterhook\macros.h" />
+    <ClInclude Include="..\..\..\include\alterhook\tools.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\calling_conventions.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\function_traits.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\other.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\static_vector.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\template_string.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\type_sequence.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\utils.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\utils_macros.h" />
     <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h" />
-    <ClInclude Include="..\..\..\src\headers\disassembler.h" />
-    <ClInclude Include="..\..\..\src\headers\arm_instructions.h" />
-    <ClInclude Include="..\..\..\src\headers\buffer.h" />
-    <ClInclude Include="..\..\..\src\headers\linux_thread_handler.h" />
-    <ClInclude Include="..\..\..\src\headers\macros.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\other.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\static_vector.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\template_string.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\utils.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\utils_macros.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
@@ -115,7 +115,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -129,7 +129,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -143,7 +143,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -157,7 +157,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>

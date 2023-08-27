@@ -13,67 +13,67 @@
     <Filter Include="Header Files">
       <UniqueIdentifier>{1f7489dd-8e5e-4c62-b6a3-b5dd361a0725}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\utilities">
-      <UniqueIdentifier>{adcc24f5-4802-4b88-b8b3-1c1d79b18e1f}</UniqueIdentifier>
+    <Filter Include="Include\utilities">
+      <UniqueIdentifier>{a497db0b-f2f5-4a49-8741-94f1bd971c92}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\utils_macros.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\other.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\static_vector.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\template_string.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\utilities\utils.h">
-      <Filter>Header Files\utilities</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h">
       <Filter>PCH</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\macros.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\calling_conventions.h">
+      <Filter>Include\utilities</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\disassembler.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\function_traits.h">
+      <Filter>Include\utilities</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\buffer.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\other.h">
+      <Filter>Include\utilities</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\linux_thread_handler.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\static_vector.h">
+      <Filter>Include\utilities</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\headers\arm_instructions.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\template_string.h">
+      <Filter>Include\utilities</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\api.h">
+    <ClInclude Include="..\..\..\include\alterhook\utilities\type_sequence.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\utils.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\utils_macros.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\addresser.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\alterhook.h">
+    <ClInclude Include="..\..\..\include\alterhook\alterhook.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\exceptions.h">
+    <ClInclude Include="..\..\..\include\alterhook\api.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\addresser.h">
+    <ClInclude Include="..\..\..\include\alterhook\exceptions.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\tools.h">
+    <ClInclude Include="..\..\..\include\alterhook\macros.h">
       <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\tools.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\headers\arm_instructions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\headers\buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\headers\disassembler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\headers\linux_thread_handler.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
