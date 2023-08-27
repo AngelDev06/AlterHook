@@ -8,6 +8,12 @@ namespace alterhook
 
   namespace helpers
   {
+#if utils_cpp20
+    template <typename T>
+    concept callable_but_stl_fn =
+        utils::callable_type<T> && !utils::stl_function_type<T>;
+#endif
+
     template <typename dtr, typename orig>
     utils_consteval void assert_valid_detour_original_pair()
     {
@@ -31,8 +37,7 @@ namespace alterhook
   } // namespace helpers
 
 #if utils_cpp20
-  template <utils::callable_type T>
-  requires(!utils::stl_function_type<T>)
+  template <helpers::callable_but_stl_fn T>
   constexpr std::byte* get_target_address(T&& fn) noexcept
 #else
   template <typename T>
@@ -102,13 +107,11 @@ namespace alterhook
 #if utils_cc_assertions
   #if utils_cpp20
     template <utils::calling_convention CC, utils::non_capturing_lambda T>
-    HG_NODISCARD inline constexpr auto
-        lambda_calling_convention(T&& obj) noexcept
+    inline constexpr auto lambda_calling_convention(T&& obj) noexcept
   #else
     template <utils::calling_convention CC, typename T,
               std::enable_if_t<utils::non_capturing_lambda<T>, size_t> = 0>
-    HG_NODISCARD inline constexpr auto
-        lambda_calling_convention(T&& obj) noexcept
+    inline constexpr auto lambda_calling_convention(T&& obj) noexcept
   #endif
     {
       typedef utils::helpers::lambda_to_fn_t<

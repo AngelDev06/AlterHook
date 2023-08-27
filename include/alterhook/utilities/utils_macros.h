@@ -109,6 +109,10 @@
   #endif
 #endif
 
+#ifndef utils_visibility
+  #define utils_visibility
+#endif
+
 #if utils_cpp20
   #define utils_concept   concept
   #define utils_consteval consteval
@@ -423,6 +427,7 @@
 #define __utils_define_getters(...)                                            \
   utils_map(__utils_define_getters1, __VA_ARGS__)
 
+// clang-format off
 /* This generates an exception class using the following properties
  * `exception_name`:
  * | The name of the exception, it will be used in the class definition like
@@ -445,26 +450,27 @@
  * declaration.
  */
 #define utils_generate_exception(exception_name, base, fields, base_args, ...) \
-  class exception_name : public base                                           \
+  class utils_visibility exception_name : public base                          \
   {                                                                            \
   public:                                                                      \
     __VA_ARGS__                                                                \
   private:                                                                     \
-    __utils_define_fields fields public                                        \
-        : exception_name(__utils_define_arguments base_args,                   \
-                         __utils_define_arguments fields)                      \
+    __utils_define_fields fields                                               \
+  public:                                                                      \
+    exception_name(__utils_define_arguments base_args,                         \
+                   __utils_define_arguments fields)                            \
         : base(__utils_pass_parameters base_args), __utils_init_fields fields  \
     {                                                                          \
     }                                                                          \
-    exception_name(const exception_name& other)                   = default;   \
-    exception_name&        operator=(const exception_name& other) = default;   \
+    exception_name(const exception_name& other)            = default;          \
+    exception_name& operator=(const exception_name& other) = default;          \
     __utils_define_getters fields                                              \
   };
 
 // Same as `utils_generate_exception` but without the fields param
 #define utils_generate_exception_no_fields(exception_name, base, base_args,    \
                                            ...)                                \
-  class exception_name : public base                                           \
+  class utils_visibility exception_name : public base                          \
   {                                                                            \
   public:                                                                      \
     __VA_ARGS__                                                                \
@@ -480,24 +486,25 @@
 // Same as `utils_generate_exception` but without the base_args param
 #define utils_generate_exception_no_base_args(exception_name, base, fields,    \
                                               ...)                             \
-  class exception_name : public base                                           \
+  class utils_visibility exception_name : public base                          \
   {                                                                            \
   public:                                                                      \
     __VA_ARGS__                                                                \
   private:                                                                     \
-    __utils_define_fields fields public                                        \
-        : exception_name(__utils_define_arguments fields)                      \
+    __utils_define_fields fields                                               \
+  public:                                                                      \
+    exception_name(__utils_define_arguments fields)                            \
         : base(), __utils_init_fields fields                                   \
     {                                                                          \
     }                                                                          \
-    exception_name(const exception_name& other)                   = default;   \
-    exception_name&        operator=(const exception_name& other) = default;   \
+    exception_name(const exception_name& other)            = default;          \
+    exception_name& operator=(const exception_name& other) = default;          \
     __utils_define_getters fields                                              \
   };
 
 // Same as `utils_generate_exception` but without fields and base_args params
 #define utils_generate_empty_exception(exception_name, base, ...)              \
-  class exception_name : public base                                           \
+  class utils_visibility exception_name : public base                          \
   {                                                                            \
   public:                                                                      \
     __VA_ARGS__                                                                \
@@ -506,3 +513,4 @@
     exception_name(const exception_name& other)            = default;          \
     exception_name& operator=(const exception_name& other) = default;          \
   };
+// clang-format on

@@ -19,20 +19,23 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\headers\buffer.h" />
+    <ClInclude Include="..\..\..\headers\disassembler.h" />
+    <ClInclude Include="..\..\..\include\alterhook\addresser.h" />
+    <ClInclude Include="..\..\..\include\alterhook\alterhook.h" />
+    <ClInclude Include="..\..\..\include\alterhook\api.h" />
+    <ClInclude Include="..\..\..\include\alterhook\exceptions.h" />
+    <ClInclude Include="..\..\..\include\alterhook\macros.h" />
+    <ClInclude Include="..\..\..\include\alterhook\tools.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\calling_conventions.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\function_traits.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\other.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\static_vector.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\template_string.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\type_sequence.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\utils.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\utils_macros.h" />
     <ClInclude Include="..\..\..\pre-compiled headers\windows\pch.h" />
-    <ClInclude Include="..\..\..\src\headers\addresser.h" />
-    <ClInclude Include="..\..\..\src\headers\arm_disassembler.h" />
-    <ClInclude Include="..\..\..\src\headers\buffer.h" />
-    <ClInclude Include="..\..\..\src\headers\exceptions.h" />
-    <ClInclude Include="..\..\..\src\headers\macros.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\calling_conventions.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\function_traits.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\other.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\static_vector.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\template_string.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\type_sequence.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\utils.h" />
-    <ClInclude Include="..\..\..\src\headers\utilities\utils_macros.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\pre-compiled headers\windows\pch.cpp">
@@ -42,7 +45,14 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
+    <ClCompile Include="..\..\..\src\api.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\buffer.cpp" />
+    <ClCompile Include="..\..\..\src\misc.cpp" />
     <ClCompile Include="..\..\..\src\windows\other.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -131,13 +141,16 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutputPath)AlterHook.dll" "$(SolutionDir)$(Platform)\$(Configuration)\AlterHook.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -150,7 +163,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -159,6 +172,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutputPath)AlterHook.dll" "$(SolutionDir)$(Platform)\$(Configuration)\AlterHook.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -169,13 +185,16 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutputPath)AlterHook.dll" "$(SolutionDir)$(Platform)\$(Configuration)\AlterHook.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -188,7 +207,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\src\headers\utilities;$(ProjectDir)..\..\..\src\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\windows;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -197,6 +216,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutputPath)AlterHook.dll" "$(SolutionDir)$(Platform)\$(Configuration)\AlterHook.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

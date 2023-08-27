@@ -1,8 +1,9 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "utilities/utils_macros.h"
-#if defined(_USRDLL) || (defined(ALTERHOOK_SHARED) && utils_windows)
+#if defined(_USRDLL) ||                                                        \
+    (defined(ALTERHOOK_SHARED) &&                                              \
+     (defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)))
   #ifdef ALTERHOOK_EXPORT
     #define ALTERHOOK_API __declspec(dllexport)
   #else
@@ -18,6 +19,9 @@
 #else
   #define ALTERHOOK_HIDDEN
 #endif
+
+#define utils_visibility ALTERHOOK_API
+#include "utilities/utils_macros.h"
 
 #if utils_cpp20
   #define __alterhook_must_be_fn_t       utils::function_type
