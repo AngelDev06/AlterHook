@@ -7,6 +7,7 @@
 #include <array>
 #include <vector>
 #include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <iomanip>
 #include <limits>

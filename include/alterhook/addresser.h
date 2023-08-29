@@ -107,12 +107,11 @@ namespace alterhook
 
 #if utils_windows
     static uintptr_t follow_thunk_function(uintptr_t address) noexcept;
-  #if !defined(NDEBUG)
+  #ifndef NDEBUG
     // msvc adds an extra jump when calling functions on debug builds
     static uintptr_t follow_msvc_debug_jmp(uintptr_t address) noexcept;
   #endif
-    // include the msvc specific implementation in the dll when targeting
-    // windows
+    // msvc abi specific implementation
     static bool is_virtual_msvc_impl(void* address) noexcept;
 #else
     static bool is_virtual_impl(void* address) noexcept;

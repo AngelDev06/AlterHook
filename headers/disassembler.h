@@ -68,26 +68,16 @@ namespace alterhook
         return *this;
       }
 
-      bool operator==(const disassembler_iterator& other) const noexcept
-      {
-        // iteration should end when either current size or status is
-        // equal to the size & status respectively of the end iterator
-        // this isn't meant to be compared with anything other than
-        // the end iterator
-        return other.size == size || other.status == status;
-      }
+      bool operator==(std::nullptr_t) const noexcept { return !status; }
 
-      bool operator!=(const disassembler_iterator& other) const noexcept
-      {
-        return !(other == *this);
-      }
+      bool operator!=(std::nullptr_t) const noexcept { return status; }
     };
   } // namespace helpers
 
   class ALTERHOOK_HIDDEN disassembler
   {
   private:
-    const std::byte* address;
+    const std::byte* address = nullptr;
 #if utils_arm
     bool thumb;
 #endif
@@ -98,15 +88,18 @@ namespace alterhook
     typedef helpers::disassembler_iterator iterator;
 
 #if utils_x86 || utils_x64
-    disassembler(const std::byte* start_address)
+    disassembler(const std::byte* start_address, bool detail = true)
+        : address(start_address)
     {
   #if utils_x64
-    #define __alterhook_disasm_mode CS_MODE_64
+      constexpr cs_mode disasm_mode = CS_MODE_64;
   #else
-    #define __alterhook_disasm_mode CS_MODE_32
+      constexpr cs_mode disasm_mode = CS_MODE_32;
   #endif
-      if (cs_err error = cs_open(CS_ARCH_X86, __alterhook_disasm_mode, &handle))
+      if (cs_err error = cs_open(CS_ARCH_X86, disasm_mode, &handle))
         throw(exceptions::disassembler_init_fail(start_address, error));
+      if (!detail)
+        return;
       if (cs_err error = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON))
         throw(exceptions::disassembler_init_fail(start_address, error));
     }
@@ -168,7 +161,7 @@ namespace alterhook
       return iterator(handle, address, disasm_size);
     }
 
-    iterator end() const noexcept { return iterator(); }
+    std::nullptr_t end() const noexcept { return nullptr; }
 
     const void* get_address() const noexcept { return address; }
 

@@ -3,37 +3,109 @@
 #include <pch.h>
 #include "exceptions.h"
 #include "addresser.h"
+#include "buffer.h"
 #include "tools.h"
 #if !utils_windows
   #include "linux_thread_handler.h"
+#else
+  #include "windows_thread_handler.h"
 #endif
 #include "api.h"
 
 namespace alterhook
 {
   extern std::shared_mutex hook_lock;
+
 #if !utils_windows
   void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
                         bool patch_above, bool enable, int old_protect);
+  #if !utils_x64
   void patch_jmp(std::byte* target, const std::byte* detour, bool patch_above,
                  int old_protect);
+  #endif
+
+  #define __alterhook_inject_extra_arg , old_protect
+  #define __alterhook_inject_base_node_extra_arg , pchain->old_protect
+  #define __alterhook_inject_other_extra_arg(other) , other.old_protect
+#else
+  void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
+                        bool patch_above, bool enable);
+  // note that patch_jmp is not needed for x64 builds
+  #if !utils_x64
+  void patch_jmp(std::byte* target, const std::byte* detour, bool patch_above);
+  #endif
+
+  #define __alterhook_inject_extra_arg
+  #define __alterhook_inject_base_node_extra_arg
+  #define __alterhook_inject_other_extra_arg(other)
+#endif
+
+#if utils_x64
   #define __alterhook_inject(backup_or_detour, enable)                         \
-    inject_to_target(ptarget, backup_or_detour, patch_above, enable,           \
-                     old_protect)
+    (enable ? (__alterhook_set_dtr(backup_or_detour),                          \
+               inject_to_target(ptarget, prelay, patch_above,                  \
+                                true __alterhook_inject_extra_arg))            \
+            : inject_to_target(ptarget, backup_or_detour, patch_above,         \
+                               false __alterhook_inject_extra_arg))
+
+  #define __alterhook_inject_other(other, backup_or_detour, enable)            \
+    (enable                                                                    \
+         ? (*reinterpret_cast<uint64_t*>(other.prelay + 6) =                   \
+                reinterpret_cast<uintptr_t>(backup_or_detour),                 \
+            inject_to_target(other.ptarget, other.prelay, other.patch_above,   \
+                             true __alterhook_inject_other_extra_arg(other)))  \
+         : inject_to_target(other.ptarget, backup_or_detour,                   \
+                            other.patch_above,                                 \
+                            false __alterhook_inject_other_extra_arg(other)))
+
+  #define __alterhook_inject_base_node(backup_or_detour, enable)               \
+    (enable ? (*reinterpret_cast<uint64_t*>(pchain->prelay + 6) =              \
+                   reinterpret_cast<uintptr_t>(backup_or_detour),              \
+               inject_to_target(pchain->ptarget, pchain->prelay,               \
+                                pchain->patch_above,                           \
+                                true __alterhook_inject_base_node_extra_arg))  \
+            : inject_to_target(pchain->ptarget, backup_or_detour,              \
+                               pchain->patch_above,                            \
+                               false __alterhook_inject_base_node_extra_arg))
+
+  #define __alterhook_patch_jmp(detour) __alterhook_set_dtr(detour)
+
+  #define __alterhook_patch_other_jmp(other, detour)                           \
+    (*reinterpret_cast<uint64_t*>(other.prelay + 6) =                          \
+         reinterpret_cast<uintptr_t>(detour))
+
+  #define __alterhook_patch_base_node_jmp(detour)                              \
+    (*reinterpret_cast<uint64_t*>(pchain->prelay + 6) =                        \
+         reinterpret_cast<uintptr_t>(detour))
+#else
+  #define __alterhook_inject(backup_or_detour, enable)                         \
+    inject_to_target(ptarget, backup_or_detour, patch_above,                   \
+                     enable __alterhook_inject_extra_arg)
+
   #define __alterhook_inject_other(other, backup_or_detour, enable)            \
     inject_to_target(other.ptarget, backup_or_detour, other.patch_above,       \
-                     enable, other.old_protect)
+                     enable __alterhook_inject_other_extra_arg(other))
+
   #define __alterhook_inject_base_node(backup_or_detour, enable)               \
     inject_to_target(pchain->ptarget, backup_or_detour, pchain->patch_above,   \
-                     enable, pchain->old_protect)
+                     enable __alterhook_inject_base_node_extra_arg)
+
   #define __alterhook_patch_jmp(detour)                                        \
-    patch_jmp(ptarget, detour, patch_above, old_protect)
+    patch_jmp(ptarget, detour, patch_above __alterhook_inject_extra_arg)
+
   #define __alterhook_patch_other_jmp(other, detour)                           \
-    patch_jmp(other.ptarget, detour, other.patch_above, other.old_protect)
+    patch_jmp(other.ptarget, detour,                                           \
+              other.patch_above __alterhook_inject_other_extra_arg(other))
+
   #define __alterhook_patch_base_node_jmp(detour)                              \
-    patch_jmp(pchain->ptarget, detour, pchain->patch_above, pchain->old_protect)
-  #define __alterhook_set_base_node_prelay(pdetour)
+    patch_jmp(pchain->ptarget, detour,                                         \
+              pchain->patch_above __alterhook_inject_base_node_extra_arg)
 #endif
+
+  void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
+  {
+    trampoline_buffer::deallocate(ptrampoline);
+  }
 
   hook::hook(const hook& other) : trampoline(other)
   {
@@ -42,7 +114,8 @@ namespace alterhook
   }
 
   hook::hook(hook&& other) noexcept
-      : trampoline(std::move(other)), enabled(other.enabled),
+      : trampoline(std::move(other)),
+        enabled(std::exchange(other.enabled, false)),
         original_buffer(other.original_buffer)
   {
     __alterhook_exchange_dtr(other);
@@ -78,9 +151,13 @@ namespace alterhook
         }
         catch (...)
         {
+          // will most likely never happen
+          assert(!"hook::operator=: failed to disable a hook in a noexcept "
+                  "function");
+          std::terminate();
         }
       trampoline::operator=(std::move(other));
-      enabled         = other.enabled;
+      enabled         = std::exchange(other.enabled, false);
       original_buffer = other.original_buffer;
       __alterhook_exchange_dtr(other);
       memcpy(backup.data(), other.backup.data(), backup.size());
@@ -97,13 +174,14 @@ namespace alterhook
   hook::~hook() noexcept
   try
   {
-    if (__alterhook_get_dtr())
-      disable();
+    disable();
     if (original_wrap)
       *original_wrap = nullptr;
   }
   catch (...)
   {
+    assert(!"hook::~hook: failed to disable a hook in a noexcept function");
+    std::terminate();
   }
 
   void hook::enable()
@@ -132,8 +210,7 @@ namespace alterhook
   void hook::set_target(std::byte* target)
   {
     const bool should_enable = enabled;
-    if (enabled)
-      disable();
+    disable();
     init(target);
     __alterhook_make_backup();
     if (should_enable)
@@ -142,10 +219,10 @@ namespace alterhook
 
   void hook::set_detour(std::byte* detour)
   {
-    if (detour == pdetour)
+    if (detour == __alterhook_get_dtr())
       return;
     __alterhook_set_dtr(detour);
-#if !utils_windows64
+#if !utils_x64
     if (enabled)
     {
       std::unique_lock lock{ hook_lock };
@@ -168,7 +245,7 @@ namespace alterhook
     memcpy(backup.data(), other.backup.data(), backup.size());
     __alterhook_def_thumb_var(ptarget);
     list_iterator itr = disabled.emplace(disabled.end());
-    itr->init(*this, itr, other.pdetour,
+    itr->init(*this, itr, __alterhook_get_other_dtr(other),
               __alterhook_add_thumb_bit(ptrampoline.get()),
               other.original_buffer);
   }
@@ -199,6 +276,9 @@ namespace alterhook
   }
   catch (...)
   {
+    assert(!"hook_chain::~hook_chain: failed to disable the hooks in a "
+            "noexcept function");
+    std::terminate();
   }
 
   void hook_chain::init_chain()
@@ -355,11 +435,12 @@ namespace alterhook
         *dlast.origwrap = elast.pdetour;
         dlast.enabled   = true;
         elast.has_other = false;
-        __alterhook_set_base_node_prelay(dlast.pdetour);
-#if !utils_windows64
-        std::unique_lock lock{ hook_lock };
-        __alterhook_patch_jmp(dlast.pdetour);
-#endif
+
+        {
+          std::unique_lock lock{ hook_lock };
+          __alterhook_patch_jmp(dlast.pdetour);
+        }
+
         enabled.splice(enabled.end(), disabled, previtr);
       }
 
@@ -2343,8 +2424,8 @@ namespace alterhook
         *origwrap = poriginal;
         std::unique_lock lock{ hook_lock };
         thread_freezer   freeze{ *pchain, true };
-        __alterhook_set_base_node_prelay(pdetour);
-        __alterhook_inject_base_node(__alterhook_get_real_dtr(), true);
+
+        __alterhook_inject_base_node(pdetour, true);
       }
       other     = std::next(current);
       has_other = other != pchain->disabled.end();
@@ -2373,13 +2454,8 @@ namespace alterhook
       {
         poriginal = pchain->enabled.back().pdetour;
         *origwrap = poriginal;
-        __alterhook_set_base_node_prelay(pdetour);
-#if !utils_windows64
-        // no need to freeze, we are just replacing old instruction address with
-        // a new one
         std::unique_lock lock{ hook_lock };
         __alterhook_patch_base_node_jmp(pdetour);
-#endif
       }
       else
       {
@@ -2455,11 +2531,8 @@ namespace alterhook
       list_iterator next = std::next(current);
       if (next == pchain->enabled.end())
       {
-        __alterhook_set_base_node_prelay(poriginal);
-#if !utils_windows64
         std::unique_lock lock{ hook_lock };
         __alterhook_patch_base_node_jmp(poriginal);
-#endif
       }
       else
       {

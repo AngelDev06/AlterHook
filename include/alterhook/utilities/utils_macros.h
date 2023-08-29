@@ -113,6 +113,8 @@
   #define utils_visibility
 #endif
 
+#define utils_array_size(array) (sizeof(array) / sizeof(array[0]))
+
 #if utils_cpp20
   #define utils_concept   concept
   #define utils_consteval consteval

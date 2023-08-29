@@ -106,7 +106,8 @@ namespace alterhook::exceptions
         } 
         __alterhook_add_uih_constr 
     private: 
-        __alterhook_add_uih_field std::byte m_instr[24]{};
+        __alterhook_add_uih_field 
+        std::byte m_instr[24]{};
     )
 
 #if utils_arm
@@ -196,15 +197,18 @@ namespace alterhook::exceptions
           return m_instruction_address;
         } 
         pc_relative_handling_fail(const std::byte  instr[],
-                                  const std::byte* target)
+                                  const std::byte* target,
+                                  bool             thumb)
             : trampoline_exception(target),
-              m_instruction_address(instr) 
+              m_instruction_address(instr),
+              m_thumb(thumb)
         {
           memcpy(m_buffer, instr, 24);
         } 
     private: 
         const std::byte* m_instruction_address;
         std::byte        m_buffer[24]{};
+        bool             m_thumb;
     )
 #endif
 

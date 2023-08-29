@@ -122,16 +122,6 @@ namespace alterhook
     return reinterpret_cast<addresser::multiple_inheritance*>(&vpointer_array);
   }
 
-#if !defined(NDEBUG)
-  uintptr_t addresser::follow_msvc_debug_jmp(uintptr_t address) noexcept
-  {
-    intptr_t result = address;
-    if (*reinterpret_cast<std::byte*>(address) == std::byte(0xE9))
-      result += *reinterpret_cast<int32_t*>(address + 1) + 5;
-    return result;
-  }
-#endif
-
 #if utils_windows
   uintptr_t addresser::follow_thunk_function(uintptr_t address) noexcept
   {
@@ -143,6 +133,16 @@ namespace alterhook
     }
     return address;
   }
+
+  #ifndef NDEBUG
+  uintptr_t addresser::follow_msvc_debug_jmp(uintptr_t address) noexcept
+  {
+    intptr_t result = address;
+    if (*reinterpret_cast<std::byte*>(address) == std::byte(0xE9))
+      result += *reinterpret_cast<int32_t*>(address + 1) + 5;
+    return result;
+  }
+  #endif
 
   bool addresser::is_virtual_msvc_impl(void* address) noexcept
   {

@@ -8,6 +8,10 @@ namespace alterhook
   inline constexpr size_t __patch_above_backup_size   = sizeof(uint64_t);
   inline constexpr size_t __patch_above_target_offset = sizeof(uint32_t);
   inline constexpr size_t __backup_size               = sizeof(uint64_t);
+#else
+  inline constexpr size_t __patch_above_backup_size   = 7;
+  inline constexpr size_t __patch_above_target_offset = 5;
+  inline constexpr size_t __backup_size               = 5;
 #endif
 
   class ALTERHOOK_API trampoline
@@ -72,7 +76,7 @@ namespace alterhook
     typedef std::unique_ptr<std::byte, deleter> trampoline_ptr;
     std::byte*                                  ptarget = nullptr;
     trampoline_ptr                              ptrampoline{};
-#if utils_windows64
+#if utils_x64
     std::byte* prelay = nullptr;
 #elif utils_arm
     std::bitset<8> instruction_sets{};
@@ -136,7 +140,10 @@ namespace alterhook
 
     using trampoline::get_target;
 
-    const std::byte* get_detour() const noexcept { return pdetour; }
+    const std::byte* get_detour() const noexcept
+    {
+      return __alterhook_get_dtr();
+    }
 
     size_t trampoline_size() const noexcept { return size(); }
 
@@ -632,7 +639,7 @@ namespace alterhook
     __alterhook_set_dtr(get_target_address(std::forward<dtr>(detour)));
     original =
         function_cast<orig>(__alterhook_add_thumb_bit(ptrampoline.get()));
-    utils_assert(target != pdetour,
+    utils_assert(target != __alterhook_get_dtr(),
                  "hook::hook: detour & target have the same address");
     if (enable_hook)
       enable();
@@ -645,7 +652,7 @@ namespace alterhook
   {
     __alterhook_make_backup();
     __alterhook_set_dtr(get_target_address(std::forward<dtr>(detour)));
-    utils_assert(target != pdetour,
+    utils_assert(target != __alterhook_get_dtr(),
                  "hook::hook: detour & target have the same address");
     if (enable_hook)
       enable();
@@ -723,7 +730,7 @@ namespace alterhook
     memcpy(backup.data(), other.backup.data(), backup.size());
     __alterhook_def_thumb_var(ptarget);
     list_iterator itr = disabled.emplace(disabled.end());
-    itr->init(*this, itr, other.pdetour,
+    itr->init(*this, itr, __alterhook_get_other_dtr(other),
               __alterhook_add_thumb_bit(ptrampoline.get()), original, false);
   }
 
@@ -787,24 +794,24 @@ namespace alterhook
                               const std::byte* original, orig& origref,
                               bool should_enable)
   {
+    new (&origbuff) helpers::original_wrapper(origref);
     pchain    = &chain;
     current   = curr;
     pdetour   = detour;
     poriginal = original;
     enabled   = should_enable;
-    new (&origbuff) helpers::original_wrapper(origref);
-    origwrap = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
-    origref  = function_cast<orig>(original);
+    origwrap  = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
+    origref   = function_cast<orig>(original);
   }
 
   template <typename orig>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour, orig& origref)
   {
-    pchain  = &chain;
-    current = curr;
-    pdetour = detour;
     new (&origbuff) helpers::original_wrapper(origref);
+    pchain   = &chain;
+    current  = curr;
+    pdetour  = detour;
     origwrap = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
     origref  = nullptr;
   }
