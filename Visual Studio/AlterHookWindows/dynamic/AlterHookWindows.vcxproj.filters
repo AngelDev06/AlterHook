@@ -74,6 +74,9 @@
     <ClInclude Include="..\..\..\headers\windows_thread_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\headers\x86_instructions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp">
@@ -92,6 +95,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\misc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\X86\trampoline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

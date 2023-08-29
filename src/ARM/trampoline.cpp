@@ -15,11 +15,6 @@ namespace alterhook
 {
   ALTERHOOK_HIDDEN std::shared_mutex hook_lock{};
 
-  void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
-  {
-    trampoline_buffer::deallocate(ptrampoline);
-  }
-
   std::pair<bool, int> get_prot(const std::byte* address);
 
   inline namespace init_impl
@@ -855,7 +850,8 @@ namespace alterhook
           {
             if (entry.flags[M_TBM])
               throw(exceptions::pc_relative_handling_fail(
-                  reinterpret_cast<std::byte*>(instr.address), target));
+                  reinterpret_cast<std::byte*>(instr.address), target,
+                  uses_thumb));
             if (!should_setup_pc_handling)
             {
               if (uses_thumb)

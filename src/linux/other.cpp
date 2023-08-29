@@ -1,9 +1,11 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
-#include "arm_instructions.h"
 #include "exceptions.h"
 #include "linux_thread_handler.h"
+#if utils_arm
+  #include "arm_instructions.h"
+#endif
 namespace fs = std::filesystem;
 
 #ifdef __GNUC__
@@ -19,124 +21,8 @@ namespace alterhook
 {
   extern const long memory_block_size;
 
-  static ALTERHOOK_HIDDEN cs_insn*
-      disasm_one(csh& handle, const std::byte target[], uint64_t address = 0)
-  {
-    cs_insn* instr  = nullptr;
-    size_t   size   = 24;
-    auto     buffer = reinterpret_cast<const uint8_t*>(target);
-    if ((handle = cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle)) ||
-        !(instr = cs_malloc(handle)) ||
-        !cs_disasm_iter(handle, &buffer, &size, &address, instr))
-    {
-      cs_free(instr, 1);
-      cs_close(&handle);
-      return nullptr;
-    }
-    return instr;
-  }
-
-  static ALTERHOOK_HIDDEN void cleanup(cs_insn* instr, csh handle)
-  {
-    cs_free(instr, 1);
-    cs_close(&handle);
-  }
-
   namespace exceptions
   {
-    std::string it_block_exception::str() const
-    {
-      std::stringstream stream;
-      csh               handle       = 0;
-      cs_insn*          instructions = nullptr;
-      size_t            count        = 0;
-
-      if (cs_open(CS_ARCH_ARM, CS_MODE_THUMB, &handle))
-        return {};
-      count = cs_disasm(handle, reinterpret_cast<const uint8_t*>(m_buffer),
-                        m_size, m_it_address, 0, &instructions);
-      if (cs_errno(handle) || !count)
-        return {};
-
-      try
-      {
-        stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
-               << reinterpret_cast<uintptr_t>(get_target())
-               << "\nIT INSTRUCTIONS COUNT: " << std::dec << instruction_count()
-               << "\nIT REMAINING INSTRUCTIONS COUNT: "
-               << m_remaining_instructions << "\nIT BLOCK:";
-        for (size_t i = 0; i != count; ++i)
-          stream << "\n\t0x" << std::hex << std::setfill('0') << std::setw(8)
-                 << instructions[i].address << ": " << instructions[i].mnemonic
-                 << '\t' << instructions[i].op_str;
-      }
-      catch (...)
-      {
-        cs_free(instructions, count);
-        cs_close(&handle);
-        throw;
-      }
-      cs_free(instructions, count);
-      cs_close(&handle);
-      return stream.str();
-    }
-
-    std::string it_block_exception::it_str() const
-    {
-      std::stringstream stream;
-      csh               handle = 0;
-
-      if (cs_insn* instr = disasm_one(handle, m_buffer, m_it_address))
-      {
-        try
-        {
-          stream << "0x" << std::hex << std::setfill('0') << std::setw(8)
-                 << instr->address << ": " << instr->mnemonic << '\t'
-                 << instr->op_str;
-        }
-        catch (...)
-        {
-          cleanup(instr, handle);
-          throw;
-        }
-        cleanup(instr, handle);
-      }
-      return stream.str();
-    }
-
-    size_t it_block_exception::instruction_count() const
-    {
-      return reinterpret_cast<const THUMB_IT*>(m_buffer)->instruction_count();
-    }
-
-    std::string pc_relative_handling_fail::str() const
-    {
-      std::stringstream stream;
-      csh               handle = 0;
-
-      if (cs_insn* instr =
-              disasm_one(handle, m_buffer,
-                         reinterpret_cast<uintptr_t>(m_instruction_address)))
-      {
-        try
-        {
-          stream << "TARGET: 0x" << std::hex << std::setfill('0')
-                 << std::setw(8) << reinterpret_cast<uintptr_t>(get_target())
-                 << '\n';
-          stream << "0x" << std::hex << std::setfill('0') << std::setw(8)
-                 << instr->address << ": " << instr->mnemonic << '\t'
-                 << instr->op_str;
-        }
-        catch (...)
-        {
-          cleanup(instr, handle);
-          throw;
-        }
-        cleanup(instr, handle);
-      }
-      return stream.str();
-    }
-
     const char* os_exception::get_error_string() const noexcept
     {
       return strerror(m_error_code);
@@ -410,6 +296,8 @@ namespace alterhook
     return false;
   }
 
+  // implementations for android
+#if utils_arm
   void ALTERHOOK_HIDDEN inject_to_target(std::byte*       target,
                                          const std::byte* backup_or_detour,
                                          bool patch_above, bool enable,
@@ -511,4 +399,5 @@ namespace alterhook
     mprotect(prot_addr, prot_len, protection);
     __alterhook_flush_cache(address, sizeof(uint32_t));
   }
+#endif
 } // namespace alterhook

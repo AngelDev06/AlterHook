@@ -22,6 +22,7 @@
     <ClInclude Include="..\..\..\headers\buffer.h" />
     <ClInclude Include="..\..\..\headers\disassembler.h" />
     <ClInclude Include="..\..\..\headers\windows_thread_handler.h" />
+    <ClInclude Include="..\..\..\headers\x86_instructions.h" />
     <ClInclude Include="..\..\..\include\alterhook\addresser.h" />
     <ClInclude Include="..\..\..\include\alterhook\alterhook.h" />
     <ClInclude Include="..\..\..\include\alterhook\api.h" />
@@ -47,14 +48,19 @@
     </ClCompile>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
     <ClCompile Include="..\..\..\src\api.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\..\src\buffer.cpp" />
     <ClCompile Include="..\..\..\src\misc.cpp" />
     <ClCompile Include="..\..\..\src\windows\other.cpp" />
+    <ClCompile Include="..\..\..\src\X86\trampoline.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\capstone\vs\capstone_static\capstone.vcxproj">
