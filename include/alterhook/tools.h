@@ -47,11 +47,19 @@ namespace alterhook
 #endif
   {
     typedef utils::remove_cvref_t<T> fn_t;
+#if utils_clang && utils_windows
+    if constexpr (utils::member_function_type<fn_t>)
+      return reinterpret_cast<std::byte*>(addresser::address_of_regular(fn));
+    else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
+      return reinterpret_cast<std::byte*>(
+          addresser::address_of_regular(&fn_t::operator()));
+#else
     if constexpr (utils::member_function_type<fn_t>)
       return reinterpret_cast<std::byte*>(addresser::address_of(fn));
     else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
       return reinterpret_cast<std::byte*>(
           addresser::address_of(&fn_t::operator()));
+#endif
     else
       return reinterpret_cast<std::byte*>(fn);
   }

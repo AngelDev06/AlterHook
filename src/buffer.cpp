@@ -8,7 +8,9 @@ namespace alterhook
 {
 #if utils_windows
   constexpr size_t memory_block_size = 0x10'00;
-  constexpr size_t max_memory_range  = 0x40'00'00'00;
+  #if utils_windows64
+  constexpr size_t max_memory_range = 0x40'00'00'00;
+  #endif
 #else
   inline const auto memory_block_size = sysconf(_SC_PAGE_SIZE);
 #endif

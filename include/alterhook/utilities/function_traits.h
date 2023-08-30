@@ -320,7 +320,8 @@ namespace utils
     utils_concept have_this_and_eq_size =
         are_pointers<PT1, PT2> &&
         (std::is_base_of_v<T1, T2> || std::is_base_of_v<T2, T1>)&&sizeof(T1) ==
-            sizeof(T2);
+            sizeof(T2) &&
+        same_cv_qualification_v<T1, T2>;
 
     template <typename seq, typename fn_1, typename fn_2>
     inline constexpr bool all_arguments_same_check =
@@ -364,25 +365,16 @@ namespace utils
         requires {
           typename fn_argument_t<T1, 0>;
           typename fn_argument_t<T2, 0>;
-        } &&
-        have_this_and_eq_size<
-            std::remove_pointer_t<std::remove_cvref_t<fn_argument_t<T1, 0>>>,
-            std::remove_pointer_t<std::remove_cvref_t<fn_argument_t<T2, 0>>>> &&
-        are_pointers<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>> &&
-        same_cv_qualification_v<std::remove_pointer_t<fn_argument_t<T1, 0>>,
-                                std::remove_pointer_t<fn_argument_t<T2, 0>>>;
+        } && have_this_and_eq_size<std::remove_cvref_t<fn_argument_t<T1, 0>>,
+                                   std::remove_cvref_t<fn_argument_t<T2, 0>>>;
 #else
     template <typename T1, typename T2, typename = void>
     inline constexpr bool have_compatible_member_fn_first_args = false;
     template <typename T1, typename T2>
     inline constexpr bool have_compatible_member_fn_first_args<
         T1, T2, std::void_t<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>>> =
-        have_this_and_eq_size<
-            std::remove_pointer_t<remove_cvref_t<fn_argument_t<T1, 0>>>,
-            std::remove_pointer_t<remove_cvref_t<fn_argument_t<T2, 0>>>> &&
-        are_pointers<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>> &&
-        same_cv_qualification_v<std::remove_pointer_t<fn_argument_t<T1, 0>>,
-                                std::remove_pointer_t<fn_argument_t<T2, 0>>>;
+        have_this_and_eq_size<remove_cvref_t<fn_argument_t<T1, 0>>,
+                              remove_cvref_t<fn_argument_t<T2, 0>>>;
 #endif
 
     template <typename T1, typename T2>
@@ -425,9 +417,7 @@ namespace utils
 #if utils_cc_assertions
       if constexpr (!compatible_calling_convention_with<T1, T2> ||
                     fn_calling_convention_v<T1> == fn_calling_convention_v<T2>)
-      {
         return have_all_args_same<T1, T2>;
-      }
       else
       {
         if constexpr (fn_calling_convention_v<T1> ==
@@ -441,13 +431,8 @@ namespace utils
         }
         else if constexpr (fn_arity_v<T1> == 1 &&
                            fn_arity_v<T1> == fn_arity_v<T2>)
-        {
           return have_compatible_member_fn_first_args<T1, T2>;
-        }
-        else
-        {
-          return false;
-        }
+        return false;
       }
 #else
       return have_all_args_same<T1, T2>;

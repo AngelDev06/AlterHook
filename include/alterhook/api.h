@@ -5,6 +5,9 @@
 #if utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4251 4715)
+#elif utils_clang
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type"
 #endif
 
 namespace alterhook
@@ -74,7 +77,7 @@ namespace alterhook
                                        bool enable_hook, unsigned long& pc);
   #endif
 #endif
-    struct deleter
+    struct ALTERHOOK_API deleter
     {
       constexpr deleter() noexcept = default;
 
@@ -765,7 +768,19 @@ namespace alterhook
         "The return types of the detours and the original function need to be "
         "the same");
 #if utils_cc_assertions
-// TODO
+    static_assert(
+        ((utils::compatible_calling_convention_with<
+              utils::clean_type_t<utils::type_at_t<d_indexes, seq>>,
+              utils::clean_type_t<utils::type_at_t<o_indexes, seq>>> &&
+          utils::compatible_calling_convention_with<
+              utils::clean_type_t<utils::type_at_t<d_indexes, seq>>,
+              coriginal_t> &&
+          utils::compatible_calling_convention_with<
+              cdetour_t,
+              utils::clean_type_t<utils::type_at_t<o_indexes, seq>>>)&&...) &&
+            utils::compatible_calling_convention_with<cdetour_t, coriginal_t>,
+        "The calling conventions of the detours and the original function "
+        "aren't compatible");
 #endif
     static_assert(
         ((utils::compatible_function_arguments_with<
@@ -774,7 +789,9 @@ namespace alterhook
           utils::compatible_function_arguments_with<
               utils::clean_type_t<utils::type_at_t<d_indexes, seq>>,
               coriginal_t>)&&...) &&
-        utils::compatible_function_arguments_with<cdetour_t, coriginal_t>);
+            utils::compatible_function_arguments_with<cdetour_t, coriginal_t>,
+        "The arguments of the detours and the original function aren't "
+        "compatible");
     __alterhook_def_thumb_var(ptarget);
     __alterhook_make_backup();
     hook& fentry = enabled.emplace_back();
@@ -1475,4 +1492,6 @@ namespace alterhook
 
 #if utils_msvc
   #pragma warning(pop)
+#elif utils_clang
+  #pragma clang diagnostic pop
 #endif

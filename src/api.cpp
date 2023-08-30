@@ -196,7 +196,7 @@ namespace alterhook
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, true };
-      __alterhook_inject(__alterhook_get_real_dtr(), true);
+      __alterhook_inject(__alterhook_get_dtr(), true);
       enabled = true;
     }
   }
@@ -512,6 +512,8 @@ namespace alterhook
       disabled.splice(trgitr, enabled, curritr);
       previtr = curritr;
     } while (!enabled.empty());
+
+    starts_enabled = false;
   }
 
   void hook_chain::pop_back(base trg)
@@ -895,6 +897,11 @@ namespace alterhook
     for (hook& h : other)
       h.pchain = &other;
   }
+
+#if utils_clang
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wswitch"
+#endif
 
   void hook_chain::splice(list_iterator newpos, hook_chain& other, transfer to,
                           transfer from)
@@ -2176,7 +2183,7 @@ namespace alterhook
         {
           if (first.enabled)
           {
-            if (first != other.enabled.begin())
+            if (static_cast<list_iterator>(first) != other.enabled.begin())
             {
               auto firstprev = std::prev(first_enabled);
               if (!firstprev->has_other)
@@ -2337,6 +2344,10 @@ namespace alterhook
       lastprev->other     = newpos;
     }
   }
+
+#if utils_clang
+  #pragma clang diagnostic pop
+#endif
 
   void hook_chain::join_last()
   {

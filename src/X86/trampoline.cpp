@@ -124,13 +124,11 @@ namespace alterhook
             if (instr.id == X86_INS_JMP)
             {
 #if utils_x64
-              new (tmpbuff.data())
-                  JMP_ABS{ .address = static_cast<uint64_t>(imm_op->imm) };
+              new (tmpbuff.data()) JMP_ABS(static_cast<uint64_t>(imm_op->imm));
               copy_size = sizeof(JMP_ABS);
 #else
-              new (tmpbuff.data())
-                  JMP{ .offset = static_cast<uint32_t>(
-                           imm_op->imm - (tramp_addr + sizeof(JMP))) };
+              new (tmpbuff.data()) JMP(static_cast<uint32_t>(
+                  imm_op->imm - (tramp_addr + sizeof(JMP))));
               copy_size = sizeof(JMP);
 #endif
               finished = instr.address >= branch_dest;
@@ -149,15 +147,15 @@ namespace alterhook
               // for x64 the condition should be inverted so that the big jump
               // is executed on false
               new (tmpbuff.data())
-                  JCC_ABS{ .opcode  = static_cast<uint8_t>(0x71 ^ condition),
-                           .address = static_cast<uint64_t>(imm_op->imm) };
+                  JCC_ABS(static_cast<uint8_t>(0x71 ^ condition),
+                          static_cast<uint64_t>(imm_op->imm));
               copy_size = sizeof(JCC_ABS);
 #else
               // turn any short jcc to big one
               new (tmpbuff.data())
-                  JCC{ .opcode2 = static_cast<uint8_t>(0x80 | condition),
-                       .offset  = static_cast<uint32_t>(
-                           imm_op->imm - (tramp_addr + sizeof(JCC))) };
+                  JCC(static_cast<uint8_t>(0x80 | condition),
+                      static_cast<uint32_t>(imm_op->imm -
+                                            (tramp_addr + sizeof(JCC))));
               copy_size = sizeof(JCC);
 #endif
             }
@@ -172,13 +170,11 @@ namespace alterhook
                        "(unreachable) An instruction of branch relative group "
                        "is neither a call nor a jump");
 #if utils_x64
-          new (tmpbuff.data())
-              CALL_ABS{ .address = static_cast<uint64_t>(imm_op->imm) };
+          new (tmpbuff.data()) CALL_ABS(static_cast<uint64_t>(imm_op->imm));
           copy_size = sizeof(CALL_ABS);
 #else
-          new (tmpbuff.data())
-              CALL{ .offset = static_cast<uint32_t>(
-                        imm_op->imm - (tramp_addr + sizeof(CALL))) };
+          new (tmpbuff.data()) CALL(
+              static_cast<uint32_t>(imm_op->imm - (tramp_addr + sizeof(CALL))));
           copy_size = sizeof(CALL);
 #endif
           copy_src = tmpbuff.data();
@@ -205,12 +201,12 @@ namespace alterhook
           reinterpret_cast<uintptr_t>(target)) >= sizeof(JMP))
       {
 #if utils_x64
-        new (tmpbuff.data()) JMP_ABS{ .address = instr.address + instr.size };
+        new (tmpbuff.data()) JMP_ABS(instr.address + instr.size);
         copy_size = sizeof(JMP_ABS);
 #else
-        new (tmpbuff.data()) JMP{ .offset = static_cast<uint32_t>(
-                                      (instr.address + instr.size) -
-                                      (tramp_addr + copy_size + sizeof(JMP))) };
+        new (tmpbuff.data())
+            JMP(static_cast<uint32_t>((instr.address + instr.size) -
+                                      (tramp_addr + copy_size + sizeof(JMP))));
         copy_size = sizeof(JMP);
 #endif
         if ((tramp_pos + copy_size) > memory_slot_size)
@@ -242,7 +238,7 @@ namespace alterhook
 
 #if utils_x64
     prelay = ptrampoline.get() + tramp_pos;
-    new (prelay) JMP_ABS{};
+    new (prelay) JMP_ABS();
 #endif
   }
 
