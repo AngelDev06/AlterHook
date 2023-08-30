@@ -1,7 +1,6 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
-#include "macros.h"
 #include "addresser.h"
 
 // Addresser inspiration from:

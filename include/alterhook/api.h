@@ -2,6 +2,11 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 
+#if utils_msvc
+  #pragma warning(push)
+  #pragma warning(disable : 4251 4715)
+#endif
+
 namespace alterhook
 {
 #if utils_arm
@@ -61,8 +66,13 @@ namespace alterhook
 
   protected:
 #ifdef __alterhook_expose_impl
+  #if utils_windows
+    friend void process_frozen_threads(const trampoline& tramp,
+                                       bool enable_hook, HANDLE thread_handle);
+  #else
     friend void process_frozen_threads(const trampoline& tramp,
                                        bool enable_hook, unsigned long& pc);
+  #endif
 #endif
     struct deleter
     {
@@ -1462,3 +1472,7 @@ namespace alterhook
     origwrap = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
   }
 } // namespace alterhook
+
+#if utils_msvc
+  #pragma warning(pop)
+#endif

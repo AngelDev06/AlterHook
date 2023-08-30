@@ -6,6 +6,11 @@
 #include <sstream>
 #include "other.h"
 
+#if utils_msvc
+  #pragma warning(push)
+  #pragma warning(disable : 4018)
+#endif
+
 #if utils_cpp20
   #define __utils_mustbefwditr std::forward_iterator
 #else
@@ -983,3 +988,7 @@ namespace std
   };
 #endif
 } // namespace std
+
+#if utils_msvc
+  #pragma warning(pop)
+#endif

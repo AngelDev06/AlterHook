@@ -3,6 +3,10 @@
 #include <pch.h>
 #include "exceptions.h"
 #include "linux_thread_handler.h"
+#include "addresser.h"
+#include "tools.h"
+#define __alterhook_expose_impl
+#include "api.h"
 #if utils_arm
   #include "arm_instructions.h"
 #endif
@@ -71,8 +75,94 @@ namespace alterhook
     }
   } // namespace exceptions
 
+#if utils_clang
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wrange-loop-construct"
+#endif
+
+#if utils_arm
   void process_frozen_threads(const trampoline& tramp, bool enable_hook,
-                              unsigned long& pc);
+                              unsigned long& pc)
+  {
+    auto& [status, data] = thread_freezer::result;
+    uint8_t exceptpos    = 0;
+    if (enable_hook)
+    {
+      const uintptr_t target = reinterpret_cast<uintptr_t>(tramp.ptarget) & ~1;
+      for (const auto [oldpos, newpos] : tramp.positions)
+      {
+        if (pc == (target + oldpos))
+        {
+          const uintptr_t dest =
+              reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + newpos;
+          const uintptr_t pushloc =
+              reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) +
+              tramp.pc_handling.second;
+          if (tramp.pc_handling.first && dest > pushloc)
+          {
+            bool expected = false;
+            if (status.compare_exchange_strong(expected, true,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire))
+            {
+              exceptpos = oldpos;
+              goto PUT_EXCEPTION;
+            }
+            return;
+          }
+          pc = dest;
+          return;
+        }
+      }
+      return;
+    }
+    else
+    {
+      uint8_t prevpos = 0;
+      for (const auto [oldpos, newpos] : tramp.positions)
+      {
+        const uintptr_t dest =
+            reinterpret_cast<uintptr_t>(tramp.ptarget) + oldpos;
+        const uintptr_t src =
+            reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + newpos;
+        const uintptr_t prevsrc =
+            reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) + prevpos;
+        const uintptr_t pushloc =
+            reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()) +
+            tramp.pc_handling.second;
+        if (pc <= src && pc >= prevsrc)
+        {
+          if (pc < src || (tramp.pc_handling.first && pc > pushloc))
+          {
+            bool expected = false;
+            if (status.compare_exchange_strong(expected, true,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire))
+            {
+              exceptpos = static_cast<uint8_t>(
+                  pc - reinterpret_cast<uintptr_t>(tramp.ptrampoline.get()));
+              goto PUT_EXCEPTION;
+            }
+            return;
+          }
+          pc = dest;
+          return;
+        }
+        prevpos = newpos;
+      }
+      return;
+    }
+  PUT_EXCEPTION:
+    auto& [ptramp, ptarget, pos] = data;
+    ptramp                       = tramp.ptrampoline.get();
+    ptarget                      = tramp.ptarget;
+    pos                          = exceptpos;
+  }
+#endif
+
+#if utils_clang
+  #pragma clang diagnostic pop
+#endif
 
   size_t             thread_freezer::ref_count = 0;
   std::mutex         thread_freezer::ref_count_lock{};
@@ -296,9 +386,8 @@ namespace alterhook
     return false;
   }
 
-  // implementations for android
 #if utils_arm
-  void ALTERHOOK_HIDDEN inject_to_target(std::byte*       target,
+  ALTERHOOK_HIDDEN void inject_to_target(std::byte*       target,
                                          const std::byte* backup_or_detour,
                                          bool patch_above, bool enable,
                                          int old_protect)
@@ -308,13 +397,11 @@ namespace alterhook
                  "inject_to_target: no backup or detour specified");
     const bool uses_thumb = reinterpret_cast<uintptr_t>(target) & 1;
     reinterpret_cast<uintptr_t&>(target) &= ~1;
-    const std::array patch_info           = {
-      std::pair(target, reinterpret_cast<uintptr_t>(target) % 4
-                                      ? sizeof(FULL_JMP_ABS) + 2
-                                      : sizeof(FULL_JMP_ABS)),
-      std::pair(target - sizeof(uint32_t), sizeof(FULL_JMP_ABS))
-    };
-    auto [address, size]       = patch_info[patch_above];
+    const auto [address, size] =
+        patch_above ? std::pair(target - sizeof(uint32_t), sizeof(FULL_JMP_ABS))
+                    : std::pair(target, reinterpret_cast<uintptr_t>(target) % 4
+                                            ? sizeof(FULL_JMP_ABS) + 2
+                                            : sizeof(FULL_JMP_ABS));
     std::byte* const prot_addr = reinterpret_cast<std::byte*>(
         utils_align(reinterpret_cast<uintptr_t>(address), memory_block_size));
     const size_t prot_len =
@@ -375,7 +462,7 @@ namespace alterhook
     __alterhook_flush_cache(address, size);
   }
 
-  void ALTERHOOK_HIDDEN patch_jmp(std::byte* target, const std::byte* detour,
+  ALTERHOOK_HIDDEN void patch_jmp(std::byte* target, const std::byte* detour,
                                   bool patch_above, int old_protect)
   {
     utils_assert(target, "patch_jmp: no target address specified");

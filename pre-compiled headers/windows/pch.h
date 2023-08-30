@@ -1,6 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include "macros.h"
 #include <utilities/utils.h>
 #include <Windows.h>
 #include <TlHelp32.h>

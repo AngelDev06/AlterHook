@@ -1,7 +1,6 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
-#include "macros.h"
 #include "buffer.h"
 #include "exceptions.h"
 
@@ -146,9 +145,9 @@ namespace alterhook
                                             MEM_COMMIT | MEM_RESERVE,          \
                                             PAGE_EXECUTE_READWRITE))
   #define __alterhook_raise_alloc_exception()                                  \
-    throw(exceptions::virtual_alloc_exception(errno, reg, memory_block_size,   \
-                                              MEM_COMMIT | MEM_RESERVE,        \
-                                              PAGE_EXECUTE_READWRITE))
+    throw(exceptions::virtual_alloc_exception(                                 \
+        GetLastError(), reg, memory_block_size, MEM_COMMIT | MEM_RESERVE,      \
+        PAGE_EXECUTE_READWRITE))
 #else
   #define __alterhook_range_check
   #if !utils_windows
@@ -167,8 +166,8 @@ namespace alterhook
                                               PAGE_EXECUTE_READWRITE))
     #define __alterhook_raise_alloc_exception()                                \
       throw(exceptions::virtual_alloc_exception(                               \
-          errno, nullptr, memory_block_size, MEM_COMMIT | MEM_RESERVE,         \
-          PAGE_EXECUTE_READWRITE))
+          GetLastError(), nullptr, memory_block_size,                          \
+          MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE))
   #endif
 #endif
 
