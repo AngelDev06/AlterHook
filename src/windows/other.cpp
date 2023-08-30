@@ -229,13 +229,12 @@ namespace alterhook
 
     if (enable)
     {
-      new (address) JMP{ .offset = static_cast<uint32_t>(
-                             backup_or_detour - (address + sizeof(JMP))) };
+      new (address) JMP(
+          static_cast<uint32_t>(backup_or_detour - (address + sizeof(JMP))));
 
       if (patch_above)
-        new (address + sizeof(JMP)) JMP_SHORT{
-          .offset = static_cast<uint8_t>(0 - (sizeof(JMP) + sizeof(JMP_SHORT)))
-        };
+        new (address + sizeof(JMP)) JMP_SHORT(
+            static_cast<uint8_t>(0 - (sizeof(JMP) + sizeof(JMP_SHORT))));
     }
     else
       memcpy(address, backup_or_detour, size);
