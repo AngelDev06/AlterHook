@@ -4,6 +4,9 @@
 #if utils_clang
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
+#elif utils_msvc
+  #pragma warning(push)
+  #pragma warning(disable : 4275)
 #endif
 
 namespace alterhook::exceptions
@@ -336,6 +339,25 @@ namespace alterhook::exceptions
         }
         std::string error_function() const override;
     )
+
+    utils_generate_exception(
+        virtual_protect_exception, os_exception,
+        (
+            (const void*, address),
+            (size_t, size),
+            (size_t, protection),
+            (uintptr_t, old_protection)
+        ),
+        (
+            (uint64_t, flag)
+        ),
+        const char* what() const noexcept override
+        {
+          return "An exception occurred when trying to change the protection of the "
+                 "target function";
+        }
+        std::string error_function() const override;
+    )
 #else
     utils_generate_exception(
         mmap_exception, os_exception,
@@ -430,4 +452,6 @@ namespace alterhook::exceptions
 
 #if utils_clang
   #pragma clang diagnostic pop
+#elif utils_msvc
+  #pragma warning(pop)
 #endif

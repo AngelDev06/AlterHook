@@ -1,9 +1,8 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
-#include "macros.h"
-#include "disassembler.h"
 #include "exceptions.h"
+#include "disassembler.h"
 #if utils_arm
   #include "arm_instructions.h"
 #endif

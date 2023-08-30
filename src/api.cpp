@@ -171,6 +171,11 @@ namespace alterhook
     return *this;
   }
 
+#if utils_msvc
+  #pragma warning(push)
+  #pragma warning(disable : 4297)
+#endif
+
   hook::~hook() noexcept
   try
   {
@@ -280,6 +285,10 @@ namespace alterhook
             "noexcept function");
     std::terminate();
   }
+
+#if utils_msvc
+  #pragma warning(pop)
+#endif
 
   void hook_chain::init_chain()
   {
