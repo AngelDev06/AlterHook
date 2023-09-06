@@ -114,6 +114,34 @@ namespace utils
   using remove_cvref_t = std::remove_cvref_t<T>;
 #endif
 
+  namespace helpers
+  {
+    template <typename pair>
+    inline constexpr bool is_pair_impl = false;
+
+    template <typename F, typename S>
+    inline constexpr bool is_pair_impl<std::pair<F, S>> = true;
+
+    template <typename tuple>
+    inline constexpr bool is_tuple_impl = false;
+
+    template <typename... types>
+    inline constexpr bool is_tuple_impl<std::tuple<types...>> = true;
+  }
+
+  template <typename pair>
+  utils_concept stl_pair = helpers::is_pair_impl<remove_cvref_t<pair>>;
+
+  template <typename tuple>
+  utils_concept stl_tuple = helpers::is_tuple_impl<remove_cvref_t<tuple>>;
+
+  template <typename... types>
+  utils_concept stl_tuples_or_pairs = ((stl_tuple<remove_cvref_t<types>> ||
+                                        stl_pair<remove_cvref_t<types>>)&&...);
+
+  template <typename fn, typename ret, typename... args>
+  utils_concept invocable_r = std::is_invocable_r_v<ret, fn, args...>;
+
   template <typename... types>
   utils_concept always_false = false;
 

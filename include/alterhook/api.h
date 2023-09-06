@@ -6,8 +6,8 @@
   #pragma warning(push)
   #pragma warning(disable : 4251 4715)
 #elif utils_clang
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreturn-type"
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wreturn-type"
 #endif
 
 namespace alterhook
@@ -105,27 +105,20 @@ namespace alterhook
     utils::static_vector<std::pair<uint8_t, uint8_t>, 8> positions{};
   };
 
-  class ALTERHOOK_API hook final : trampoline
+  class ALTERHOOK_API hook : trampoline
   {
   public:
-    template <__alterhook_must_be_callable_t dtr,
-              __alterhook_must_be_fn_t orig
-                  __alterhook_fn_callable_sfinae_templ>
+    template <__alterhook_is_detour_and_original(dtr, orig)>
     hook(std::byte* target, dtr&& detour, orig& original,
          bool enable_hook = true);
 
-    template <
-        __alterhook_must_be_callable_t dtr __alterhook_callable_sfinae_templ>
+    template <__alterhook_is_detour(dtr)>
     hook(std::byte* target, dtr&& detour, bool enable_hook = true);
 
-    template <
-        __alterhook_must_be_callable_t trg, __alterhook_must_be_callable_t dtr,
-        __alterhook_must_be_fn_t orig __alterhook_fn_callable2_sfinae_templ>
+    template <__alterhook_is_target_detour_and_original(trg, dtr, orig)>
     hook(trg&& target, dtr&& detour, orig& original, bool enable_hook = true);
 
-    template <__alterhook_must_be_callable_t trg,
-              __alterhook_must_be_callable_t dtr
-                  __alterhook_callable2_sfinae_templ>
+    template <__alterhook_is_target_and_detour(trg, dtr)>
     hook(trg&& target, dtr&& detour, bool enable_hook = true);
 
     hook(const hook& other);
@@ -147,6 +140,8 @@ namespace alterhook
 
     hook& operator=(const hook& other);
     hook& operator=(hook&& other) noexcept;
+    hook& operator=(const trampoline& other);
+    hook& operator=(trampoline&& other);
 
     void enable();
     void disable();
@@ -170,17 +165,15 @@ namespace alterhook
 
     void set_target(std::byte* target);
 
-    template <__alterhook_must_be_callable_t trg
-                  __alterhook_callable_trg_sfinae_templ>
+    template <__alterhook_is_target(trg)>
     void set_target(trg&& target)
     {
       set_target(get_target_address(std::forward<trg>(target)));
     }
 
-    template <
-        __alterhook_must_be_callable_t dtr __alterhook_callable_sfinae_templ>
+    template <__alterhook_is_detour(dtr)>
     void set_detour(dtr&& detour);
-    template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_templ>
+    template <__alterhook_is_original(orig)>
     void set_original(orig& original);
     void set_original(std::nullptr_t);
 
@@ -197,7 +190,7 @@ namespace alterhook
     void set_detour(std::byte* detour);
   };
 
-  class ALTERHOOK_API hook_chain final : trampoline
+  class ALTERHOOK_API hook_chain : trampoline
   {
   public:
     // member types
@@ -210,7 +203,7 @@ namespace alterhook
       enabled,
       both
     };
-    typedef transfer                                include, base;
+    typedef transfer                                include;
     typedef std::list<hook>::const_iterator         const_list_iterator;
     typedef std::list<hook>::iterator               list_iterator;
     typedef std::list<hook>::const_reverse_iterator const_reverse_list_iterator;
@@ -224,27 +217,33 @@ namespace alterhook
     typedef const hook&                             const_reference;
 
     // constructors/destructors/assignment operators
-    template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig,
-              typename... types __alterhook_fn_callable_pairs_sfinae_templ>
-    hook_chain(std::byte* target, dtr&& detour, orig& original,
-               types&&... rest) __alterhook_requires_fn_callable_pairs;
+    template <__alterhook_are_detour_and_original_pairs(dtr, orig, types)>
+    hook_chain(std::byte* target, dtr&& detour, orig& original, types&&... rest)
+        __alterhook_requires(utils::detour_and_storage_pairs<types...>);
 
-    template <__alterhook_must_be_callable_t trg,
-              __alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig,
-              typename... types __alterhook_fn_callable2_pairs_sfinae_templ>
-    hook_chain(trg&& target, dtr&& detour, orig& original,
-               types&&... rest) __alterhook_requires_fn_callable_pairs;
+    template <__alterhook_are_target_detour_and_original_pairs(trg, dtr, orig,
+                                                               types)>
+    hook_chain(trg&& target, dtr&& detour, orig& original, types&&... rest)
+        __alterhook_requires(utils::detour_and_storage_pairs<types...>);
 
-    hook_chain(std::byte* target) : trampoline(target) {}
+    template <__alterhook_are_detour_and_original_stl_pairs(pair, types)>
+    hook_chain(std::byte* target, pair&& first, types&&... rest)
+        __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>);
 
-    template <__alterhook_must_be_callable_t trg
-                  __alterhook_callable_trg_sfinae_templ>
+    template <__alterhook_are_target_detour_and_original_stl_pairs(trg, pair,
+                                                                   types)>
+    hook_chain(trg&& target, pair&& first, types&&... rest)
+        __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>);
+
+    hook_chain(std::byte* target);
+
+    template <__alterhook_is_target(trg)>
     hook_chain(trg&& target)
         : hook_chain(get_target_address(std::forward<trg>(target)))
     {
     }
 
-    template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_templ>
+    template <__alterhook_is_original(orig)>
     hook_chain(const alterhook::hook& other, orig& original);
     hook_chain(alterhook::hook&& other);
 
@@ -267,32 +266,29 @@ namespace alterhook
 
     hook_chain& operator=(const hook_chain& other);
     hook_chain& operator=(hook_chain&& other) noexcept;
+    hook_chain& operator=(const trampoline& other);
+    hook_chain& operator=(trampoline&& other);
 
     // status update
     void enable_all();
     void disable_all();
 
     // container modifiers
-    void clear(include trg = include::both);
-    void pop_back(base trg = base::both);
-    void pop_front(base trg = base::both);
-    void erase(list_iterator position);
-    template <__alterhook_must_be_callable_t dtr,
-              __alterhook_must_be_fn_t orig
-                  __alterhook_fn_callable_sfinae_templ>
+    void          clear(include trg = include::both);
+    void          pop_back(include trg = include::both);
+    void          pop_front(include trg = include::both);
+    list_iterator erase(list_iterator position);
+    list_iterator erase(list_iterator first, list_iterator last);
+    list_iterator erase(iterator first, iterator last);
+
+    template <__alterhook_is_detour_and_original(dtr, orig)>
     void push_back(dtr&& detour, orig& original, bool enable_hook = true);
-    template <__alterhook_must_be_callable_t dtr,
-              __alterhook_must_be_fn_t orig
-                  __alterhook_fn_callable_sfinae_templ>
+    template <__alterhook_is_detour_and_original(dtr, orig)>
     void push_front(dtr&& detour, orig& original, bool enable_hook = true);
-    template <__alterhook_must_be_callable_t dtr,
-              __alterhook_must_be_fn_t orig
-                  __alterhook_fn_callable_sfinae_templ>
+    template <__alterhook_is_detour_and_original(dtr, orig)>
     hook& insert(list_iterator position, dtr&& detour, orig& original,
-                 base trg = base::enabled);
-    template <__alterhook_must_be_callable_t dtr,
-              __alterhook_must_be_fn_t orig
-                  __alterhook_fn_callable_sfinae_templ>
+                 include trg = include::enabled);
+    template <__alterhook_is_detour_and_original(dtr, orig)>
     hook& insert(iterator position, dtr&& detour, orig& original);
     void  swap(list_iterator left, hook_chain& other, list_iterator right);
 
@@ -386,7 +382,7 @@ namespace alterhook
 
     void splice(iterator newpos, iterator first, iterator last);
 
-    // getters
+    // element access
     reference       operator[](size_t n) noexcept;
     const_reference operator[](size_t n) const noexcept;
     reference       at(size_t n);
@@ -404,7 +400,16 @@ namespace alterhook
     reference       dback() noexcept;
     const_reference dback() const noexcept;
 
-    // capacity
+    // setters
+    void set_target(std::byte* target);
+
+    template <__alterhook_is_target(trg)>
+    void set_target(trg&& target)
+    {
+      set_target(get_target_address(std::forward<trg>(target)));
+    }
+
+    // getters
     bool empty() const noexcept { return enabled.empty() && disabled.empty(); }
 
     bool empty_enabled() const noexcept { return enabled.empty(); }
@@ -418,6 +423,8 @@ namespace alterhook
     size_t enabled_size() const noexcept { return enabled.size(); }
 
     size_t disabled_size() const noexcept { return disabled.size(); }
+
+    using trampoline::get_target;
 
     // iterators
     iterator                    begin() noexcept;
@@ -462,10 +469,40 @@ namespace alterhook
     void init_chain(std::index_sequence<d_indexes...>,
                     std::index_sequence<o_indexes...>,
                     std::tuple<detour_t, original_t, types...>&& args);
+    template <typename dfirst, typename... detours, typename ofirst,
+              typename... originals, size_t... indexes>
+    void init_chain(std::index_sequence<indexes...>,
+                    std::pair<std::tuple<dfirst, detours...>,
+                              std::tuple<ofirst, originals...>>&& args);
     void init_chain();
     void join_last();
     void join_first();
     void join(list_iterator itr);
+    template <__alterhook_is_invocable(callable, list_iterator, bool)>
+    void unbind_range(list_iterator first, list_iterator last, callable&& func);
+    void unbind(list_iterator position);
+    void uninject_all();
+    void uninject_range(list_iterator first, list_iterator last);
+    void uninject(list_iterator position);
+    void bind(list_iterator pos, list_iterator oldpos, bool to_enabled);
+    void inject_range(list_iterator pos, list_iterator first,
+                      list_iterator last);
+    void inject_back(list_iterator first, list_iterator last);
+    void toggle_status(list_iterator first, list_iterator last);
+    void toggle_status(list_iterator position);
+    void toggle_status_all(include src);
+
+  protected:
+    trampoline& get_trampoline() { return *this; }
+
+    void set_trampoline(const hook_chain& other)
+    {
+      trampoline::operator=(other);
+      memcpy(backup.data(), other.backup.data(), backup.size());
+    }
+
+    list_iterator append_item(hook& h, transfer to = transfer::disabled);
+    void          set_item(hook& left, const hook& right);
   };
 
   class ALTERHOOK_API hook_chain::hook
@@ -499,14 +536,13 @@ namespace alterhook
 
     operator bool() const noexcept { return enabled; }
 
-    template <
-        __alterhook_must_be_callable_t dtr __alterhook_callable_sfinae_templ>
+    template <__alterhook_is_detour(dtr)>
     void set_detour(dtr&& detour)
     {
       set_detour(get_target_address(std::forward<dtr>(detour)));
     }
 
-    template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_templ>
+    template <__alterhook_is_original(orig)>
     void set_original(orig& original);
 
   private:
@@ -521,14 +557,15 @@ namespace alterhook
     bool                 enabled   = false;
     bool                 has_other = false;
 
-    template <typename orig>
+    template <__alterhook_is_original(orig)>
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
               const std::byte* original, orig& origref, bool should_enable);
-    template <typename orig>
+    template <__alterhook_is_original(orig)>
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
               orig& origref);
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
-              const std::byte* original, const helpers::orig_buff_t& buffer);
+              const std::byte* original, const helpers::orig_buff_t& buffer,
+              bool enable_hook = true);
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
               const helpers::orig_buff_t& buffer);
     void set_detour(std::byte* detour);
@@ -538,7 +575,6 @@ namespace alterhook
   class hook_chain::iterator
   {
   public:
-    typedef const_iterator __base;
 #if utils_cpp20
     typedef std::forward_iterator_tag iterator_concept;
 #endif
@@ -634,12 +670,250 @@ namespace alterhook
     }
   };
 
+  template <typename key, typename hash = std::hash<key>,
+            typename keyequal  = std::equal_to<key>,
+            typename allocator = std::allocator<
+                std::pair<const key, typename std::list<hook>::iterator>>>
+  class hook_map : hook_chain
+  {
+  public:
+    typedef hook_chain                           base;
+    typedef std::allocator_traits<allocator>     alloc_traits;
+    typedef key                                  key_type;
+    typedef typename std::list<hook>::iterator   mapped_type;
+    typedef std::pair<const key, mapped_type>    value_type;
+    typedef size_t                               size_type;
+    typedef ptrdiff_t                            difference_type;
+    typedef hash                                 hasher;
+    typedef keyequal                             key_equal;
+    typedef allocator                            allocator_type;
+    typedef value_type&                          reference;
+    typedef const value_type&                    const_reference;
+    typedef typename alloc_traits::pointer       pointer;
+    typedef typename alloc_traits::const_pointer const_pointer;
+    typedef std::unordered_map<key, mapped_type, hash, keyequal, allocator>
+                                                   wrapped;
+    typedef typename wrapped::iterator             iterator;
+    typedef typename wrapped::const_iterator       const_iterator;
+    typedef typename wrapped::local_iterator       local_iterator;
+    typedef typename wrapped::const_local_iterator const_local_iterator;
+    typedef typename base::iterator                chain_iterator;
+    typedef typename base::const_iterator          const_chain_iterator;
+    typedef typename base::reference               hook_reference;
+    typedef typename base::const_reference         const_hook_reference;
+    typedef typename base::pointer                 hook_pointer;
+    typedef typename base::const_pointer           const_hook_pointer;
+
+    using base::const_list_iterator;
+    using base::const_reverse_list_iterator;
+    using base::hook;
+    using base::include;
+    using base::list_iterator;
+    using base::reverse_list_iterator;
+    using base::transfer;
+
+    hook_map() : hook_chain() {}
+
+    template <__alterhook_are_key_detour_and_original_triplets(fkey, dtr, orig,
+                                                               types)>
+    hook_map(std::byte* target, fkey&& first_key, dtr&& detour, orig& original,
+             types&&... rest)
+        __alterhook_requires(
+            utils::key_detour_and_storage_triplets<fkey, types...>);
+
+    template <__alterhook_are_target_key_detour_and_original_triplets(
+        trg, fkey, dtr, orig, types)>
+    hook_map(trg&& target, fkey&& first_key, dtr&& detour, orig& original,
+             types&&... rest)
+        __alterhook_requires(
+            utils::key_detour_and_storage_triplets<fkey, types...>);
+
+    explicit hook_map(size_t bucket_count, const hash& hashinst = hash(),
+                      const keyequal&  equal = keyequal(),
+                      const allocator& alloc = allocator())
+        : map(bucket_count, hashinst, equal, alloc)
+    {
+    }
+
+    hook_map(size_t bucket_count, const allocator& alloc)
+        : map(bucket_count, alloc)
+    {
+    }
+
+    hook_map(size_t bucket_count, const hash& hashinst, const allocator& alloc)
+        : map(bucket_count, alloc)
+    {
+    }
+
+    explicit hook_map(const allocator& alloc) : map(alloc) {}
+
+    hook_map(const hook_map& other);
+    hook_map(const hook_map& other, const allocator& alloc);
+    hook_map(hook_map&& other) noexcept;
+    hook_map(hook_map&& other, const allocator& alloc) noexcept;
+
+    ~hook_map() {}
+
+    hook_map& operator=(const hook_map& other);
+    hook_map& operator=(hook_map&& other) noexcept;
+
+    // getters
+    allocator get_allocator() const noexcept { return map.get_allocator(); }
+
+    size_t size() const noexcept { return map.size(); }
+
+    size_t max_size() const noexcept { return map.max_size(); }
+
+    bool empty() const noexcept { return map.empty(); }
+
+    operator bool() const noexcept { return !empty(); }
+
+    size_t bucket_count() const { return map.bucket_count(); }
+
+    size_t max_bucket_count() const { return map.max_bucket_count(); }
+
+    size_t bucket_size(size_t n) const { return map.bucket_size(n); }
+
+    size_t bucket(const key& k) const { return map.bucket(k); }
+
+    float load_factor() const { return map.load_factor(); }
+
+    hasher hash_function() const { return map.hash_function(); }
+
+    key_equal key_eq() const { return map.key_eq(); }
+
+    using base::back;
+    using base::dback;
+    using base::dfront;
+    using base::disabled_size;
+    using base::eback;
+    using base::efront;
+    using base::empty_disabled;
+    using base::empty_enabled;
+    using base::enabled_size;
+    using base::front;
+    using base::get_target;
+
+    // setters
+    using base::set_target;
+
+    // lookup
+    hook_reference       at(const key& k);
+    const_hook_reference at(const key& k) const;
+    hook_reference       operator[](const key& k) noexcept;
+    const_hook_reference operator[](const key& k) const noexcept;
+    iterator             find(const key& k);
+    const_iterator       find(const key& k) const;
+    bool                 contains(const key& k) const;
+
+    // status update
+    using base::disable_all;
+    using base::enable_all;
+
+    // modifiers
+    using base::splice;
+    using base::swap;
+    void swap(hook_map& other);
+    void merge(hook_map& other);
+
+    // iterators
+    iterator begin() noexcept { return map.begin(); }
+
+    iterator end() noexcept { return map.end(); }
+
+    const_iterator begin() const noexcept { return map.begin(); }
+
+    const_iterator end() const noexcept { return map.end(); }
+
+    const_iterator cbegin() const noexcept { return map.begin(); }
+
+    const_iterator cend() const noexcept { return map.end(); }
+
+    local_iterator begin(size_t n) { return map.begin(n); }
+
+    local_iterator end(size_t n) { return map.end(n); }
+
+    const_local_iterator begin(size_t n) const { return map.begin(n); }
+
+    const_local_iterator end(size_t n) const { return map.end(n); }
+
+    const_local_iterator cbegin(size_t n) const { return map.begin(n); }
+
+    const_local_iterator cend(size_t n) const { return map.end(n); }
+
+    // clang-format off
+    utils_map(__alterhook_decl_itr_func, 
+              (chain_iterator, begin, noexcept),
+              (chain_iterator, end, noexcept),
+              (const_chain_iterator, begin, const noexcept),
+              (const_chain_iterator, end, const noexcept),
+              (const_chain_iterator, cbegin, const noexcept),
+              (const_chain_iterator, cend, const noexcept),
+              (list_iterator, ebegin, noexcept),
+              (list_iterator, eend, noexcept),
+              (const_list_iterator, ebegin, const noexcept),
+              (const_list_iterator, eend, const noexcept),
+              (reverse_list_iterator, rebegin, noexcept),
+              (reverse_list_iterator, reend, noexcept),
+              (const_reverse_list_iterator, rebegin, const noexcept),
+              (const_reverse_list_iterator, reend, const noexcept),
+              (const_list_iterator, cebegin, const noexcept),
+              (const_list_iterator, ceend, const noexcept),
+              (const_reverse_list_iterator, crebegin, const noexcept),
+              (const_reverse_list_iterator, creend, const noexcept),
+              (list_iterator, dbegin, noexcept),
+              (list_iterator, dend, noexcept),
+              (const_list_iterator, dbegin, const noexcept),
+              (const_list_iterator, dend, const noexcept),
+              (reverse_list_iterator, rdbegin, noexcept),
+              (reverse_list_iterator, rdend, noexcept),
+              (const_reverse_list_iterator, rdbegin, const noexcept),
+              (const_reverse_list_iterator, rdend, const noexcept),
+              (const_list_iterator, cdbegin, const noexcept),
+              (const_list_iterator, cdend, const noexcept),
+              (const_reverse_list_iterator, crdbegin, const noexcept),
+              (const_reverse_list_iterator, crdend, const noexcept))
+        // clang-format on
+        private : wrapped map;
+
+    void swap(hook_chain&)                                            = delete;
+    void swap(list_iterator, base&, list_iterator)                    = delete;
+    void splice(list_iterator, hook_chain&, transfer, transfer)       = delete;
+    void splice(list_iterator, hook_chain&&, transfer, transfer)      = delete;
+    void splice(chain_iterator, hook_chain&, transfer)                = delete;
+    void splice(chain_iterator, hook_chain&&, transfer)               = delete;
+    void splice(list_iterator, hook_chain&, list_iterator, transfer)  = delete;
+    void splice(list_iterator, hook_chain&&, list_iterator, transfer) = delete;
+    void splice(chain_iterator, hook_chain&, list_iterator)           = delete;
+    void splice(chain_iterator, hook_chain&&, list_iterator)          = delete;
+    void splice(list_iterator, hook_chain&, list_iterator, list_iterator,
+                transfer)                                             = delete;
+    void splice(list_iterator, hook_chain&&, list_iterator, list_iterator,
+                transfer)                                             = delete;
+    void splice(chain_iterator, hook_chain&, list_iterator,
+                list_iterator)                                        = delete;
+    void splice(chain_iterator, hook_chain&&, list_iterator,
+                list_iterator)                                        = delete;
+    void splice(list_iterator, hook_chain&, chain_iterator, chain_iterator,
+                transfer)                                             = delete;
+    void splice(list_iterator, hook_chain&&, chain_iterator, chain_iterator,
+                transfer)                                             = delete;
+    void splice(chain_iterator, hook_chain&, chain_iterator,
+                chain_iterator)                                       = delete;
+    void splice(chain_iterator, hook_chain&&, chain_iterator,
+                chain_iterator)                                       = delete;
+
+    template <size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
+              typename... types>
+    hook_map(std::byte* target, std::index_sequence<k_indexes...>,
+             std::index_sequence<d_indexes...>,
+             std::index_sequence<o_indexes...>, std::tuple<types...>&& args);
+  };
+
   /*
    * TEMPLATE DEFINITIONS (ignore them)
    */
-  template <__alterhook_must_be_callable_t dtr,
-            __alterhook_must_be_fn_t orig
-                __alterhook_fn_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
   hook::hook(std::byte* target, dtr&& detour, orig& original, bool enable_hook)
       : trampoline(target)
   {
@@ -658,8 +932,7 @@ namespace alterhook
       enable();
   }
 
-  template <
-      __alterhook_must_be_callable_t dtr __alterhook_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_impl(dtr)>
   hook::hook(std::byte* target, dtr&& detour, bool enable_hook)
       : trampoline(target)
   {
@@ -671,32 +944,27 @@ namespace alterhook
       enable();
   }
 
-  template <
-      __alterhook_must_be_callable_t trg, __alterhook_must_be_callable_t dtr,
-      __alterhook_must_be_fn_t orig __alterhook_fn_callable2_sfinae_nd_templ>
+  template <__alterhook_is_target_detour_and_original_impl(trg, dtr, orig)>
   hook::hook(trg&& target, dtr&& detour, orig& original, bool enable_hook)
       : hook(get_target_address(std::forward<trg>(target)),
              std::forward<dtr>(detour), original, enable_hook)
   {
   }
 
-  template <__alterhook_must_be_callable_t trg,
-            __alterhook_must_be_callable_t dtr
-                __alterhook_callable2_sfinae_nd_templ>
+  template <__alterhook_is_target_and_detour_impl(trg, dtr)>
   hook::hook(trg&& target, dtr&& detour, bool enable_hook)
       : hook(get_target_address(std::forward<trg>(target)),
              std::forward<dtr>(detour), enable_hook)
   {
   }
 
-  template <
-      __alterhook_must_be_callable_t dtr __alterhook_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_impl(dtr)>
   void hook::set_detour(dtr&& detour)
   {
     set_detour(get_target_address(std::forward<dtr>(detour)));
   }
 
-  template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_nd_templ>
+  template <__alterhook_is_original_impl(orig)>
   void hook::set_original(orig& original)
   {
     if (original_wrap->contains_ref(original))
@@ -713,10 +981,10 @@ namespace alterhook
       *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
   }
 
-  template <__alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig,
-            typename... types __alterhook_fn_callable_pairs_sfinae_nd_templ>
+  template <__alterhook_are_detour_and_original_pairs_impl(dtr, orig, types)>
   hook_chain::hook_chain(std::byte* target, dtr&& detour, orig& original,
-                         types&&... rest) __alterhook_requires_fn_callable_pairs
+                         types&&... rest)
+      __alterhook_requires(utils::detour_and_storage_pairs<types...>)
       : trampoline(target)
   {
     init_chain(utils::make_index_sequence_with_step<sizeof...(types) + 2, 2>(),
@@ -725,18 +993,51 @@ namespace alterhook
                                      std::forward<types>(rest)...));
   }
 
-  template <__alterhook_must_be_callable_t trg,
-            __alterhook_must_be_callable_t dtr, __alterhook_must_be_fn_t orig,
-            typename... types __alterhook_fn_callable2_pairs_sfinae_nd_templ>
+  template <__alterhook_are_target_detour_and_original_pairs_impl(trg, dtr,
+                                                                  orig, types)>
   hook_chain::hook_chain(trg&& target, dtr&& detour, orig& original,
-                         types&&... rest) __alterhook_requires_fn_callable_pairs
+                         types&&... rest)
+      __alterhook_requires(utils::detour_and_storage_pairs<types...>)
       : hook_chain(get_target_address(std::forward<trg>(target)),
                    std::forward<dtr>(detour), original,
                    std::forward<types>(rest)...)
   {
   }
 
-  template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_nd_templ>
+  template <__alterhook_are_detour_and_original_stl_pairs_impl(pair, types)>
+  hook_chain::hook_chain(std::byte* target, pair&& first, types&&... rest)
+      __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>)
+      : trampoline(target)
+  {
+    init_chain(
+        std::make_index_sequence<sizeof...(types)>(),
+        std::pair(
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<pair>>>(
+                    std::get<0>(first)),
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
+                    std::get<0>(rest))...),
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<1, utils::remove_cvref_t<pair>>>(
+                    std::get<1>(first)),
+                std::forward<
+                    std::tuple_element_t<1, utils::remove_cvref_t<types>>>(
+                    std::get<1>(rest))...)));
+  }
+
+  template <__alterhook_are_target_detour_and_original_stl_pairs_impl(trg, pair,
+                                                                      types)>
+  hook_chain::hook_chain(trg&& target, pair&& first, types&&... rest)
+      __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>)
+      : hook_chain(get_target_address(std::forward<trg>(target)),
+                   std::forward<pair>(first), std::forward<types>(rest)...)
+  {
+  }
+
+  template <__alterhook_is_original(orig)>
   hook_chain::hook_chain(const alterhook::hook& other, orig& original)
       : trampoline(other)
   {
@@ -815,7 +1116,73 @@ namespace alterhook
     init_chain();
   }
 
-  template <typename orig>
+  template <typename dfirst, typename... detours, typename ofirst,
+            typename... originals, size_t... indexes>
+  void
+      hook_chain::init_chain(std::index_sequence<indexes...>,
+                             std::pair<std::tuple<dfirst, detours...>,
+                                       std::tuple<ofirst, originals...>>&& args)
+  {
+    typedef utils::clean_type_t<dfirst> cdfirst;
+    typedef utils::clean_type_t<ofirst> cofirst;
+    static_assert(
+        ((std::is_same_v<utils::fn_return_t<cdfirst>,
+                         utils::fn_return_t<utils::clean_type_t<detours>>> &&
+          std::is_same_v<
+              utils::fn_return_t<cofirst>,
+              utils::fn_return_t<utils::clean_type_t<originals>>>)&&...) &&
+            std::is_same_v<utils::fn_return_t<cdfirst>,
+                           utils::fn_return_t<cofirst>>,
+        "The return types of the detours and the original function need to be "
+        "the same");
+#if utils_cc_assertions
+    static_assert(
+        ((utils::compatible_calling_convention_with<
+              utils::clean_type_t<detours>, utils::clean_type_t<originals>> &&
+          utils::compatible_calling_convention_with<
+              cdfirst, utils::clean_type_t<originals>> &&
+          utils::compatible_calling_convention_with<
+              utils::clean_type_t<detours>, cofirst>)&&...) &&
+            utils::compatible_calling_convention_with<cdfirst, cofirst>,
+        "The calling conventions of the detours and the original function "
+        "aren't compatible");
+#endif
+    static_assert(
+        ((utils::compatible_function_arguments_with<
+              utils::clean_type_t<detours>, utils::clean_type_t<originals>> &&
+          utils::compatible_function_arguments_with<
+              utils::clean_type_t<detours>, cofirst>)&&...) &&
+            utils::compatible_function_arguments_with<cdfirst, cofirst>,
+        "The arguments of the detours and the original function aren't "
+        "compatible");
+
+    __alterhook_def_thumb_var(ptarget);
+    __alterhook_make_backup();
+    hook& fentry = enabled.emplace_back();
+    fentry.init(
+        *this, enabled.begin(),
+        get_target_address(std::forward<dfirst>(std::get<0>(args.first))),
+        __alterhook_add_thumb_bit(ptrampoline.get()), std::get<0>(args.second),
+        true);
+    starts_enabled = true;
+
+    if constexpr (sizeof...(detours) > 0)
+    {
+      list_iterator    iter    = enabled.begin();
+      hook*            entry   = &fentry;
+      const std::byte* pdetour = entry->pdetour;
+      ((entry = &enabled.emplace_back(),
+        entry->init(*this, ++iter,
+                    get_target_address(std::forward<detours>(
+                        std::get<indexes + 1>(args.first))),
+                    pdetour, std::get<indexes + 1>(args.second), true),
+        pdetour = entry->pdetour),
+       ...);
+    }
+    init_chain();
+  }
+
+  template <__alterhook_is_original(orig)>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour,
                               const std::byte* original, orig& origref,
@@ -831,7 +1198,7 @@ namespace alterhook
     origref   = function_cast<orig>(original);
   }
 
-  template <typename orig>
+  template <__alterhook_is_original(orig)>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour, orig& origref)
   {
@@ -843,7 +1210,7 @@ namespace alterhook
     origref  = nullptr;
   }
 
-  template <__alterhook_must_be_fn_t orig __alterhook_fn_sfinae_nd_templ>
+  template <__alterhook_is_original_impl(orig)>
   void hook_chain::hook::set_original(orig& original)
   {
     if (origwrap->contains_ref(original))
@@ -854,20 +1221,18 @@ namespace alterhook
     *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
   }
 
-  template <__alterhook_must_be_callable_t dtr,
-            __alterhook_must_be_fn_t orig
-                __alterhook_fn_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
   hook_chain::hook& hook_chain::insert(list_iterator position, dtr&& detour,
-                                       orig& original, base trg)
+                                       orig& original, include trg)
   {
-    utils_assert(trg != base::both,
+    utils_assert(trg != include::both,
                  "hook_chain::insert: base cannot be the both flag");
     std::list<hook>* to    = nullptr;
     std::list<hook>* other = nullptr;
     list_iterator    itr{};
     list_iterator    itrprev{};
 
-    if (trg == base::enabled)
+    if (trg == include::enabled)
     {
       to    = &enabled;
       other = &disabled;
@@ -921,20 +1286,16 @@ namespace alterhook
     return *itr;
   }
 
-  template <__alterhook_must_be_callable_t dtr,
-            __alterhook_must_be_fn_t orig
-                __alterhook_fn_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
   hook_chain::hook& hook_chain::insert(iterator position, dtr&& detour,
                                        orig& original)
   {
     return insert(static_cast<list_iterator>(position),
                   std::forward<dtr>(detour), original,
-                  position.enabled ? base::enabled : base::disabled);
+                  position.enabled ? include::enabled : include::disabled);
   }
 
-  template <__alterhook_must_be_callable_t dtr,
-            __alterhook_must_be_fn_t orig
-                __alterhook_fn_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
   void hook_chain::push_back(dtr&& detour, orig& original, bool enable_hook)
   {
     hook& newentry =
@@ -998,9 +1359,7 @@ namespace alterhook
     }
   }
 
-  template <__alterhook_must_be_callable_t dtr,
-            __alterhook_must_be_fn_t orig
-                __alterhook_fn_callable_sfinae_nd_templ>
+  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
   void hook_chain::push_front(dtr&& detour, orig& original, bool enable_hook)
   {
     hook& newentry =
@@ -1035,9 +1394,129 @@ namespace alterhook
     starts_enabled = enable_hook;
   }
 
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  template <size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
+            typename... types>
+  hook_map<key, hash, keyequal, allocator>::hook_map(
+      std::byte* target, std::index_sequence<k_indexes...>,
+      std::index_sequence<d_indexes...>, std::index_sequence<o_indexes...>,
+      std::tuple<types...>&& args)
+      : hook_chain(
+            target,
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<d_indexes, std::tuple<types...>>>(
+                    std::get<d_indexes>(args)),
+                std::forward<
+                    std::tuple_element_t<o_indexes, std::tuple<types...>>>(
+                    std::get<o_indexes>(args)))...)
+  {
+    list_iterator itr = ebegin();
+    (map.emplace(
+         std::forward<std::tuple_element_t<k_indexes, std::tuple<types...>>>(
+             std::get<k_indexes>(args)),
+         itr++),
+     ...);
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  template <__alterhook_are_key_detour_and_original_triplets_impl(fkey, dtr,
+                                                                  orig, types)>
+  hook_map<key, hash, keyequal, allocator>::hook_map(std::byte* target,
+                                                     fkey&&     first_key,
+                                                     dtr&&      detour,
+                                                     orig&      original,
+                                                     types&&... rest)
+      __alterhook_requires(
+          utils::key_detour_and_storage_triplets<fkey, types...>)
+      : hook_map(
+            target,
+            utils::make_index_sequence_with_step<sizeof...(types) + 3, 0, 3>(),
+            utils::make_index_sequence_with_step<sizeof...(types) + 3, 1, 3>(),
+            utils::make_index_sequence_with_step<sizeof...(types) + 3, 2, 3>(),
+            std::forward_as_tuple(std::forward<fkey>(first_key),
+                                  std::forward<dtr>(detour), original,
+                                  std::forward<types>(rest)...))
+  {
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  template <__alterhook_are_target_key_detour_and_original_triplets_impl(
+      trg, fkey, dtr, orig, types)>
+  hook_map<key, hash, keyequal, allocator>::hook_map(trg&&  target,
+                                                     fkey&& first_key,
+                                                     dtr&&  detour,
+                                                     orig&  original,
+                                                     types&&... rest)
+      __alterhook_requires(
+          utils::key_detour_and_storage_triplets<fkey, types...>)
+      : hook_map(get_target_address(std::forward<trg>(target)),
+                 std::forward<fkey>(first_key), std::forward<dtr>(detour),
+                 original, std::forward<types>(rest)...)
+  {
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  hook_map<key, hash, keyequal, allocator>::hook_map(const hook_map& other)
+      : hook_chain(other.get_target())
+  {
+    for (const auto& [k, v] : other)
+      map.emplace(k, append_item(*v));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  hook_map<key, hash, keyequal, allocator>::hook_map(const hook_map&  other,
+                                                     const allocator& alloc)
+      : map(alloc), hook_chain(other.get_target())
+  {
+    for (const auto& [k, v] : other)
+      map.emplace(k, append_item(*v));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  hook_map<key, hash, keyequal, allocator>::hook_map(hook_map&& other) noexcept
+      : map(std::move(other.map)), hook_chain(std::move(other))
+  {
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  hook_map<key, hash, keyequal, allocator>::hook_map(
+      hook_map&& other, const allocator& alloc) noexcept
+      : map(std::move(other.map), alloc), hook_chain(std::move(other))
+  {
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator>
+  hook_map<key, hash, keyequal, allocator>&
+      hook_map<key, hash, keyequal, allocator>::operator=(const hook_map& other)
+  {
+    if (this != &other)
+    {
+      disable_all();
+      set_trampoline(other.get_trampoline());
+
+      for (auto itr = map.begin(), enditr = map.end(); itr != enditr;)
+      {
+        if (other.map.count(itr->first))
+          ++itr;
+        else
+          itr = map.erase(itr);
+      }
+
+      if (map.size() >= other.map.size())
+      {
+      }
+    }
+  }
+
   /*
    * NON-TEMPLATE DEFINITIONS (ignore them)
    */
+  inline hook_chain::hook_chain(std::byte* target) : trampoline(target)
+  {
+    __alterhook_make_backup();
+  }
+
   inline void hook_chain::merge(hook_chain& other, bool at_back)
   {
     iterator where = at_back ? end() : begin();
@@ -1407,6 +1886,75 @@ namespace alterhook
     return disabled.back();
   }
 
+  inline hook_chain::list_iterator hook_chain::append_item(hook& h, transfer to)
+  {
+    utils_assert(to != transfer::both,
+                 "hook_chain::append_item: to can't be the both flag");
+    list_iterator    result{};
+    list_iterator    itrprev{};
+    std::list<hook>* trg   = nullptr;
+    std::list<hook>* other = nullptr;
+
+    if (to == transfer::enabled)
+    {
+      trg    = &enabled;
+      other  = &disabled;
+      result = (enabled.emplace_back(), std::prev(enabled.end()));
+
+      if (result == enabled.begin())
+      {
+        __alterhook_def_thumb_var(ptarget);
+        result->init(*this, result, h.pdetour,
+                     __alterhook_add_thumb_bit(ptrampoline.get()), h.origbuff,
+                     true);
+      }
+      else
+      {
+        itrprev = std::prev(result);
+        result->init(*this, result, h.pdetour, itrprev->pdetour, h.origbuff,
+                     true);
+      }
+      join_last();
+    }
+    else
+    {
+      trg    = &disabled;
+      other  = &enabled;
+      result = (disabled.emplace_back(), std::prev(disabled.end()));
+      result->init(*this, result, h.pdetour, h.origbuff);
+    }
+
+    bool touch_back = false;
+
+    if (result == trg->begin())
+    {
+      if (other->empty())
+        starts_enabled = to == transfer::enabled;
+      else
+        touch_back = true;
+    }
+    else
+    {
+      itrprev = std::prev(result);
+      if (itrprev->has_other)
+        touch_back = true;
+    }
+
+    if (touch_back)
+    {
+      hook& otherback     = other->back();
+      otherback.has_other = true;
+      otherback.other     = result;
+    }
+    return result;
+  }
+
+  inline void hook_chain::set_item(hook& left, const hook& right)
+  {
+    left.origbuff = right.origbuff;
+    left.pdetour  = right.pdetour;
+  }
+
   inline hook_chain::const_iterator&
       hook_chain::const_iterator::operator++() noexcept
   {
@@ -1467,7 +2015,8 @@ namespace alterhook
   inline void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                                      const std::byte*            detour,
                                      const std::byte*            original,
-                                     const helpers::orig_buff_t& buffer)
+                                     const helpers::orig_buff_t& buffer,
+                                     bool                        enable_hook)
   {
     pchain    = &chain;
     current   = curr;
@@ -1476,6 +2025,7 @@ namespace alterhook
     origbuff  = buffer;
     origwrap  = std::launder(reinterpret_cast<helpers::original*>(&origbuff));
     *origwrap = original;
+    enabled   = enable_hook;
   }
 
   inline void hook_chain::hook::init(hook_chain& chain, list_iterator curr,

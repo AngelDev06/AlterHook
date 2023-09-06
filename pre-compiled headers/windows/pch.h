@@ -12,4 +12,5 @@
 #include <sstream>
 #include <iomanip>
 #include <limits>
+#include <unordered_map>
 #include <capstone/capstone.h>
