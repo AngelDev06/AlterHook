@@ -359,14 +359,19 @@ namespace alterhook
   {
     if (this != &other)
     {
-      // keeping new buffer to a temporary in case trampcpy throws (very
-      // unlikely)
-      trampoline_ptr newbuff{ trampoline_buffer::allocate(
-          __alterhook_pass_alloc_arg(ptarget)) };
-      trampcpy(newbuff.get(), other.ptrampoline.get(), other.tramp_size);
+      if (!ptrampoline)
+      {
+        // keeping new buffer to a temporary in case trampcpy throws (very
+        // unlikely)
+        trampoline_ptr newbuff{ trampoline_buffer::allocate(
+            __alterhook_pass_alloc_arg(ptarget)) };
+        trampcpy(newbuff.get(), other.ptrampoline.get(), other.tramp_size);
+        ptrampoline = std::move(newbuff);
+      }
+      else
+        trampcpy(ptrampoline.get(), other.ptrampoline.get(), other.tramp_size);
 
       ptarget     = other.ptarget;
-      ptrampoline = std::move(newbuff);
       patch_above = other.patch_above;
       tramp_size  = other.tramp_size;
       positions   = other.positions;

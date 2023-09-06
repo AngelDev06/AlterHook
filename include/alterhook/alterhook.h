@@ -18,6 +18,7 @@
 #include <bitset>
 #include <array>
 #include <list>
+#include <unordered_map>
 #if utils_cpp20
   #include <bit>
 #else

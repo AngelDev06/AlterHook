@@ -340,12 +340,20 @@ namespace utils
 
       constexpr static_vector_iterator() noexcept {}
 
+#ifndef NDEBUG
       constexpr explicit static_vector_iterator(pointer       ptr,
                                                 const size_t* size = nullptr,
                                                 size_t offset      = 0) noexcept
           : base(ptr, size, offset)
       {
       }
+#else
+      constexpr explicit static_vector_iterator(pointer ptr,
+                                                size_t  offset = 0) noexcept
+          : base(ptr, offset)
+      {
+      }
+#endif
 
       constexpr reference operator*() const noexcept
       {
@@ -513,6 +521,7 @@ namespace utils
 
     ~static_vector() { clear(); }
 
+#ifndef NDEBUG
     iterator begin() noexcept
     {
       return iterator(std::launder(reinterpret_cast<pointer>(data)), &count, 0);
@@ -535,6 +544,29 @@ namespace utils
       return const_iterator(std::launder(reinterpret_cast<const_pointer>(data)),
                             &count, count);
     }
+#else
+    iterator begin() noexcept
+    {
+      return iterator(std::launder(reinterpret_cast<pointer>(data)));
+    }
+
+    const_iterator begin() const noexcept
+    {
+      return const_iterator(
+          std::launder(reinterpret_cast<const_pointer>(data)));
+    }
+
+    iterator end() noexcept
+    {
+      return iterator(std::launder(reinterpret_cast<pointer>(data)), count);
+    }
+
+    const_iterator end() const noexcept
+    {
+      return const_iterator(std::launder(reinterpret_cast<const_pointer>(data)),
+                            count);
+    }
+#endif
 
     reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
 

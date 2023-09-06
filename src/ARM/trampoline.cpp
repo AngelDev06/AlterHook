@@ -1266,6 +1266,8 @@ namespace alterhook
   {
     if (this != &other)
     {
+      if (!ptrampoline)
+        ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
       ptarget          = other.ptarget;
       instruction_sets = other.instruction_sets;
       patch_above      = other.patch_above;
@@ -1273,8 +1275,6 @@ namespace alterhook
       pc_handling      = other.pc_handling;
       positions        = other.positions;
       old_protect      = other.old_protect;
-      if (!ptrampoline)
-        ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
       memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
     }
     return *this;
