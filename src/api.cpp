@@ -413,16 +413,12 @@ namespace alterhook
   {
     if (static_cast<trampoline*>(this) != &other)
     {
-      if (!enabled.empty())
-      {
-        std::unique_lock lock{ hook_lock };
-        thread_freezer   freeze{ *this, false };
-        __alterhook_inject(backup.data(), false);
-      }
+      uninject_all();
 
       try
       {
         trampoline::operator=(other);
+        inject_back(enabled.begin(), enabled.end());
         __alterhook_make_backup();
         if (!enabled.empty())
         {
@@ -433,29 +429,7 @@ namespace alterhook
       }
       catch (...)
       {
-        if (!disabled.empty())
-          disabled.back().has_other = false;
-        list_iterator previtr = disabled.end();
-        do
-        {
-          list_iterator curritr = std::prev(enabled.end());
-          list_iterator trgitr  = previtr;
-          hook&         curr    = *curritr;
-
-          if (curr.has_other)
-          {
-            if (curr.other != disabled.begin())
-              std::prev(curr.other)->has_other = false;
-            trgitr         = curr.other;
-            curr.has_other = false;
-          }
-
-          curr.enabled = false;
-          disabled.splice(trgitr, enabled, curritr);
-          previtr = curritr;
-        } while (!enabled.empty());
-
-        starts_enabled = false;
+        toggle_status_all(include::enabled);
         throw;
       }
     }
@@ -818,7 +792,167 @@ namespace alterhook
     if (first->enabled)
       uninject_range(first, last);
 
-    unbind_range(first, last, [&](list_iterator itr, bool) { trg.erase(itr); });
+    struct erase_callback : unbind_range_callback
+    {
+      std::list<hook>& trg;
+
+      erase_callback(std::list<hook>& trg) : trg(trg) {}
+
+      void operator()(list_iterator itr, bool) override { trg.erase(itr); }
+    } callback{ trg };
+
+    unbind_range(first, last, callback);
+    return last;
+  }
+
+  hook_chain::iterator hook_chain::erase(iterator first, iterator last)
+  {
+    list_iterator       firstprev{};
+    list_iterator       search_itr{};
+    list_iterator       range_begin   = first;
+    const list_iterator range_end     = last;
+    list_iterator       first_enabled = range_begin;
+    list_iterator       last_enabled  = range_end;
+    bool                has_enabled   = false;
+    bool                has_firstprev = false;
+    bool                search        = false;
+
+    auto [first_current, first_other] = first.enabled
+                                            ? std::tie(enabled, disabled)
+                                            : std::tie(disabled, enabled);
+    std::list<hook>& last_current     = last.enabled ? enabled : disabled;
+
+    // find firstprev
+    if (range_begin == first_current.begin())
+    {
+      if (first.enabled != starts_enabled)
+      {
+        search     = true;
+        search_itr = first_other.begin();
+      }
+    }
+    else
+    {
+      has_firstprev = true;
+      firstprev     = std::prev(range_begin);
+      if (firstprev->has_other)
+      {
+        search     = true;
+        search_itr = firstprev->other;
+      }
+    }
+
+    if (search)
+    {
+      has_firstprev = true;
+      while (!search_itr->has_other)
+        ++search_itr;
+      firstprev = search_itr;
+    }
+
+    // find first_enabled
+    if (!first.enabled)
+    {
+      if (!last.enabled)
+      {
+        while (range_begin != range_end && !range_begin->has_other)
+          range_begin = disabled.erase(range_begin);
+
+        if (range_begin != range_end)
+        {
+          has_enabled   = true;
+          first_enabled = range_begin->other;
+          disabled.erase(range_begin);
+        }
+      }
+      else
+      {
+        while (!range_begin->has_other)
+          range_begin = disabled.erase(range_begin);
+
+        first_enabled = range_begin->other;
+        disabled.erase(first_enabled);
+        if (first_enabled != range_end)
+          has_enabled = true;
+      }
+    }
+
+    if (has_enabled)
+    {
+      // erase all except enabled ones for safety reasons
+      for (auto itr = iterator(list_iterator(), first_enabled, true);
+           itr != last;)
+      {
+        if (itr.enabled)
+          last_enabled = itr++;
+        else
+        {
+          iterator next = std::next(itr);
+          disabled.erase(next);
+          itr = next;
+        }
+      }
+
+      const list_iterator end_enabled = std::next(last_enabled);
+
+      // only after uninjecting successfully it is safe to erase the enabled
+      // hooks
+      try
+      {
+        uninject_range(first_enabled, end_enabled);
+      }
+      catch (...)
+      {
+        for (list_iterator itr = first_enabled; itr != end_enabled; ++itr)
+          itr->has_other = false;
+
+        if (has_firstprev)
+        {
+          firstprev->has_other = false;
+          if (!firstprev->enabled)
+          {
+            firstprev->has_other = true;
+            firstprev->other     = first_enabled;
+          }
+        }
+        else
+          starts_enabled = true;
+
+        if (range_end != last_current.end() && !range_end->enabled)
+        {
+          last_enabled->has_other = true;
+          last_enabled->other     = range_end;
+        }
+        throw;
+      }
+
+      enabled.erase(first_enabled, end_enabled);
+    }
+    else
+    {
+      if (last.enabled)
+      {
+        list_iterator itr = first;
+        while (!itr->has_other)
+          itr = disabled.erase(itr);
+      }
+      else
+        disabled.erase(first, last);
+    }
+
+    if (has_firstprev)
+    {
+      firstprev->has_other = false;
+      if (range_end != last_current.end() &&
+          range_end->enabled != firstprev->enabled)
+      {
+        firstprev->has_other = true;
+        firstprev->other     = range_end;
+      }
+    }
+    else
+      starts_enabled = last.enabled;
+
     return last;
   }
 
@@ -1149,17 +1283,35 @@ namespace alterhook
 
     list_iterator current_newpos = newpos;
 
+    struct splice_callback : unbind_range_callback
+    {
+      hook_chain*      current;
+      const bool       to_enabled;
+      std::list<hook>& trg;
+      std::list<hook>& src;
+      list_iterator    newpos;
+
+      splice_callback(hook_chain* current, bool to_enabled,
+                      std::list<hook>& trg, std::list<hook>& src,
+                      list_iterator newpos)
+          : current(current), to_enabled(to_enabled), trg(trg), src(src),
+            newpos(newpos)
+      {
+      }
+
+      void operator()(list_iterator itr, bool forward) override
+      {
+        set_has_other(itr, false);
+        set_enabled(itr, to_enabled);
+        set_pchain(itr, current);
+        trg.splice(newpos, src, itr);
+        if (!forward)
+          newpos = itr;
+      }
+    } callback{ this, to_enabled, trg, src, newpos };
+
     bind(newpos, first, to_enabled);
-    other.unbind_range(first, last,
-                       [&](list_iterator itr, bool forward)
-                       {
-                         itr->has_other = false;
-                         itr->enabled   = to_enabled;
-                         itr->pchain    = this;
-                         trg.splice(current_newpos, src, itr);
-                         if (!forward)
-                           current_newpos = itr;
-                       });
+    other.unbind_range(first, last, callback);
   }
 
   void hook_chain::splice(list_iterator newpos, hook_chain& other,
@@ -1503,13 +1655,8 @@ namespace alterhook
 
   // hook_chain utilities
 
-  // needed for stupid msvc
-  typedef typename hook_chain::list_iterator hook_chain_list_iterator;
-
-  template <__alterhook_is_invocable_impl(callable, hook_chain_list_iterator,
-                                          bool)>
   void hook_chain::unbind_range(list_iterator first, list_iterator last,
-                                callable&& func)
+                                unbind_range_callback& callback)
   {
     list_iterator range_begin = first, range_end = std::prev(last);
     list_iterator other_range_begin{}, other_range_end{};
@@ -1519,7 +1666,7 @@ namespace alterhook
 
     // search backwards for last link from other to this range
     while (!range_end->has_other && range_end != range_begin)
-      func(std::exchange(range_end, std::prev(range_end)), false);
+      callback(std::exchange(range_end, std::prev(range_end)), false);
 
     if (range_end->has_other)
     {
@@ -1551,7 +1698,7 @@ namespace alterhook
       else if (has_last_link)
       {
         while (!range_begin->has_other)
-          func(std::exchange(range_begin, std::next(range_begin)), true);
+          callback(std::exchange(range_begin, std::next(range_begin)));
 
         other_range_begin    = range_begin->other;
         has_first_link       = true;
@@ -1565,7 +1712,7 @@ namespace alterhook
       if (!has_first_link)
       {
         while (!range_begin->has_other)
-          func(std::exchange(range_begin, std::next(range_begin)), true);
+          callback(std::exchange(range_begin, std::next(range_begin)));
 
         other_range_begin = range_begin->other;
       }
@@ -1587,7 +1734,7 @@ namespace alterhook
     }
 
     while (range_begin != last)
-      func(std::exchange(range_begin, std::next(range_begin)), true);
+      callback(std::exchange(range_begin, std::next(range_begin)));
   }
 
   void hook_chain::unbind(list_iterator position)

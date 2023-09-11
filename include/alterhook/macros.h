@@ -24,71 +24,93 @@
 #include "utilities/utils_macros.h"
 
 #if utils_cpp20
-  #define __alterhook_is_invocable_impl(T, ...) std::invocable<__VA_ARGS__> T
-  #define __alterhook_is_invocable(T, ...)      std::invocable<__VA_ARGS__> T
-
   #define __alterhook_requires(...) requires __VA_ARGS__
 
   #define __alterhook_is_detour_and_original_impl(T1, T2)                      \
     utils::callable_type T1, utils::function_type T2
   #define __alterhook_is_detour_and_original(T1, T2)                           \
     __alterhook_is_detour_and_original_impl(T1, T2)
+
   #define __alterhook_is_detour_impl(T) utils::callable_type T
   #define __alterhook_is_detour(T)      utils::callable_type T
+
   #define __alterhook_is_target_detour_and_original_impl(T1, T2, T3)           \
     utils::callable_type T1, utils::callable_type T2, utils::function_type T3
   #define __alterhook_is_target_detour_and_original(T1, T2, T3)                \
     __alterhook_is_target_detour_and_original_impl(T1, T2, T3)
+
   #define __alterhook_is_target_and_detour_impl(T1, T2)                        \
     utils::callable_type T1, utils::callable_type T2
   #define __alterhook_is_target_and_detour(T1, T2)                             \
     utils::callable_type T1, utils::callable_type T2
+
   #define __alterhook_is_target_impl(T)   utils::callable_type T
   #define __alterhook_is_target(T)        utils::callable_type T
   #define __alterhook_is_detour_impl(T)   utils::callable_type T
   #define __alterhook_is_detour(T)        utils::callable_type T
   #define __alterhook_is_original_impl(T) utils::function_type T
   #define __alterhook_is_original(T)      utils::function_type T
+
   #define __alterhook_are_detour_and_original_pairs_impl(T1, T2, TREST)        \
     utils::callable_type T1, utils::function_type T2, typename... TREST
   #define __alterhook_are_detour_and_original_pairs(T1, T2, TREST)             \
     __alterhook_are_detour_and_original_pairs_impl(T1, T2, TREST)
+
   #define __alterhook_are_target_detour_and_original_pairs_impl(T1, T2, T3,    \
                                                                 TREST)         \
     utils::callable_type T1, utils::callable_type T2, utils::function_type T3, \
         typename... TREST
   #define __alterhook_are_target_detour_and_original_pairs(T1, T2, T3, TREST)  \
     __alterhook_are_target_detour_and_original_pairs_impl(T1, T2, T3, TREST)
+
   #define __alterhook_are_detour_and_original_stl_pairs_impl(T1, TREST)        \
     utils::detour_and_storage_stl_pairs T1, typename... TREST
   #define __alterhook_are_detour_and_original_stl_pairs(T1, TREST)             \
     __alterhook_are_detour_and_original_stl_pairs_impl(T1, TREST)
+
   #define __alterhook_are_target_detour_and_original_stl_pairs_impl(T1, T2,    \
                                                                     TREST)     \
     utils::callable_type T1, utils::detour_and_storage_stl_pairs T2,           \
         typename... TREST
   #define __alterhook_are_target_detour_and_original_stl_pairs(T1, T2, TREST)  \
     __alterhook_are_target_detour_and_original_stl_pairs_impl(T1, T2, TREST)
+
   #define __alterhook_are_key_detour_and_original_triplets_impl(T1, T2, T3,    \
                                                                 TREST)         \
-    utils::clean_same_as<key> T1, utils::callable_type T2,                     \
+    std::convertible_to<typename T::key_type> T1, utils::callable_type T2,     \
         utils::function_type T3, typename... TREST
   #define __alterhook_are_key_detour_and_original_triplets(T1, T2, T3, TREST)  \
     __alterhook_are_key_detour_and_original_triplets_impl(T1, T2, T3, TREST)
+
   #define __alterhook_are_target_key_detour_and_original_triplets_impl(        \
       T1, T2, T3, T4, TREST)                                                   \
-    utils::callable_type T1, utils::clean_same_as<key> T2,                     \
+    utils::callable_type T1, std::convertible_to<typename T::key_type> T2,     \
         utils::callable_type T3, utils::function_type T4, typename... TREST
   #define __alterhook_are_target_key_detour_and_original_triplets(T1, T2, T3,  \
                                                                   T4, TREST)   \
     __alterhook_are_target_key_detour_and_original_triplets_impl(T1, T2, T3,   \
                                                                  T4, TREST)
-#else
-  #define __alterhook_is_invocable_impl(T, ...)                                \
-    typename T, std::enable_if_t<std::is_invocable_v<T, __VA_ARGS__>, size_t>
-  #define __alterhook_is_invocable(T, ...)                                     \
-    __alterhook_is_invocable_impl(T, __VA_ARGS__) = 0
 
+  #define __alterhook_are_key_detour_and_original_stl_triplets_impl(T1, TREST) \
+    typename T1, typename... TREST
+  #define __alterhook_are_key_detour_and_original_stl_triplets(T1, TREST)      \
+    __alterhook_are_key_detour_and_original_stl_triplets_impl(T1, TREST)
+
+  #define __alterhook_are_target_key_detour_and_original_stl_triplets_impl(    \
+      T1, T2, TREST)                                                           \
+    utils::callable_type T1, typename T2, typename... TREST
+  #define __alterhook_are_target_key_detour_and_original_stl_triplets(T1, T2,  \
+                                                                      TREST)   \
+    __alterhook_are_target_key_detour_and_original_stl_triplets_impl(T1, T2,   \
+                                                                     TREST)
+
+  #define __alterhook_is_key_detour_and_original_impl(T1, T2, T3)              \
+    std::convertible_to<typename T::key_type> T1, utils::callable_type T2,     \
+        utils::function_type T3
+  #define __alterhook_is_key_detour_and_original(T1, T2, T3)                   \
+    std::convertible_to<typename T::key_type> T1, utils::callable_type T2,     \
+        utils::function_type T3
+#else
   #define __alterhook_requires(...)
 
   #define __alterhook_is_detour_and_original_impl(T1, T2)                      \
@@ -97,9 +119,11 @@
                          size_t>
   #define __alterhook_is_detour_and_original(T1, T2)                           \
     __alterhook_is_detour_and_original_impl(T1, T2) = 0
+
   #define __alterhook_is_detour_impl(T)                                        \
     typename T, std::enable_if_t<utils::callable_type<T>, size_t>
   #define __alterhook_is_detour(T) __alterhook_is_detour_impl(T) = 0
+
   #define __alterhook_is_target_detour_and_original_impl(T1, T2, T3)           \
     typename T1, typename T2, typename T3,                                     \
         std::enable_if_t<utils::callable_type<T1> &&                           \
@@ -108,21 +132,26 @@
                          size_t>
   #define __alterhook_is_target_detour_and_original(T1, T2, T3)                \
     __alterhook_is_target_detour_and_original_impl(T1, T2, T3) = 0
+
   #define __alterhook_is_target_and_detour_impl(T1, T2)                        \
     typename T1, typename T2,                                                  \
         std::enable_if_t<utils::callable_type<T1> && utils::callable_type<T2>, \
                          size_t>
   #define __alterhook_is_target_and_detour(T1, T2)                             \
     __alterhook_is_target_and_detour_impl(T1, T2) = 0
+
   #define __alterhook_is_target_impl(T)                                        \
     typename T, std::enable_if_t<utils::callable_type<T>, size_t>
   #define __alterhook_is_target(T) __alterhook_is_target_impl(T) = 0
+
   #define __alterhook_is_detour_impl(T)                                        \
     typename T, std::enable_if_t<utils::callable_type<T>, size_t>
   #define __alterhook_is_detour(T) __alterhook_is_detour_impl(T) = 0
+
   #define __alterhook_is_original_impl(T)                                      \
     typename T, std::enable_if_t<utils::function_type<T>, size_t>
   #define __alterhook_is_original(T) __alterhook_is_original_impl(T) = 0
+
   #define __alterhook_are_detour_and_original_pairs_impl(T1, T2, TREST)        \
     typename T1, typename T2, typename... TREST,                               \
         std::enable_if_t<utils::callable_type<T1> &&                           \
@@ -131,6 +160,7 @@
                          size_t>
   #define __alterhook_are_detour_and_original_pairs(T1, T2, TREST)             \
     __alterhook_are_detour_and_original_pairs_impl(T1, T2, TREST) = 0
+
   #define __alterhook_are_target_detour_and_original_pairs_impl(T1, T2, T3,    \
                                                                 TREST)         \
     typename T1, typename T2, typename T3, typename... TREST,                  \
@@ -141,12 +171,14 @@
                          size_t>
   #define __alterhook_are_target_detour_and_original_pairs(T1, T2, T3, TREST)  \
     __alterhook_are_target_detour_and_original_pairs_impl(T1, T2, T3, TREST) = 0
+
   #define __alterhook_are_detour_and_original_stl_pairs_impl(T1, TREST)        \
     typename T1, typename... TREST,                                            \
         std::enable_if_t<utils::detour_and_storage_stl_pairs<T1, TREST...>,    \
                          size_t>
   #define __alterhook_are_detour_and_original_stl_pairs(T1, TREST)             \
     __alterhook_are_detour_and_original_stl_pairs_impl(T1, TREST) = 0
+
   #define __alterhook_are_target_detour_and_original_stl_pairs_impl(T1, T2,    \
                                                                     TREST)     \
     typename T1, typename T2, typename... TREST,                               \
@@ -156,31 +188,62 @@
             size_t>
   #define __alterhook_are_target_detour_and_original_stl_pairs(T1, T2, TREST)  \
     __alterhook_are_target_detour_and_original_stl_pairs_impl(T1, T2, TREST) = 0
+
   #define __alterhook_are_key_detour_and_original_triplets_impl(T1, T2, T3,    \
                                                                 TREST)         \
     typename T1, typename T2, typename T3, typename... TREST,                  \
-        std::enable_if_t<                                                      \
-            std::is_same_v<utils::remove_cvref_t<key>,                         \
-                           utils::remove_cvref_t<T1>> &&                       \
-                utils::callable_type<T2> && utils::function_type<T3> &&        \
-                utils::key_detour_and_storage_triplets<T1, TREST...>,          \
-            size_t>
+        std::enable_if_t<std::is_convertible_v<T1, helpers::key_t<T>> &&       \
+                             utils::callable_type<T2> &&                       \
+                             utils::function_type<T3> &&                       \
+                             utils::key_detour_and_storage_triplets<           \
+                                 helpers::key_t<T>, TREST...>,                 \
+                         size_t>
   #define __alterhook_are_key_detour_and_original_triplets(T1, T2, T3, TREST)  \
     __alterhook_are_key_detour_and_original_triplets_impl(T1, T2, T3, TREST) = 0
+
   #define __alterhook_are_target_key_detour_and_original_triplets_impl(        \
       T1, T2, T3, T4, TREST)                                                   \
     typename T1, typename T2, typename T3, typename T4, typename... TREST,     \
-        std::enable_if_t<                                                      \
-            utils::callable_type<T1> &&                                        \
-                std::is_same_v<utils::remove_cvref_t<key>,                     \
-                               utils::remove_cvref_t<T2>> &&                   \
-                utils::callable_type<T3> && utils::function_type<T4> &&        \
-                utils::key_detour_and_storage_triplets<T2, TREST...>,          \
-            size_t>
+        std::enable_if_t<utils::callable_type<T1> &&                           \
+                             std::is_convertible_v<T2, helpers::key_t<T>> &&   \
+                             utils::callable_type<T3> &&                       \
+                             utils::function_type<T4> &&                       \
+                             utils::key_detour_and_storage_triplets<           \
+                                 helpers::key_t<T>, TREST...>,                 \
+                         size_t>
   #define __alterhook_are_target_key_detour_and_original_triplets(T1, T2, T3,  \
                                                                   T4, TREST)   \
     __alterhook_are_target_key_detour_and_original_triplets_impl(              \
         T1, T2, T3, T4, TREST) = 0
+
+  #define __alterhook_are_key_detour_and_original_stl_triplets_impl(T1, TREST) \
+    typename T1, typename... TREST,                                            \
+        std::enable_if_t<utils::key_detour_and_storage_stl_triplets<           \
+                             helpers::key_t<T>, T1, TREST...>,                 \
+                         size_t>
+  #define __alterhook_are_key_detour_and_original_stl_triplets(T1, TREST)      \
+    __alterhook_are_key_detour_and_original_stl_triplets_impl(T1, TREST) = 0
+
+  #define __alterhook_are_target_key_detour_and_original_stl_triplets_impl(    \
+      T1, T2, TREST)                                                           \
+    typename T1, typename T2, typename... TREST,                               \
+        std::enable_if_t<utils::callable_type<T1> &&                           \
+                             utils::key_detour_and_storage_stl_triplets<       \
+                                 helpers::key_t<T>, T2, TREST...>,             \
+                         size_t>
+  #define __alterhook_are_target_key_detour_and_original_stl_triplets(T1, T2,  \
+                                                                      TREST)   \
+    __alterhook_are_target_key_detour_and_original_stl_triplets_impl(          \
+        T1, T2, TREST) = 0
+
+  #define __alterhook_is_key_detour_and_original_impl(T1, T2, T3)              \
+    typename T1, typename T2, typename T3,                                     \
+        std::enable_if_t<std::is_convertible_v<T1, helpers::key_t<T>> &&       \
+                             utils::callable_type<T2> &&                       \
+                             utils::function_type<T3>,                         \
+                         size_t>
+  #define __alterhook_is_key_detour_and_original(T1, T2, T3)                   \
+    __alterhook_is_key_detour_and_original_impl(T1, T2, T3) = 0
 #endif
 
 #if !utils_x64
@@ -243,13 +306,9 @@
   #define __alterhook_add_thumb_bit(address) address
 #endif
 
-#define __alterhook_decl_itr_get_0(first, second, ...)    first
-#define __alterhook_decl_itr_get_1(first, second, ...)    second
-#define __alterhook_decl_itr_get_rest(first, second, ...) __VA_ARGS__
-#define __alterhook_decl_itr_func(params)                                      \
-  __alterhook_decl_itr_get_0 params utils_concat(                              \
-      chain_, __alterhook_decl_itr_get_1 params)()                             \
-      __alterhook_decl_itr_get_rest params                                     \
-  {                                                                            \
-    return base::__alterhook_decl_itr_get_1 params();                          \
-  }
+#define __alterhook_decl_itr_func2(itr, name)                                  \
+  itr         chain_##name() noexcept { return base::name(); }                 \
+  const_##itr chain_##name() const noexcept { return base::name(); }           \
+  const_##itr chain_c##name() const noexcept { return base::name(); }
+
+#define __alterhook_decl_itr_func(params) __alterhook_decl_itr_func2 params
