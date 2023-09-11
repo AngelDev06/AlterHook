@@ -30,7 +30,7 @@ namespace alterhook
 {
   std::shared_mutex hook_lock{};
 
-  static bool is_pad(const std::byte* target, size_t size) noexcept 
+  static bool is_pad(const std::byte* target, size_t size) noexcept
   {
     if (target[0] != std::byte() && target[0] != std::byte(0x90) &&
         target[0] != std::byte(0xCC))
@@ -78,7 +78,7 @@ namespace alterhook
           reinterpret_cast<uintptr_t>(ptrampoline.get()) + tramp_pos;
       const cs_x86_op *operands_begin = detail.operands,
                       *operands_end   = detail.operands + detail.op_count;
-      addr = instr.address + instr.size;
+      addr                            = instr.address + instr.size;
 
 #if utils_x64
       auto has_rip = std::find_if(operands_begin, operands_end,
@@ -183,7 +183,7 @@ namespace alterhook
       else if (memchr(instr.detail->groups, X86_GRP_RET,
                       instr.detail->groups_count))
         finished = instr.address >= branch_dest;
-      
+
       if (instr.address < branch_dest && copy_size != instr.size)
         throw(exceptions::instructions_in_branch_handling_fail(target));
       if ((tramp_pos + copy_size) > memory_slot_size)
@@ -198,7 +198,7 @@ namespace alterhook
       if (finished)
         break;
       if (((instr.address + instr.size) -
-          reinterpret_cast<uintptr_t>(target)) >= sizeof(JMP))
+           reinterpret_cast<uintptr_t>(target)) >= sizeof(JMP))
       {
 #if utils_x64
         new (tmpbuff.data()) JMP_ABS(instr.address + instr.size);
@@ -394,7 +394,10 @@ namespace alterhook
       tramp_size  = other.tramp_size;
       positions   = other.positions;
       __alterhook_copy_old_protect(other);
+#if utils_x64
+      prelay = other.prelay;
+#endif
     }
     return *this;
   }
-}
+} // namespace alterhook

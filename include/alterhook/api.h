@@ -161,7 +161,7 @@ namespace alterhook
 
     bool is_enabled() const noexcept { return enabled; }
 
-    operator bool() const noexcept { return enabled; }
+    explicit operator bool() const noexcept { return enabled; }
 
     void set_target(std::byte* target);
 
@@ -279,7 +279,8 @@ namespace alterhook
     void          pop_front(include trg = include::both);
     list_iterator erase(list_iterator position);
     list_iterator erase(list_iterator first, list_iterator last);
-    list_iterator erase(iterator first, iterator last);
+    iterator      erase(iterator position);
+    iterator      erase(iterator first, iterator last);
 
     template <__alterhook_is_detour_and_original(dtr, orig)>
     void push_back(dtr&& detour, orig& original, bool enable_hook = true);
@@ -416,7 +417,7 @@ namespace alterhook
 
     bool empty_disabled() const noexcept { return disabled.empty(); }
 
-    operator bool() const noexcept { return !empty(); }
+    explicit operator bool() const noexcept { return !empty(); }
 
     size_t size() const noexcept { return enabled.size() + disabled.size(); }
 
@@ -464,6 +465,16 @@ namespace alterhook
     std::list<hook>                      enabled{};
     bool                                 starts_enabled = false;
 
+    struct unbind_range_callback
+    {
+      virtual void operator()(list_iterator itr, bool forward = true) = 0;
+
+      static void set_pchain(list_iterator itr, hook_chain* pchain);
+      static void set_enabled(list_iterator itr, bool status);
+      static void set_has_other(list_iterator itr, bool status);
+      static void set_other(list_iterator itr, list_iterator other);
+    };
+
     template <typename detour_t, typename original_t, size_t... d_indexes,
               size_t... o_indexes, typename... types>
     void init_chain(std::index_sequence<d_indexes...>,
@@ -478,8 +489,8 @@ namespace alterhook
     void join_last();
     void join_first();
     void join(list_iterator itr);
-    template <__alterhook_is_invocable(callable, list_iterator, bool)>
-    void unbind_range(list_iterator first, list_iterator last, callable&& func);
+    void unbind_range(list_iterator first, list_iterator last,
+                      unbind_range_callback& callback);
     void unbind(list_iterator position);
     void uninject_all();
     void uninject_range(list_iterator first, list_iterator last);
@@ -495,14 +506,16 @@ namespace alterhook
   protected:
     trampoline& get_trampoline() { return *this; }
 
+    const trampoline& get_trampoline() const { return *this; }
+
     void set_trampoline(const hook_chain& other)
     {
       trampoline::operator=(other);
       memcpy(backup.data(), other.backup.data(), backup.size());
     }
 
-    list_iterator append_item(hook& h, transfer to = transfer::disabled);
-    void          set_item(hook& left, const hook& right);
+    list_iterator append_item(const hook& h, transfer to = transfer::disabled);
+    static void   set_item(hook& left, const hook& right);
   };
 
   class ALTERHOOK_API hook_chain::hook
@@ -534,7 +547,7 @@ namespace alterhook
 
     bool is_enabled() const noexcept { return enabled; }
 
-    operator bool() const noexcept { return enabled; }
+    explicit operator bool() const noexcept { return enabled; }
 
     template <__alterhook_is_detour(dtr)>
     void set_detour(dtr&& detour)
@@ -547,6 +560,7 @@ namespace alterhook
 
   private:
     friend class hook_chain;
+    friend struct hook_chain::unbind_range_callback;
     list_iterator        current{};
     list_iterator        other{};
     hook_chain*          pchain    = nullptr;
@@ -670,212 +684,298 @@ namespace alterhook
     }
   };
 
+  namespace helpers
+  {
+    template <typename T>
+    class hook_map_base;
+    template <typename T>
+    class regular_hook_map_base;
+
+    template <typename T>
+    using key_t = typename T::key_type;
+  } // namespace helpers
+
   template <typename key, typename hash = std::hash<key>,
             typename keyequal  = std::equal_to<key>,
-            typename allocator = std::allocator<
-                std::pair<const key, typename std::list<hook>::iterator>>>
-  class hook_map : hook_chain
+            typename allocator = std::allocator<std::pair<
+                const key, std::reference_wrapper<typename hook_chain::hook>>>,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map    = std::unordered_map,
+            bool concurrent_mode = utils::concurrent_hash_map<
+                hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
+                         hash, keyequal, allocator>>>
+  class hook_map
+      : public helpers::regular_hook_map_base<
+            hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
+                     hash, keyequal, allocator>>
   {
   public:
-    typedef hook_chain                           base;
-    typedef std::allocator_traits<allocator>     alloc_traits;
-    typedef key                                  key_type;
-    typedef typename std::list<hook>::iterator   mapped_type;
-    typedef std::pair<const key, mapped_type>    value_type;
-    typedef size_t                               size_type;
-    typedef ptrdiff_t                            difference_type;
-    typedef hash                                 hasher;
-    typedef keyequal                             key_equal;
-    typedef allocator                            allocator_type;
-    typedef value_type&                          reference;
-    typedef const value_type&                    const_reference;
-    typedef typename alloc_traits::pointer       pointer;
-    typedef typename alloc_traits::const_pointer const_pointer;
-    typedef std::unordered_map<key, mapped_type, hash, keyequal, allocator>
-                                                   wrapped;
-    typedef typename wrapped::iterator             iterator;
-    typedef typename wrapped::const_iterator       const_iterator;
-    typedef typename wrapped::local_iterator       local_iterator;
-    typedef typename wrapped::const_local_iterator const_local_iterator;
-    typedef typename base::iterator                chain_iterator;
-    typedef typename base::const_iterator          const_chain_iterator;
-    typedef typename base::reference               hook_reference;
-    typedef typename base::const_reference         const_hook_reference;
-    typedef typename base::pointer                 hook_pointer;
-    typedef typename base::const_pointer           const_hook_pointer;
+    typedef hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
+                     hash, keyequal, allocator>
+        adapter;
+    static_assert(
+        utils::regular_hash_map<adapter> || utils::multi_hash_map<adapter>,
+        "hook map template is instantiated with an invalid hash map type");
+    typedef helpers::regular_hook_map_base<adapter> base;
 
-    using base::const_list_iterator;
-    using base::const_reverse_list_iterator;
-    using base::hook;
-    using base::include;
-    using base::list_iterator;
-    using base::reverse_list_iterator;
-    using base::transfer;
+    using typename base::allocator_type;
+    using typename base::chain_iterator;
+    using typename base::const_chain_iterator;
+    using typename base::const_iterator;
+    using typename base::const_list_iterator;
+    using typename base::const_pointer;
+    using typename base::const_reference;
+    using typename base::const_reverse_list_iterator;
+    using typename base::difference_type;
+    using typename base::hasher;
+    using typename base::hook;
+    using typename base::include;
+    using typename base::iterator;
+    using typename base::key_equal;
+    using typename base::key_type;
+    using typename base::list_iterator;
+    using typename base::mapped_type;
+    using typename base::pointer;
+    using typename base::reference;
+    using typename base::reverse_list_iterator;
+    using typename base::size_type;
+    using typename base::transfer;
+    using typename base::value_type;
+    using hook_reference       = typename base::hook_reference;
+    using const_hook_reference = typename base::const_hook_reference;
 
-    hook_map() : hook_chain() {}
+    using base::base;
+
+    // modifiers
+    iterator erase(const_iterator pos);
+    iterator erase(const_iterator first, const_iterator last);
+
+    // lookup
+    hook_reference                            operator[](const key& k);
+    const_hook_reference                      operator[](const key& k) const;
+    hook_reference                            at(const key& k);
+    const_hook_reference                      at(const key& k) const;
+    iterator                                  find(const key& k);
+    const_iterator                            find(const key& k) const;
+    std::pair<iterator, iterator>             equal_range(const key& k);
+    std::pair<const_iterator, const_iterator> equal_range(const key& k) const;
+    template <typename K>
+    hook_reference operator[](const K& k);
+    template <typename K>
+    const_hook_reference operator[](const K& k) const;
+    template <typename K>
+    hook_reference at(const K& k);
+    template <typename K>
+    const_hook_reference at(const K& k) const;
+    template <typename K>
+    iterator find(const K& k);
+    template <typename K>
+    const_iterator find(const K& k) const;
+    template <typename K>
+    std::pair<iterator, iterator> equal_range(const K& k);
+    template <typename K>
+    std::pair<const_iterator, const_iterator> equal_range(const K& k) const;
+
+    // iterators
+    iterator begin() noexcept { return iterator(adapter::begin()); }
+
+    const_iterator begin() const noexcept
+    {
+      return const_iterator(adapter::begin());
+    }
+
+    iterator end() noexcept { return iterator(adapter::end()); }
+
+    const_iterator end() const noexcept
+    {
+      return const_iterator(adapter::end());
+    }
+
+    const_iterator cbegin() const noexcept
+    {
+      return const_iterator(adapter::begin());
+    }
+
+    const_iterator cend() const noexcept
+    {
+      return const_iterator(adapter::end());
+    }
+
+    // clang-format off
+    utils_map(__alterhook_decl_itr_func, (chain_iterator, begin),
+              (chain_iterator, end), (list_iterator, ebegin),
+              (list_iterator, eend), (reverse_list_iterator, rebegin),
+              (reverse_list_iterator, reend), (list_iterator, dbegin),
+              (list_iterator, dend), (reverse_list_iterator, rdbegin),
+              (reverse_list_iterator, rdend))
+  };
+
+  // clang-format on
+
+  template <typename key,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map>
+  using hook_map_using = hook_map<
+      key, std::hash<key>, std::equal_to<key>,
+      std::allocator<std::pair<
+          const key, std::reference_wrapper<typename hook_chain::hook>>>,
+      hash_map>;
+
+  template <typename key>
+  using concurrent_hook_map = hook_map<
+      key, std::hash<key>, std::equal_to<key>,
+      std::allocator<std::pair<
+          const key, std::reference_wrapper<typename hook_chain::hook>>>,
+      std::unordered_map, true>;
+
+  template <typename key,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map>
+  using concurrent_hook_map_using = hook_map<
+      key, std::hash<key>, std::equal_to<key>,
+      std::allocator<std::pair<
+          const key, std::reference_wrapper<typename hook_chain::hook>>>,
+      hash_map, true>;
+
+  /*
+   * DEFAULT API FOR HOOK_MAP
+   */
+  template <typename T>
+  class helpers::hook_map_base : hook_chain,
+                                 public T
+  {
+  public:
+    typedef T                                adapter;
+    typedef hook_chain                       base;
+    typedef typename base::iterator          chain_iterator;
+    typedef typename base::const_iterator    const_chain_iterator;
+    typedef typename hook_chain::hook&       hook_reference;
+    typedef const typename hook_chain::hook& const_hook_reference;
+
+    using typename adapter::allocator_type;
+    using typename adapter::const_pointer;
+    using typename adapter::const_reference;
+    using typename adapter::difference_type;
+    using typename adapter::hasher;
+    using typename adapter::key_equal;
+    using typename adapter::key_type;
+    using typename adapter::mapped_type;
+    using typename adapter::pointer;
+    using typename adapter::reference;
+    using typename adapter::size_type;
+    using typename adapter::value_type;
+    using typename base::const_list_iterator;
+    using typename base::const_reverse_list_iterator;
+    using typename base::hook;
+    using typename base::include;
+    using typename base::list_iterator;
+    using typename base::reverse_list_iterator;
+    using transfer = base::transfer;
+
+    using adapter::adapter;
 
     template <__alterhook_are_key_detour_and_original_triplets(fkey, dtr, orig,
                                                                types)>
-    hook_map(std::byte* target, fkey&& first_key, dtr&& detour, orig& original,
-             types&&... rest)
+    hook_map_base(std::byte* target, fkey&& first_key, dtr&& detour,
+                  orig& original, types&&... rest)
         __alterhook_requires(
             utils::key_detour_and_storage_triplets<fkey, types...>);
 
     template <__alterhook_are_target_key_detour_and_original_triplets(
         trg, fkey, dtr, orig, types)>
-    hook_map(trg&& target, fkey&& first_key, dtr&& detour, orig& original,
-             types&&... rest)
+    hook_map_base(trg&& target, fkey&& first_key, dtr&& detour, orig& original,
+                  types&&... rest)
         __alterhook_requires(
             utils::key_detour_and_storage_triplets<fkey, types...>);
 
-    explicit hook_map(size_t bucket_count, const hash& hashinst = hash(),
-                      const keyequal&  equal = keyequal(),
-                      const allocator& alloc = allocator())
-        : map(bucket_count, hashinst, equal, alloc)
-    {
-    }
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    hook_map_base(std::byte* target, tuple&& first, types&&... rest)
+        __alterhook_requires(utils::key_detour_and_storage_stl_triplets<
+                             typename T::key_type, tuple, types...>);
 
-    hook_map(size_t bucket_count, const allocator& alloc)
-        : map(bucket_count, alloc)
-    {
-    }
+    template <__alterhook_are_target_key_detour_and_original_stl_triplets(
+        trg, tuple, types)>
+    hook_map_base(trg&& target, tuple&& first, types&&... rest)
+        __alterhook_requires(utils::key_detour_and_storage_stl_triplets<
+                             typename T::key_type, tuple, types...>);
 
-    hook_map(size_t bucket_count, const hash& hashinst, const allocator& alloc)
-        : map(bucket_count, alloc)
-    {
-    }
+    hook_map_base(const hook_map_base& other);
+    hook_map_base(const hook_map_base& other, const allocator_type& alloc);
+    hook_map_base(hook_map_base&& other) noexcept;
+    hook_map_base(hook_map_base&& other, const allocator_type& alloc) noexcept;
 
-    explicit hook_map(const allocator& alloc) : map(alloc) {}
+    ~hook_map_base() {}
 
-    hook_map(const hook_map& other);
-    hook_map(const hook_map& other, const allocator& alloc);
-    hook_map(hook_map&& other) noexcept;
-    hook_map(hook_map&& other, const allocator& alloc) noexcept;
-
-    ~hook_map() {}
-
-    hook_map& operator=(const hook_map& other);
-    hook_map& operator=(hook_map&& other) noexcept;
+    hook_map_base& operator=(const hook_map_base& other);
+    hook_map_base& operator=(hook_map_base&& other) noexcept;
+    hook_map_base& operator=(const alterhook::trampoline& other);
+    hook_map_base& operator=(alterhook::trampoline&& other);
 
     // getters
-    allocator get_allocator() const noexcept { return map.get_allocator(); }
-
-    size_t size() const noexcept { return map.size(); }
-
-    size_t max_size() const noexcept { return map.max_size(); }
-
-    bool empty() const noexcept { return map.empty(); }
-
-    operator bool() const noexcept { return !empty(); }
-
-    size_t bucket_count() const { return map.bucket_count(); }
-
-    size_t max_bucket_count() const { return map.max_bucket_count(); }
-
-    size_t bucket_size(size_t n) const { return map.bucket_size(n); }
-
-    size_t bucket(const key& k) const { return map.bucket(k); }
-
-    float load_factor() const { return map.load_factor(); }
-
-    hasher hash_function() const { return map.hash_function(); }
-
-    key_equal key_eq() const { return map.key_eq(); }
-
     using base::back;
     using base::dback;
     using base::dfront;
     using base::disabled_size;
     using base::eback;
     using base::efront;
+    using base::empty;
     using base::empty_disabled;
     using base::empty_enabled;
     using base::enabled_size;
     using base::front;
     using base::get_target;
+    using base::operator bool;
+    using adapter::max_size;
 
     // setters
     using base::set_target;
 
     // lookup
-    hook_reference       at(const key& k);
-    const_hook_reference at(const key& k) const;
-    hook_reference       operator[](const key& k) noexcept;
-    const_hook_reference operator[](const key& k) const noexcept;
-    iterator             find(const key& k);
-    const_iterator       find(const key& k) const;
-    bool                 contains(const key& k) const;
+    using adapter::count;
 
     // status update
     using base::disable_all;
     using base::enable_all;
 
     // modifiers
+    using base::insert;
     using base::splice;
     using base::swap;
-    void swap(hook_map& other);
-    void merge(hook_map& other);
+    void      clear();
+    void      swap(hook_map_base& other);
+    void      merge(hook_map_base& other);
+    size_type erase(const key_type& k);
+    template <typename K>
+    size_type erase(const K& k);
+
+  protected:
+    // modifiers
+    using adapter::insert;
 
     // iterators
-    iterator begin() noexcept { return map.begin(); }
+    using base::begin;
+    using base::cbegin;
+    using base::cdbegin;
+    using base::cdend;
+    using base::cebegin;
+    using base::ceend;
+    using base::cend;
+    using base::crdbegin;
+    using base::crdend;
+    using base::crebegin;
+    using base::creend;
+    using base::dbegin;
+    using base::dend;
+    using base::ebegin;
+    using base::eend;
+    using base::end;
+    using base::rdbegin;
+    using base::rdend;
+    using base::rebegin;
+    using base::reend;
 
-    iterator end() noexcept { return map.end(); }
-
-    const_iterator begin() const noexcept { return map.begin(); }
-
-    const_iterator end() const noexcept { return map.end(); }
-
-    const_iterator cbegin() const noexcept { return map.begin(); }
-
-    const_iterator cend() const noexcept { return map.end(); }
-
-    local_iterator begin(size_t n) { return map.begin(n); }
-
-    local_iterator end(size_t n) { return map.end(n); }
-
-    const_local_iterator begin(size_t n) const { return map.begin(n); }
-
-    const_local_iterator end(size_t n) const { return map.end(n); }
-
-    const_local_iterator cbegin(size_t n) const { return map.begin(n); }
-
-    const_local_iterator cend(size_t n) const { return map.end(n); }
-
-    // clang-format off
-    utils_map(__alterhook_decl_itr_func, 
-              (chain_iterator, begin, noexcept),
-              (chain_iterator, end, noexcept),
-              (const_chain_iterator, begin, const noexcept),
-              (const_chain_iterator, end, const noexcept),
-              (const_chain_iterator, cbegin, const noexcept),
-              (const_chain_iterator, cend, const noexcept),
-              (list_iterator, ebegin, noexcept),
-              (list_iterator, eend, noexcept),
-              (const_list_iterator, ebegin, const noexcept),
-              (const_list_iterator, eend, const noexcept),
-              (reverse_list_iterator, rebegin, noexcept),
-              (reverse_list_iterator, reend, noexcept),
-              (const_reverse_list_iterator, rebegin, const noexcept),
-              (const_reverse_list_iterator, reend, const noexcept),
-              (const_list_iterator, cebegin, const noexcept),
-              (const_list_iterator, ceend, const noexcept),
-              (const_reverse_list_iterator, crebegin, const noexcept),
-              (const_reverse_list_iterator, creend, const noexcept),
-              (list_iterator, dbegin, noexcept),
-              (list_iterator, dend, noexcept),
-              (const_list_iterator, dbegin, const noexcept),
-              (const_list_iterator, dend, const noexcept),
-              (reverse_list_iterator, rdbegin, noexcept),
-              (reverse_list_iterator, rdend, noexcept),
-              (const_reverse_list_iterator, rdbegin, const noexcept),
-              (const_reverse_list_iterator, rdend, const noexcept),
-              (const_list_iterator, cdbegin, const noexcept),
-              (const_list_iterator, cdend, const noexcept),
-              (const_reverse_list_iterator, crdbegin, const noexcept),
-              (const_reverse_list_iterator, crdend, const noexcept))
-        // clang-format on
-        private : wrapped map;
-
+  private:
     void swap(hook_chain&)                                            = delete;
     void swap(list_iterator, base&, list_iterator)                    = delete;
     void splice(list_iterator, hook_chain&, transfer, transfer)       = delete;
@@ -905,9 +1005,137 @@ namespace alterhook
 
     template <size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
               typename... types>
-    hook_map(std::byte* target, std::index_sequence<k_indexes...>,
-             std::index_sequence<d_indexes...>,
-             std::index_sequence<o_indexes...>, std::tuple<types...>&& args);
+    hook_map_base(std::byte* target, std::index_sequence<k_indexes...>,
+                  std::index_sequence<d_indexes...>,
+                  std::index_sequence<o_indexes...>,
+                  std::tuple<types...>&& args);
+  };
+
+  template <typename T>
+  class helpers::regular_hook_map_base : protected helpers::hook_map_base<T>
+  {
+  protected:
+    template <typename itrbase>
+    class __const_itr;
+    template <typename itrbase>
+    class __itr;
+
+  public:
+    typedef hook_map_base<T>                        base;
+    typedef __const_itr<typename T::const_iterator> const_iterator;
+    typedef __itr<typename T::const_iterator>       iterator;
+
+    using typename base::allocator_type;
+    using typename base::chain_iterator;
+    using typename base::const_chain_iterator;
+    using typename base::const_hook_reference;
+    using typename base::const_list_iterator;
+    using typename base::const_pointer;
+    using typename base::const_reference;
+    using typename base::const_reverse_list_iterator;
+    using typename base::difference_type;
+    using typename base::hasher;
+    using typename base::hook;
+    using typename base::hook_reference;
+    using typename base::include;
+    using typename base::key_equal;
+    using typename base::key_type;
+    using typename base::list_iterator;
+    using typename base::mapped_type;
+    using typename base::pointer;
+    using typename base::reference;
+    using typename base::reverse_list_iterator;
+    using typename base::size_type;
+    using typename base::value_type;
+    using transfer = base::transfer;
+
+    typedef std::conditional_t<utils::multi_hash_map<T>, iterator,
+                               std::pair<iterator, bool>>
+        insert_ret_t;
+
+    using base::base;
+
+    template <__alterhook_is_key_detour_and_original(K, dtr, orig)>
+    insert_ret_t insert(K&& k, dtr&& detour, orig& original,
+                        transfer to = transfer::enabled);
+    iterator     erase(const_iterator pos);
+    iterator     erase(const_iterator first, const_iterator last);
+  };
+
+  template <typename T>
+  template <typename itrbase>
+  class helpers::regular_hook_map_base<T>::__const_itr : public itrbase
+  {
+  public:
+    typedef std::pair<typename T::key_type, typename hook_chain::hook>
+        value_type;
+    typedef std::pair<const typename T::key_type&,
+                      const typename hook_chain::hook&>
+        reference;
+
+    using typename itrbase::difference_type;
+    using typename itrbase::iterator_category;
+    using typename itrbase::pointer;
+
+    __const_itr() noexcept {}
+
+    __const_itr(itrbase itr) : itrbase(itr) {}
+
+    reference operator*() const noexcept
+    {
+      auto ptr = itrbase::operator->();
+      return std::make_pair(std::cref(ptr->first), std::cref(ptr->second));
+    }
+
+    __const_itr& operator++()
+    {
+      itrbase::operator++();
+      return *this;
+    }
+
+    __const_itr operator++(int)
+    {
+      __const_itr tmp = *this;
+      ++*this;
+      return tmp;
+    }
+  };
+
+  template <typename T>
+  template <typename itrbase>
+  class helpers::regular_hook_map_base<T>::__itr : public __const_itr<itrbase>
+  {
+  public:
+    typedef __const_itr<itrbase> base;
+    typedef std::pair<const typename T::key_type&, typename hook_chain::hook&>
+        reference;
+    using typename base::difference_type;
+    using typename base::iterator_category;
+    using typename base::pointer;
+    using typename base::value_type;
+
+    __itr() noexcept {}
+
+    __itr(itrbase itr) : __const_itr<itrbase>(itr) {}
+
+    reference operator*() const noexcept
+    {
+      auto ptr = __const_itr<itrbase>::operator->();
+      return std::make_pair(std::cref(ptr->first), ptr->second);
+    }
+
+    __itr& operator++()
+    {
+      __const_itr<itrbase>::operator++();
+      return *this;
+    }
+
+    __itr operator++(int)
+    {
+      __itr tmp = *this;
+      ++*this;
+      return tmp;
+    }
   };
 
   /*
@@ -1037,7 +1265,7 @@ namespace alterhook
   {
   }
 
-  template <__alterhook_is_original(orig)>
+  template <__alterhook_is_original_impl(orig)>
   hook_chain::hook_chain(const alterhook::hook& other, orig& original)
       : trampoline(other)
   {
@@ -1182,7 +1410,7 @@ namespace alterhook
     init_chain();
   }
 
-  template <__alterhook_is_original(orig)>
+  template <__alterhook_is_original_impl(orig)>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour,
                               const std::byte* original, orig& origref,
@@ -1198,7 +1426,7 @@ namespace alterhook
     origref   = function_cast<orig>(original);
   }
 
-  template <__alterhook_is_original(orig)>
+  template <__alterhook_is_original_impl(orig)>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour, orig& origref)
   {
@@ -1394,13 +1622,14 @@ namespace alterhook
     starts_enabled = enable_hook;
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
+  template <typename T>
   template <size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
             typename... types>
-  hook_map<key, hash, keyequal, allocator>::hook_map(
-      std::byte* target, std::index_sequence<k_indexes...>,
-      std::index_sequence<d_indexes...>, std::index_sequence<o_indexes...>,
-      std::tuple<types...>&& args)
+  helpers::hook_map_base<T>::hook_map_base(std::byte* target,
+                                           std::index_sequence<k_indexes...>,
+                                           std::index_sequence<d_indexes...>,
+                                           std::index_sequence<o_indexes...>,
+                                           std::tuple<types...>&& args)
       : hook_chain(
             target,
             std::forward_as_tuple(
@@ -1412,24 +1641,23 @@ namespace alterhook
                     std::get<o_indexes>(args)))...)
   {
     list_iterator itr = ebegin();
-    (map.emplace(
+
+    (adapter::emplace(
          std::forward<std::tuple_element_t<k_indexes, std::tuple<types...>>>(
              std::get<k_indexes>(args)),
-         itr++),
+         std::ref(*(itr++))),
      ...);
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
+  template <typename T>
   template <__alterhook_are_key_detour_and_original_triplets_impl(fkey, dtr,
                                                                   orig, types)>
-  hook_map<key, hash, keyequal, allocator>::hook_map(std::byte* target,
-                                                     fkey&&     first_key,
-                                                     dtr&&      detour,
-                                                     orig&      original,
-                                                     types&&... rest)
+  helpers::hook_map_base<T>::hook_map_base(std::byte* target, fkey&& first_key,
+                                           dtr&& detour, orig& original,
+                                           types&&... rest)
       __alterhook_requires(
           utils::key_detour_and_storage_triplets<fkey, types...>)
-      : hook_map(
+      : hook_map_base(
             target,
             utils::make_index_sequence_with_step<sizeof...(types) + 3, 0, 3>(),
             utils::make_index_sequence_with_step<sizeof...(types) + 3, 1, 3>(),
@@ -1440,73 +1668,511 @@ namespace alterhook
   {
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
+  template <typename T>
   template <__alterhook_are_target_key_detour_and_original_triplets_impl(
       trg, fkey, dtr, orig, types)>
-  hook_map<key, hash, keyequal, allocator>::hook_map(trg&&  target,
-                                                     fkey&& first_key,
-                                                     dtr&&  detour,
-                                                     orig&  original,
-                                                     types&&... rest)
+  helpers::hook_map_base<T>::hook_map_base(trg&& target, fkey&& first_key,
+                                           dtr&& detour, orig& original,
+                                           types&&... rest)
       __alterhook_requires(
           utils::key_detour_and_storage_triplets<fkey, types...>)
-      : hook_map(get_target_address(std::forward<trg>(target)),
-                 std::forward<fkey>(first_key), std::forward<dtr>(detour),
-                 original, std::forward<types>(rest)...)
+      : hook_map_base(get_target_address(std::forward<trg>(target)),
+                      std::forward<fkey>(first_key), std::forward<dtr>(detour),
+                      original, std::forward<types>(rest)...)
   {
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
-  hook_map<key, hash, keyequal, allocator>::hook_map(const hook_map& other)
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  helpers::hook_map_base<T>::hook_map_base(std::byte* target, tuple&& first,
+                                           types&&... rest)
+      __alterhook_requires(utils::key_detour_and_storage_stl_triplets<
+                           typename T::key_type, tuple, types...>)
+      : hook_chain(
+            target,
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<1, utils::remove_cvref_t<tuple>>>(
+                    std::get<1>(first)),
+                std::get<2>(first)),
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<1, utils::remove_cvref_t<types>>>(
+                    std::get<1>(rest)),
+                std::get<2>(rest))...)
+  {
+    list_iterator itr = base::ebegin();
+    adapter::emplace(
+        std::forward<std::tuple_element_t<0, utils::remove_cvref_t<tuple>>>(
+            std::get<0>(first)),
+        std::ref(*(itr++)));
+    (adapter::emplace(
+         std::forward<std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
+             std::get<0>(rest)),
+         std::ref(*(itr++))),
+     ...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_target_key_detour_and_original_stl_triplets_impl(
+      trg, tuple, types)>
+  helpers::hook_map_base<T>::hook_map_base(trg&& target, tuple&& first,
+                                           types&&... rest)
+      __alterhook_requires(utils::key_detour_and_storage_stl_triplets<
+                           typename T::key_type, tuple, types...>)
+      : hook_map_base(get_target_address(std::forward<trg>(target)),
+                      std::forward<tuple>(first), std::forward<types>(rest)...)
+  {
+  }
+
+  template <typename T>
+  helpers::hook_map_base<T>::hook_map_base(const hook_map_base& other)
       : hook_chain(other.get_target())
   {
-    for (const auto& [k, v] : other)
-      map.emplace(k, append_item(*v));
+    for (const auto& [k, v] : static_cast<const adapter&>(other))
+      adapter::emplace(k, *append_item(v));
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
-  hook_map<key, hash, keyequal, allocator>::hook_map(const hook_map&  other,
-                                                     const allocator& alloc)
-      : map(alloc), hook_chain(other.get_target())
+  template <typename T>
+  helpers::hook_map_base<T>::hook_map_base(const hook_map_base&  other,
+                                           const allocator_type& alloc)
+      : adapter(alloc), hook_chain(other.get_target())
   {
-    for (const auto& [k, v] : other)
-      map.emplace(k, append_item(*v));
+    for (const auto& [k, v] : static_cast<const adapter&>(other))
+      adapter::emplace(k, *append_item(v));
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
-  hook_map<key, hash, keyequal, allocator>::hook_map(hook_map&& other) noexcept
-      : map(std::move(other.map)), hook_chain(std::move(other))
-  {
-  }
-
-  template <typename key, typename hash, typename keyequal, typename allocator>
-  hook_map<key, hash, keyequal, allocator>::hook_map(
-      hook_map&& other, const allocator& alloc) noexcept
-      : map(std::move(other.map), alloc), hook_chain(std::move(other))
+  template <typename T>
+  helpers::hook_map_base<T>::hook_map_base(hook_map_base&& other) noexcept
+      : adapter(std::move(other)), hook_chain(std::move(other))
   {
   }
 
-  template <typename key, typename hash, typename keyequal, typename allocator>
-  hook_map<key, hash, keyequal, allocator>&
-      hook_map<key, hash, keyequal, allocator>::operator=(const hook_map& other)
+  template <typename T>
+  helpers::hook_map_base<T>::hook_map_base(hook_map_base&&       other,
+                                           const allocator_type& alloc) noexcept
+      : adapter(std::move(other), alloc), hook_chain(std::move(other))
+  {
+  }
+
+  template <typename T>
+  helpers::hook_map_base<T>&
+      helpers::hook_map_base<T>::operator=(const hook_map_base& other)
   {
     if (this != &other)
     {
       disable_all();
       set_trampoline(other.get_trampoline());
 
-      for (auto itr = map.begin(), enditr = map.end(); itr != enditr;)
+      for (auto itr = adapter::begin(), enditr = adapter::end(); itr != enditr;)
       {
-        if (other.map.count(itr->first))
+        if (other.adapter::count(itr->first))
           ++itr;
         else
-          itr = map.erase(itr);
+          itr = adapter::erase(itr);
       }
 
-      if (map.size() >= other.map.size())
+      if (adapter::size() >= other.adapter::size())
       {
+        chain_iterator itr = base::begin();
+        for (auto& [k, otheritr] : static_cast<const adapter&>(other))
+        {
+          set_item(*itr, static_cast<const hook&>(otheritr));
+          adapter::insert_or_assign(k, std::ref(*(itr++)));
+        }
+
+        base::erase(itr, base::end());
+      }
+      else
+      {
+        typename adapter::const_iterator otheritr = other.adapter::begin();
+        for (list_iterator itr = base::dbegin(), itrend = base::dend();
+             itr != itrend; ++itr)
+        {
+          set_item(*itr, otheritr->second);
+          adapter::insert_or_assign(otheritr->first, std::ref(*(itr++)));
+        }
+
+        for (typename adapter::const_iterator otherend = other.adapter::end();
+             otheritr != otherend; ++otheritr)
+          adapter::insert_or_assign(otheritr->first,
+                                    std::ref(*append_item(otheritr->second)));
       }
     }
+    return *this;
+  }
+
+  template <typename T>
+  helpers::hook_map_base<T>&
+      helpers::hook_map_base<T>::operator=(hook_map_base&& other) noexcept
+  {
+    if (&other != this)
+    {
+      hook_chain::operator=(std::move(other));
+      adapter::operator=(std::move(other));
+    }
+    return *this;
+  }
+
+  template <typename T>
+  helpers::hook_map_base<T>&
+      helpers::hook_map_base<T>::operator=(const alterhook::trampoline& other)
+  {
+    base::operator=(other);
+    return *this;
+  }
+
+  template <typename T>
+  helpers::hook_map_base<T>&
+      helpers::hook_map_base<T>::operator=(alterhook::trampoline&& other)
+  {
+    base::operator=(std::move(other));
+    return *this;
+  }
+
+  template <typename T>
+  void helpers::hook_map_base<T>::clear()
+  {
+    base::clear();
+    adapter::clear();
+  }
+
+  template <typename T>
+  void helpers::hook_map_base<T>::swap(hook_map_base& other)
+  {
+    base::swap(other);
+    adapter::swap(other);
+  }
+
+  template <typename T>
+  void helpers::hook_map_base<T>::merge(hook_map_base& other)
+  {
+    for (auto itr = other.adapter::begin(), itrend = other.adapter::end();
+         itr != itrend; ++itr)
+    {
+      if (adapter::count(itr->first))
+        continue;
+      auto [flag, newpos] = itr->second.get().is_enabled()
+                                ? std::pair(transfer::enabled, base::eend())
+                                : std::pair(transfer::disabled, base::dend());
+      base::splice(newpos, other, itr->second.get().get_list_iterator(), flag);
+      adapter::insert(*itr);
+      other.adapter::erase(itr);
+    }
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::iterator
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::erase(const_iterator pos)
+  {
+    base::erase(pos->second.get().get_list_iterator());
+    return adapter::erase(pos);
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::iterator
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::erase(const_iterator first,
+                                       const_iterator last)
+  {
+    while (first != last)
+    {
+      base::erase(first->second.get().get_list_iterator());
+      first = adapter::erase(first);
+    }
+    return last;
+  }
+
+  template <typename T>
+  typename helpers::hook_map_base<T>::size_type
+      helpers::hook_map_base<T>::erase(const key_type& k)
+  {
+    if constexpr (utils::multi_hash_map<adapter>)
+    {
+      auto   range = adapter::equal_range(k);
+      size_t count = 0;
+      while (range.first != range.second)
+      {
+        base::erase(range.first->second.get().get_list_iterator());
+        range.first = adapter::erase(range.first);
+        ++count;
+      }
+      return count;
+    }
+    else
+    {
+      auto result = adapter::find(k);
+      if (result == adapter::cend())
+        return 0;
+      base::erase(result->second.get().get_list_iterator());
+      adapter::erase(result);
+      return 1;
+    }
+  }
+
+  template <typename T>
+  template <typename K>
+  typename helpers::hook_map_base<T>::size_type
+      helpers::hook_map_base<T>::erase(const K& k)
+  {
+    if constexpr (utils::multi_hash_map<adapter>)
+    {
+      auto   range = adapter::equal_range(k);
+      size_t count = 0;
+      while (range.first != range.second)
+      {
+        base::erase(range.first->second.get().get_list_iterator());
+        range.first = adapter::erase(range.first);
+        ++count;
+      }
+      return count;
+    }
+    else
+    {
+      auto result = adapter::find(k);
+      if (result == adapter::cend())
+        return 0;
+      base::erase(result->second.get().get_list_iterator());
+      adapter::erase(result);
+      return 1;
+    }
+  }
+
+  template <typename T>
+  template <__alterhook_is_key_detour_and_original_impl(K, dtr, orig)>
+  typename helpers::regular_hook_map_base<T>::insert_ret_t
+      helpers::regular_hook_map_base<T>::insert(K&& k, dtr&& detour,
+                                                orig& original, transfer to)
+  {
+    if constexpr (!utils::multi_hash_map<T>)
+    {
+      if (base::count(k))
+        return std::pair(iterator(), false);
+    }
+    list_iterator pos = to == transfer::enabled ? base::eend() : base::dend();
+    hook& h = base::insert(pos, std::forward<dtr>(detour), original, to);
+    return static_cast<insert_ret_t>(
+        base::emplace(std::forward<K>(k), std::ref(h)));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::operator[](const key& k)
+  {
+    return adapter::find(k)->second;
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::const_hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::operator[](const key& k) const
+  {
+    return adapter::find(k)->second;
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::at(
+          const key& k)
+  {
+    return adapter::at(k);
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::const_hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::at(
+          const key& k) const
+  {
+    return adapter::at(k);
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::iterator
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::find(
+          const key& k)
+  {
+    return static_cast<iterator>(adapter::find(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::const_iterator
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::find(
+          const key& k) const
+  {
+    return static_cast<const_iterator>(adapter::find(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  std::pair<typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::iterator,
+            typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::iterator>
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::equal_range(const key& k)
+  {
+    return static_cast<std::pair<iterator, iterator>>(adapter::equal_range(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  std::pair<typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::const_iterator,
+            typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::const_iterator>
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::equal_range(const key& k) const
+  {
+    return static_cast<std::pair<const_iterator, const_iterator>>(
+        adapter::equal_range(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::operator[](const K& k)
+  {
+    return adapter::find(k)->second;
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::const_hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::operator[](const K& k) const
+  {
+    return adapter::find(k)->second;
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::at(
+          const K& k)
+  {
+    return adapter::at(k);
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::const_hook_reference
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::at(
+          const K& k) const
+  {
+    return adapter::at(k);
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::iterator
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::find(
+          const K& k)
+  {
+    return static_cast<iterator>(adapter::find(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  typename hook_map<key, hash, keyequal, allocator, hash_map,
+                    concurrent_mode>::const_iterator
+      hook_map<key, hash, keyequal, allocator, hash_map, concurrent_mode>::find(
+          const K& k) const
+  {
+    return static_cast<const_iterator>(adapter::find(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  std::pair<typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::iterator,
+            typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::iterator>
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::equal_range(const K& k)
+  {
+    return static_cast<std::pair<iterator, iterator>>(adapter::equal_range(k));
+  }
+
+  template <typename key, typename hash, typename keyequal, typename allocator,
+            template <typename, typename, typename, typename, typename>
+            typename hash_map,
+            bool concurrent_mode>
+  template <typename K>
+  std::pair<typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::const_iterator,
+            typename hook_map<key, hash, keyequal, allocator, hash_map,
+                              concurrent_mode>::const_iterator>
+      hook_map<key, hash, keyequal, allocator, hash_map,
+               concurrent_mode>::equal_range(const K& k) const
+  {
+    return static_cast<std::pair<const_iterator, const_iterator>>(
+        adapter::equal_range(k));
   }
 
   /*
@@ -1515,6 +2181,13 @@ namespace alterhook
   inline hook_chain::hook_chain(std::byte* target) : trampoline(target)
   {
     __alterhook_make_backup();
+  }
+
+  inline hook_chain::iterator hook_chain::erase(iterator position)
+  {
+    iterator next = std::next(position);
+    erase(static_cast<list_iterator>(position));
+    return next;
   }
 
   inline void hook_chain::merge(hook_chain& other, bool at_back)
@@ -1886,7 +2559,8 @@ namespace alterhook
     return disabled.back();
   }
 
-  inline hook_chain::list_iterator hook_chain::append_item(hook& h, transfer to)
+  inline hook_chain::list_iterator hook_chain::append_item(const hook& h,
+                                                           transfer    to)
   {
     utils_assert(to != transfer::both,
                  "hook_chain::append_item: to can't be the both flag");
@@ -1953,6 +2627,31 @@ namespace alterhook
   {
     left.origbuff = right.origbuff;
     left.pdetour  = right.pdetour;
+  }
+
+  inline void hook_chain::unbind_range_callback::set_pchain(list_iterator itr,
+                                                            hook_chain* pchain)
+  {
+    itr->pchain = pchain;
+  }
+
+  inline void hook_chain::unbind_range_callback::set_enabled(list_iterator itr,
+                                                             bool status)
+  {
+    itr->enabled = status;
+  }
+
+  inline void
+      hook_chain::unbind_range_callback::set_has_other(list_iterator itr,
+                                                       bool          status)
+  {
+    itr->has_other = status;
+  }
+
+  inline void hook_chain::unbind_range_callback::set_other(list_iterator itr,
+                                                           list_iterator other)
+  {
+    itr->other = other;
   }
 
   inline hook_chain::const_iterator&

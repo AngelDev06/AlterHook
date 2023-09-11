@@ -29,7 +29,9 @@
     <ClInclude Include="..\..\..\include\alterhook\exceptions.h" />
     <ClInclude Include="..\..\..\include\alterhook\macros.h" />
     <ClInclude Include="..\..\..\include\alterhook\tools.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\adapters.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\calling_conventions.h" />
+    <ClInclude Include="..\..\..\include\alterhook\utilities\concepts.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\function_traits.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\other.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\static_vector.h" />

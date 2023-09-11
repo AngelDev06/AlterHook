@@ -19,6 +19,7 @@
 #include <array>
 #include <list>
 #include <unordered_map>
+#include <shared_mutex>
 #if utils_cpp20
   #include <bit>
 #else
