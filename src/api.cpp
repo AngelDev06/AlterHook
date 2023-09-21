@@ -970,7 +970,23 @@ namespace alterhook
       std::swap(left->pchain, right->pchain);
       std::swap(left->other, right->other);
       std::swap(left->has_other, right->has_other);
-      std::swap(left->poriginal, right->poriginal);
+      if (left->enabled && right->enabled)
+      {
+        if (left->poriginal == right->pdetour)
+        {
+          left->poriginal  = right->poriginal;
+          right->poriginal = left->pdetour;
+        }
+        else if (right->poriginal == left->pdetour)
+        {
+          right->poriginal = left->poriginal;
+          left->poriginal  = right->pdetour;
+        }
+        else
+          std::swap(left->poriginal, right->poriginal);
+      }
+      else
+        std::swap(left->poriginal, right->poriginal);
       std::swap(left->enabled, right->enabled);
       lefttrg.splice(leftnext, righttrg, right);
       righttrg.splice(rightnext, lefttrg, left);
@@ -992,7 +1008,7 @@ namespace alterhook
         {
           if (leftnext == enabled.end())
             __alterhook_patch_jmp(left->pdetour);
-          else
+          else if (leftnext != left)
           {
             leftnext->poriginal = left->pdetour;
             *leftnext->origwrap = left->pdetour;
@@ -1004,7 +1020,7 @@ namespace alterhook
         {
           if (rightnext == other.enabled.end())
             __alterhook_patch_other_jmp(other, right->pdetour);
-          else
+          else if (rightnext != right)
           {
             rightnext->poriginal = right->pdetour;
             *rightnext->origwrap = right->pdetour;
