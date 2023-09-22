@@ -1442,12 +1442,14 @@ namespace alterhook
     class bucket_api_base : public T
     {
     public:
-      typedef T base;
-      typedef typename base::template __itr<typename T::const_local_iterator>
-          local_iterator;
+      typedef T                                   base;
+      typedef utils::first_template_param_of_t<T> adapted;
       typedef
-          typename base::template __const_itr<typename T::const_local_iterator>
-              const_local_iterator;
+          typename base::template __itr<typename adapted::const_local_iterator>
+              local_iterator;
+      typedef typename base::template __const_itr<
+          typename adapted::const_local_iterator>
+          const_local_iterator;
       using typename base::allocator_type;
       using typename base::chain_iterator;
       using typename base::const_chain_iterator;
@@ -1476,24 +1478,49 @@ namespace alterhook
 
       using base::base;
 
-      local_iterator begin(size_type n) { return T::begin(n); }
+      using base::begin;
+      using base::cbegin;
+      using base::cend;
+      using base::end;
 
-      const_local_iterator begin(size_type n) const { return T::begin(n); }
+      local_iterator begin(size_type n)
+      {
+        return static_cast<local_iterator>(adapted::begin(n));
+      }
 
-      const_local_iterator cbegin(size_type n) const { return T::begin(n); }
+      const_local_iterator begin(size_type n) const
+      {
+        return static_cast<const_local_iterator>(adapted::begin(n));
+      }
 
-      local_iterator end(size_type n) { return T::end(n); }
+      const_local_iterator cbegin(size_type n) const
+      {
+        return static_cast<const_local_iterator>(adapted::begin(n));
+      }
 
-      const_local_iterator end(size_type n) const { return T::end(n); }
+      local_iterator end(size_type n)
+      {
+        return static_cast<local_iterator>(adapted::end(n));
+      }
 
-      const_local_iterator cend(size_type n) const { return T::end(n); }
+      const_local_iterator end(size_type n) const
+      {
+        return static_cast<const_local_iterator>(adapted::end(n));
+      }
+
+      const_local_iterator cend(size_type n) const
+      {
+        return static_cast<const_local_iterator>(adapted::end(n));
+      }
 
       using base::bucket;
       using base::bucket_size;
       using base::max_bucket_count;
     };
 
-    template <typename T, bool = utils::closed_addressing<T>>
+    template <typename T,
+              bool =
+                  utils::closed_addressing<utils::first_template_param_of_t<T>>>
     struct add_bucket_api
     {
       typedef T type;

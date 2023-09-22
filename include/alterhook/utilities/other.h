@@ -127,7 +127,7 @@ namespace utils
 
     template <typename... types>
     inline constexpr bool is_tuple_impl<std::tuple<types...>> = true;
-  }
+  } // namespace helpers
 
   template <typename pair>
   utils_concept stl_pair = helpers::is_pair_impl<remove_cvref_t<pair>>;
@@ -156,6 +156,19 @@ namespace utils
 
   template <typename... types>
   overloaded(types...) -> overloaded<types...>;
+
+  template <typename T>
+  struct first_template_param_of;
+
+  template <template <typename, typename...> typename templ, typename T,
+            typename... rest>
+  struct first_template_param_of<templ<T, rest...>>
+  {
+    typedef T type;
+  };
+
+  template <typename T>
+  using first_template_param_of_t = typename first_template_param_of<T>::type;
 
 // why on earth did we have to wait till c++20 to get bitwise rotate added
 #if utils_cpp20
