@@ -77,9 +77,6 @@
     <ClInclude Include="..\..\..\headers\x86_instructions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\alterhook\utilities\adapters.h">
-      <Filter>Include\utilities</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\include\alterhook\utilities\concepts.h">
       <Filter>Include\utilities</Filter>
     </ClInclude>
