@@ -75,6 +75,9 @@
     <ClInclude Include="..\..\..\headers\linux_thread_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\utilities\concepts.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp">
