@@ -701,6 +701,11 @@ namespace alterhook
     template <typename T>
     class default_unique_concurrent_hook_map_base;
 
+    template <typename T, bool concurrent_mode>
+    struct determine_adapter;
+    template <typename T, bool concurrent_mode>
+    using determine_adapter_t =
+        typename determine_adapter<T, concurrent_mode>::type;
     template <typename T>
     using key_t = typename T::key_type;
   } // namespace helpers
@@ -715,42 +720,16 @@ namespace alterhook
                 hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
                          hash, keyequal, allocator>>>
   class hook_map
-      : public helpers::default_concurrent_hook_map_base<
+      : public helpers::determine_adapter_t<
             hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
-                     hash, keyequal, allocator>>
+                     hash, keyequal, allocator>,
+            concurrent_mode>
   {
   public:
     typedef hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
                      hash, keyequal, allocator>
-                                                               adapter;
-    // static_assert(
-    // utils::regular_hash_map<adapter> || utils::multi_hash_map<adapter>,
-    //"hook map template is instantiated with an invalid hash map type");
-    typedef helpers::default_concurrent_hook_map_base<adapter> base;
-
-    using typename base::allocator_type;
-    using typename base::chain_iterator;
-    using typename base::const_chain_iterator;
-    using typename base::const_list_iterator;
-    using typename base::const_pointer;
-    using typename base::const_reference;
-    using typename base::const_reverse_list_iterator;
-    using typename base::difference_type;
-    using typename base::hasher;
-    using typename base::hook;
-    using typename base::include;
-    using typename base::key_equal;
-    using typename base::key_type;
-    using typename base::list_iterator;
-    using typename base::mapped_type;
-    using typename base::pointer;
-    using typename base::reference;
-    using typename base::reverse_list_iterator;
-    using typename base::size_type;
-    using typename base::transfer;
-    using typename base::value_type;
-    using hook_reference       = typename base::hook_reference;
-    using const_hook_reference = typename base::const_hook_reference;
+                                                                   adapted;
+    typedef helpers::determine_adapter_t<adapted, concurrent_mode> base;
 
     using base::base;
   };
@@ -781,7 +760,7 @@ namespace alterhook
       hash_map, true>;
 
   /*
-   * DEFAULT API FOR HOOK_MAP
+   * ADAPTERS FOR HOOK MAP
    */
   template <typename T>
   class helpers::hook_map_base : protected hook_chain,
@@ -944,7 +923,7 @@ namespace alterhook
     using typename base::reverse_list_iterator;
     using typename base::size_type;
     using typename base::value_type;
-    using transfer = base::transfer;
+    using transfer = typename base::transfer;
 
     typedef std::conditional_t<utils::multi_hash_map<T>, iterator,
                                std::pair<iterator, bool>>
@@ -961,10 +940,10 @@ namespace alterhook
     using hook_chain::front;
 
     // modifiers
-    template <typename K>
-    void splice(const K& newpos, const K& oldpos);
-    template <typename K>
-    void swap(const K& left, const K& right);
+    template <typename K1, typename K2>
+    void splice(const K1& newpos, const K2& oldpos);
+    template <typename K1, typename K2>
+    void swap(const K1& left, const K2& right);
     template <__alterhook_is_key_detour_and_original(K, dtr, orig)>
     insert_ret_t insert(K&& k, dtr&& detour, orig& original,
                         transfer to = transfer::enabled);
@@ -1068,7 +1047,7 @@ namespace alterhook
     using typename base::reverse_list_iterator;
     using typename base::size_type;
     using typename base::value_type;
-    using transfer = base::transfer;
+    using transfer = typename base::transfer;
 
     using base::base;
 
@@ -1110,7 +1089,7 @@ namespace alterhook
     using typename base::reverse_list_iterator;
     using typename base::size_type;
     using typename base::value_type;
-    using transfer = base::transfer;
+    using transfer = typename base::transfer;
 
     using base::base;
 
@@ -1195,7 +1174,7 @@ namespace alterhook
     using typename base::reverse_list_iterator;
     using typename base::size_type;
     using typename base::value_type;
-    using transfer = base::transfer;
+    using transfer = typename base::transfer;
 
     using base::base;
 
@@ -1273,7 +1252,7 @@ namespace alterhook
     using typename base::reverse_list_iterator;
     using typename base::size_type;
     using typename base::value_type;
-    using transfer = base::transfer;
+    using transfer = typename base::transfer;
 
     using base::base;
 
@@ -1293,8 +1272,11 @@ namespace alterhook
     size_t cvisit_all(callable&& func) const;
 
     // modifiers
-    template <typename K>
-    void splice(const K& newpos, const K& oldpos);
+    template <typename K1, typename K2>
+    void splice(const K1& newpos, const K2& oldpos);
+    template <typename K1, typename K2>
+    void swap(const K1& left, const K2& right);
+    using base::swap;
 
     template <__alterhook_is_key_detour_and_original(K, dtr, orig)>
     bool insert(K&& k, dtr&& detour, orig& original,
@@ -1349,7 +1331,9 @@ namespace alterhook
     using typename base::reverse_list_iterator;
     using typename base::size_type;
     using typename base::value_type;
-    using transfer = base::transfer;
+    using transfer = typename base::transfer;
+
+    using base::base;
 
     template <typename callable,
               __alterhook_is_key_detour_and_original(K, dtr, orig)>
@@ -1436,6 +1420,155 @@ namespace alterhook
       return tmp;
     }
   };
+
+  /*
+   * ADAPTER HANDLING
+   */
+  namespace helpers
+  {
+    enum class adapter_type
+    {
+      NONE,
+      REGULAR_UNIQUE_HOOK_MAP,           // eg. std::unordered_map
+      REGULAR_MULTI_HOOK_MAP,            // eg. std::unordered_multimap
+      CUSTOM_CONCURRENT_HOOK_MAP,        // eg. boost::concurrent_flat_map
+      DEFAULT_CONCURRENT_HOOK_MAP,       // eg. std::unordered_multimap with
+                                         // concurrent_mode = true
+      DEFAULT_UNIQUE_CONCURRENT_HOOK_MAP // eg. std::unordered_map with
+                                         // concurrent_mode = true
+    };
+
+    template <typename T>
+    class bucket_api_base : public T
+    {
+    public:
+      typedef T base;
+      typedef typename base::template __itr<typename T::const_local_iterator>
+          local_iterator;
+      typedef
+          typename base::template __const_itr<typename T::const_local_iterator>
+              const_local_iterator;
+      using typename base::allocator_type;
+      using typename base::chain_iterator;
+      using typename base::const_chain_iterator;
+      using typename base::const_hook_reference;
+      using typename base::const_iterator;
+      using typename base::const_list_iterator;
+      using typename base::const_pointer;
+      using typename base::const_reference;
+      using typename base::const_reverse_list_iterator;
+      using typename base::difference_type;
+      using typename base::hasher;
+      using typename base::hook;
+      using typename base::hook_reference;
+      using typename base::include;
+      using typename base::iterator;
+      using typename base::key_equal;
+      using typename base::key_type;
+      using typename base::list_iterator;
+      using typename base::mapped_type;
+      using typename base::pointer;
+      using typename base::reference;
+      using typename base::reverse_list_iterator;
+      using typename base::size_type;
+      using typename base::value_type;
+      using transfer = typename base::transfer;
+
+      using base::base;
+
+      local_iterator begin(size_type n) { return T::begin(n); }
+
+      const_local_iterator begin(size_type n) const { return T::begin(n); }
+
+      const_local_iterator cbegin(size_type n) const { return T::begin(n); }
+
+      local_iterator end(size_type n) { return T::end(n); }
+
+      const_local_iterator end(size_type n) const { return T::end(n); }
+
+      const_local_iterator cend(size_type n) const { return T::end(n); }
+
+      using base::bucket;
+      using base::bucket_size;
+      using base::max_bucket_count;
+    };
+
+    template <typename T, bool = utils::closed_addressing<T>>
+    struct add_bucket_api
+    {
+      typedef T type;
+    };
+
+    template <typename T>
+    struct add_bucket_api<T, true>
+    {
+      typedef bucket_api_base<T> type;
+    };
+
+    template <typename T>
+    using add_bucket_api_t = typename add_bucket_api<T>::type;
+
+    template <typename T, adapter_type type = adapter_type::NONE>
+    struct determine_adapter_impl
+    {
+      static_assert(utils::always_false<T>,
+                    "couldn't find a suitable adapter for given hash map");
+    };
+
+    template <typename T>
+    struct determine_adapter_impl<T, adapter_type::REGULAR_UNIQUE_HOOK_MAP>
+    {
+      typedef add_bucket_api_t<regular_unique_hook_map_base<T>> type;
+    };
+
+    template <typename T>
+    struct determine_adapter_impl<T, adapter_type::REGULAR_MULTI_HOOK_MAP>
+    {
+      typedef add_bucket_api_t<regular_hook_map_base<T>> type;
+    };
+
+    template <typename T>
+    struct determine_adapter_impl<T, adapter_type::CUSTOM_CONCURRENT_HOOK_MAP>
+    {
+      typedef custom_concurrent_hook_map_base<T> type;
+    };
+
+    template <typename T>
+    struct determine_adapter_impl<T, adapter_type::DEFAULT_CONCURRENT_HOOK_MAP>
+    {
+      typedef default_concurrent_hook_map_base<T> type;
+    };
+
+    template <typename T>
+    struct determine_adapter_impl<
+        T, adapter_type::DEFAULT_UNIQUE_CONCURRENT_HOOK_MAP>
+    {
+      typedef default_unique_concurrent_hook_map_base<T> type;
+    };
+
+    template <typename T, bool concurrent_mode>
+    struct determine_adapter
+        : determine_adapter_impl<T, utils::regular_hash_map<T>
+                                        ? adapter_type::REGULAR_UNIQUE_HOOK_MAP
+                                    : utils::multi_hash_map<T>
+                                        ? adapter_type::REGULAR_MULTI_HOOK_MAP
+                                        : adapter_type::NONE>
+    {
+    };
+
+    template <typename T>
+    struct determine_adapter<T, true>
+        : determine_adapter_impl<
+              T, utils::regular_hash_map<T>
+                     ? adapter_type::DEFAULT_UNIQUE_CONCURRENT_HOOK_MAP
+                 : utils::multi_hash_map<T>
+                     ? adapter_type::DEFAULT_CONCURRENT_HOOK_MAP
+                 : utils::concurrent_hash_map<T>
+                     ? adapter_type::CUSTOM_CONCURRENT_HOOK_MAP
+                     : adapter_type::NONE>
+    {
+    };
+  } // namespace helpers
 
   /*
    * TEMPLATE DEFINITIONS (ignore them)
@@ -2229,8 +2362,8 @@ namespace alterhook
   }
 
   template <typename T>
-  template <typename K>
-  void helpers::regular_hook_map_base<T>::swap(const K& left, const K& right)
+  template <typename K1, typename K2>
+  void helpers::regular_hook_map_base<T>::swap(const K1& left, const K2& right)
   {
     if constexpr (utils::multi_hash_map<T>)
     {
@@ -2272,9 +2405,9 @@ namespace alterhook
   }
 
   template <typename T>
-  template <typename K>
-  void helpers::regular_hook_map_base<T>::splice(const K& newpos,
-                                                 const K& oldpos)
+  template <typename K1, typename K2>
+  void helpers::regular_hook_map_base<T>::splice(const K1& newpos,
+                                                 const K2& oldpos)
   {
     if constexpr (utils::multi_hash_map<T>)
     {
@@ -2813,9 +2946,9 @@ namespace alterhook
   }
 
   template <typename T>
-  template <typename K>
-  void helpers::default_concurrent_hook_map_base<T>::splice(const K& newpos,
-                                                            const K& oldpos)
+  template <typename K1, typename K2>
+  void helpers::default_concurrent_hook_map_base<T>::splice(const K1& newpos,
+                                                            const K2& oldpos)
   {
     std::unique_lock lock{ base::map_lock };
 
@@ -2837,6 +2970,52 @@ namespace alterhook
       auto [hnewpos, holdpos] = std::make_pair(T::at(newpos), T::at(oldpos));
       hook_chain::splice(hnewpos.get_iterator(), holdpos.get_list_iterator());
     }
+  }
+
+  template <typename T>
+  template <typename K1, typename K2>
+  void helpers::default_concurrent_hook_map_base<T>::swap(const K1& left,
+                                                          const K2& right)
+  {
+    std::unique_lock lock{ base::map_lock };
+
+    if constexpr (utils::multi_hash_map<T>)
+    {
+      auto range_left = T::equal_range(left);
+      if (range_left.first == range_left.second)
+        throw(std::out_of_range("hook_map: out of range swap left operand"));
+      auto range_right = T::equal_range(right);
+      if (range_right.first == range_right.second)
+        throw(std::out_of_range("hook_map: out of range swap right operand"));
+      hook_chain::swap(range_left.first->second.get().get_list_iterator(),
+                       range_right.first->second.get().get_list_iterator());
+
+      auto [trgitrleft, trgitrright] =
+          std::pair(range_right.first->second.get().get_iterator(),
+                    range_left.first->second.get().get_iterator());
+
+      ++range_right.first;
+      ++range_left.first;
+
+      for (auto itr_right = range_right.first; itr_right != range_right.second;
+           ++itr_right)
+      {
+        hook_chain::splice(++trgitrleft,
+                           itr_right->second.get().get_list_iterator());
+        trgitrleft = itr_right->second.get().get_iterator();
+      }
+
+      for (auto itr_left = range_left.first; itr_left != range_left.second;
+           ++itr_left)
+      {
+        hook_chain::splice(++trgitrright,
+                           itr_left->second.get().get_list_iterator());
+        trgitrright = itr_left->second.get().get_iterator();
+      }
+    }
+    else
+      hook_chain::swap(T::at(left).get().get_list_iterator(),
+                       T::at(right).get().get_list_iterator());
   }
 
   template <typename T>

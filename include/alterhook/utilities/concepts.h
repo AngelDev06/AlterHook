@@ -333,30 +333,12 @@ namespace utils
 
   template <typename T>
   concept multi_hash_map =
-      hash_map<T> &&
+      hash_map<T> && forward_iterable<T> &&
       requires(
           T& instance, const T& cinstance, const typename T::value_type& val,
           std::initializer_list<typename T::value_type> list,
           typename T::iterator itr, typename T::const_iterator citr,
           const typename T::key_type& key, const typename T::mapped_type& obj) {
-        {
-          instance.begin()
-        } -> std::convertible_to<typename T::iterator>;
-        {
-          instance.end()
-        } -> std::convertible_to<typename T::iterator>;
-        {
-          cinstance.begin()
-        } -> std::convertible_to<typename T::const_iterator>;
-        {
-          cinstance.end()
-        } -> std::convertible_to<typename T::const_iterator>;
-        {
-          cinstance.cbegin()
-        } -> std::convertible_to<typename T::const_iterator>;
-        {
-          cinstance.cend()
-        } -> std::convertible_to<typename T::const_iterator>;
         instance.insert(itr, itr);
         instance.insert(list);
         {
@@ -383,6 +365,42 @@ namespace utils
           cinstance.equal_range(key)
         } -> std::same_as<
             std::pair<typename T::const_iterator, typename T::const_iterator>>;
+      };
+
+  template <typename T>
+  concept closed_addressing =
+      (regular_hash_map<T> || multi_hash_map<T>)&&requires(
+          T& instance, const T& cinstance, typename T::size_type n,
+          const typename T::key_type& key) {
+        typename T::local_iterator;
+        typename T::const_local_iterator;
+        {
+          instance.begin(n)
+        } -> std::same_as<typename T::local_iterator>;
+        {
+          instance.end(n)
+        } -> std::same_as<typename T::local_iterator>;
+        {
+          cinstance.begin(n)
+        } -> std::same_as<typename T::const_local_iterator>;
+        {
+          cinstance.end(n)
+        } -> std::same_as<typename T::const_local_iterator>;
+        {
+          cinstance.cbegin(n)
+        } -> std::same_as<typename T::const_local_iterator>;
+        {
+          cinstance.cend(n)
+        } -> std::same_as<typename T::const_local_iterator>;
+        {
+          cinstance.max_bucket_count()
+        } -> std::same_as<typename T::size_type>;
+        {
+          cinstance.bucket_size(n)
+        } -> std::same_as<typename T::size_type>;
+        {
+          cinstance.bucket(key)
+        } -> std::same_as<typename T::size_type>;
       };
 #else
   namespace helpers
@@ -497,7 +515,7 @@ namespace utils
     // clang-format off
     utils_map(__utils_gen_checker, begin, end, cbegin, cend, get_allocator,
               empty, size, max_size, hash_function, key_eq, bucket_count,
-              load_factor, max_load_factor, max_load, clear)
+              load_factor, max_load_factor, max_load, clear, max_bucket_count)
 
     utils_map(
         __utils_gen_args_checker,
@@ -538,12 +556,19 @@ namespace utils
         (equal_range, equal_range,
          __utils_make_args(const typename T::key_type&)),
         (at, at, __utils_make_args(const typename T::key_type&)),
-        (operator[], access, __utils_make_args(const typename T::key_type&)))
+        (operator[], access, __utils_make_args(const typename T::key_type&)),
+        (begin, bbegin, __utils_make_args(typename T::size_type)),
+        (end, bend, __utils_make_args(typename T::size_type)),
+        (cbegin, bcbegin, __utils_make_args(typename T::size_type)),
+        (cend, bcend, __utils_make_args(typename T::size_type)),
+        (bucket_size, bucket_size, __utils_make_args(typename T::size_type)),
+        (bucket, bucket, __utils_make_args(const typename T::key_type&)))
 
     utils_map(__utils_gen_member_type_checker, iterator, const_iterator,
               value_type, key_type, mapped_type, hasher, key_equal,
               allocator_type, pointer, const_pointer, reference,
-              const_reference, size_type, difference_type)
+              const_reference, size_type, difference_type, local_iterator,
+              const_local_iterator)
 
     template <typename T, typename = void>
     inline constexpr bool dummy = false;
@@ -746,6 +771,28 @@ namespace utils
         __utils_convertible_checks((erase, typename T::iterator),
                                    (find, typename T::iterator)) &&
         __utils_const_convertible_checks((find, typename T::const_iterator));
+
+    template <
+        typename T,
+        bool =
+            (regular_hash_map_impl<T> ||
+             multi_hash_map_impl<T>)&&__utils_has_types(local_iterator,
+                                                        const_local_iterator) &&
+            __utils_has_const_methods(bbegin, bend, bcbegin, bcend,
+                                      max_bucket_count, bucket_size, bucket)>
+    inline constexpr bool closed_addressing_impl = false;
+    template <typename T>
+    inline constexpr bool closed_addressing_impl<T, true> =
+        __utils_same_method_return_types((bbegin, typename T::local_iterator),
+                                         (bend, typename T::local_iterator)) &&
+        __utils_same_const_method_return_types(
+            (bbegin, typename T::const_local_iterator),
+            (bend, typename T::const_local_iterator),
+            (bcbegin, typename T::const_local_iterator),
+            (bcend, typename T::const_local_iterator),
+            (max_bucket_count, typename T::size_type),
+            (bucket_size, typename T::size_type),
+            (bucket, typename T::size_type));
   } // namespace helpers
 
   template <typename T>
@@ -766,6 +813,9 @@ namespace utils
 
   template <typename T>
   inline constexpr bool multi_hash_map = helpers::multi_hash_map_impl<T>;
+
+  template <typename T>
+  inline constexpr bool closed_addressing = helpers::closed_addressing_impl<T>;
 #endif
 
   namespace helpers
