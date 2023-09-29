@@ -1,8 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#if defined(_USRDLL) ||                                                        \
-    (defined(ALTERHOOK_SHARED) &&                                              \
+#if (defined(ALTERHOOK_SHARED) &&                                              \
      (defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)))
   #ifdef ALTERHOOK_EXPORT
     #define ALTERHOOK_API __declspec(dllexport)
