@@ -1,3 +1,5 @@
 *.vcxproj.user
+.vs/
 bin/
 build/
+out/
