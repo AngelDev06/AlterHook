@@ -38,7 +38,7 @@
     <ClInclude Include="..\..\..\include\alterhook\utilities\type_sequence.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\utils.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\utils_macros.h" />
-    <ClInclude Include="..\..\..\pre-compiled headers\android\pch.h" />
+    <ClInclude Include="..\..\..\pre-compiled headers\linux\pch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
@@ -143,8 +143,8 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>..\..\..\pre-compiled headers\android\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\android;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeaderFile>..\..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\headers;$(ProjectDir)..\..\..\pre-compiled headers\linux;$(ProjectDir)..\..\..\capstone\include;$(ProjectDir)..\..\..\include\alterhook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
