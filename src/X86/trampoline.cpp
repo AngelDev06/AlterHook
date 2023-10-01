@@ -24,10 +24,25 @@
             throw(exceptions::invalid_address(addr));                          \
         })(address)
   #define __alterhook_copy_old_protect(other) ((void)0)
+#else
+  #define __alterhook_set_old_protect_or_validate_address(address)             \
+    (                                                                          \
+        [this]                                                                 \
+        {                                                                      \
+          auto [status, value] = get_prot(ptarget);                            \
+          if (!status || !(value & PROT_EXEC))                                 \
+            throw(exceptions::invalid_address(ptarget));                       \
+          old_protect = value;                                                 \
+        })()
+  #define __alterhook_copy_old_protect(other) (old_protect = other.old_protect)
 #endif
 
 namespace alterhook
 {
+#if !utils_windows
+  std::pair<bool, int> ALTERHOOK_HIDDEN get_prot(const std::byte* address);
+#endif
+
   std::shared_mutex hook_lock{};
 
   static bool is_pad(const std::byte* target, size_t size) noexcept

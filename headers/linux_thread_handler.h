@@ -10,27 +10,34 @@ namespace alterhook
   class ALTERHOOK_HIDDEN thread_freezer
   {
   private:
-    friend void               process_frozen_threads(const trampoline& tramp,
-                                                     bool enable_hook, unsigned long& pc);
+#if utils_arm
+    friend void process_frozen_threads(const trampoline& tramp,
+                                       bool enable_hook, unsigned long& pc);
+#else
+    friend void process_frozen_threads(const trampoline& tramp,
+                                       bool enable_hook, greg_t& ip);
+#endif
     // when ref count reaches 0, the old signal handler will be reset
-    static size_t             ref_count;
+    static size_t                             ref_count;
     // the lock is needed here because the ref count may be incremented or
     // decremented at the same time causing issues. and no the use of atomic
     // wouldn't really fix the problem as one thread could be suspending threads
     // the moment another thread is trying to setup the signal handler. so a
     // mutex is the safest solution
-    static std::mutex         ref_count_lock;
+    static std::mutex                         ref_count_lock;
     // when a thread is successfully processed this is incremented by one
     // this is needed in order to make sure no further actions are taken before
     // all threads are processed
-    static std::atomic_size_t processed_threads_count;
-    static std::shared_mutex  freezer_lock;
-    static bool               should_suspend;
-    static struct sigaction   old_action;
+    static std::atomic_size_t                 processed_threads_count;
+    static std::shared_mutex                  freezer_lock;
+    static bool                               should_suspend;
+    static struct sigaction                   old_action;
     static std::pair<const trampoline*, bool> args;
+#if utils_arm
     static std::pair<std::atomic_bool,
                      std::tuple<std::byte*, std::byte*, size_t>>
-                       result;
+        result;
+#endif
     // these are tids and not pids. pids & tids just share the same type
     // underlying
     std::vector<pid_t> tids;
