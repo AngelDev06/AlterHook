@@ -1,0 +1,118 @@
+{
+  "version": 4,
+  "configurePresets": [
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "ALTERHOOK_TARGET_ARCH": "X86",
+        "CMAKE_CXX_STANDARD": "20"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+        }
+      }
+    },
+    {
+      "name": "linux-so",
+      "hidden": true,
+      "cacheVariables": {
+        "ALTERHOOK_SHARED": "ON"
+      }
+    },
+    {
+      "name": "linux-gcc-base",
+      "hidden": true,
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "linux-x64-debug",
+      "displayName": "Linux x64 Debug",
+      "inherits": "linux-gcc-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "intelliSenseMode": "linux-gcc-x86"
+        }
+      }
+    },
+    {
+      "name": "linux-x64-release",
+      "displayName": "Linux x64 Release",
+      "inherits": "linux-x64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-x86-debug",
+      "displayName": "Linux x86 Debug",
+      "inherits": "linux-gcc-base",
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "environment": {
+        "CC": "gcc",
+        "CFLAGS": "-m32",
+        "CXX": "g++",
+        "CXXFLAGS": "-m32",
+        "LDFLAGS": "-m32"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "intelliSenseMode": "linux-gcc-x86"
+        }
+      }
+    },
+    {
+      "name": "linux-x86-release",
+      "displayName": "Linux x86 Release",
+      "inherits": "linux-x86-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-x64-debug-so",
+      "displayName": "Linux x64 Debug SO",
+      "inherits": [ "linux-x64-debug", "linux-so" ]
+    },
+    {
+      "name": "linux-x64-release-so",
+      "displayName": "Linux x64 Release SO",
+      "inherits": [ "linux-x64-release", "linux-so" ]
+    },
+    {
+      "name": "linux-x86-debug-so",
+      "displayName": "Linux x86 Debug SO",
+      "inherits": [ "linux-x86-debug", "linux-so" ]
+    },
+    {
+      "name": "linux-x86-release-so",
+      "displayName": "Linux x86 Release SO",
+      "inherits": [ "linux-x86-release", "linux-so" ]
+    }
+  ]
+}

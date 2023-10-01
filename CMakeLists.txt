@@ -88,7 +88,7 @@ if (WIN32)
 	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/windows_thread_handler.h")
 	list(APPEND ALTERHOOK_CPP_FILES "src/windows/other.cpp")
 else()
-	set(ALTERHOOK_PCH "pre-compiled headers/android")
+	set(ALTERHOOK_PCH "pre-compiled headers/linux")
 	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/linux_thread_handler.h")
 	list(APPEND ALTERHOOK_CPP_FILES "src/linux/other.cpp")
 endif()
@@ -110,8 +110,12 @@ source_group("Include" ${ALTERHOOK_PUBLIC_HEADERS})
 source_group("PCH" ${ALTERHOOK_PCH}/pch.h)
 
 if (ALTERHOOK_SHARED)
-	target_compile_definitions(AlterHook PUBLIC ALTERHOOK_SHARED PRIVATE ALTERHOOK_EXPORT)
 	add_library(AlterHook SHARED ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
+	target_compile_definitions(AlterHook PUBLIC ALTERHOOK_SHARED PRIVATE ALTERHOOK_EXPORT)
+
+	if (NOT WIN32)
+		set_target_properties(capstone PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	endif()
 else()
 	add_library(AlterHook STATIC ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
 endif()
@@ -126,5 +130,7 @@ PRIVATE
 	$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/${ALTERHOOK_PCH}>
 	$<BUILD_INTERFACE:${capstone_SOURCE_DIR}/include>
 )
+
+target_link_libraries(AlterHook PRIVATE capstone)
 
 target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH}/pch.h)

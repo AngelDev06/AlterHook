@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <capstone/capstone.h>
+#include <string.h>
 #include <array>
 #include <vector>
 #include <unordered_map>
@@ -11,7 +12,9 @@
 #include <shared_mutex>
 #include <atomic>
 #include <sys/mman.h>
+#ifndef __GNUC__
 #include <sys/cachectl.h>
+#endif
 #include <signal.h>
 #include <sstream>
 #include <iomanip>

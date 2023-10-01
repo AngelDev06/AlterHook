@@ -72,9 +72,12 @@ namespace alterhook
   #if utils_windows
     friend void process_frozen_threads(const trampoline& tramp,
                                        bool enable_hook, HANDLE thread_handle);
-  #else
+  #elif utils_arm
     friend void process_frozen_threads(const trampoline& tramp,
                                        bool enable_hook, unsigned long& pc);
+  #else
+    friend void process_frozen_threads(const trampoline& tramp,
+                                       bool enable_hook, greg_t& ip);
   #endif
 #endif
     struct ALTERHOOK_API deleter

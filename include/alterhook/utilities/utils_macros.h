@@ -71,7 +71,7 @@
   #define utils_packed
 #endif
 
-#if defined(_M_X64) || defined(__x86_x64__)
+#if defined(_M_X64) || defined(__x86_64__)
   #define utils_x64 true
   #define utils_x86 false
   #define utils_arm false
