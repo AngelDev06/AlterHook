@@ -21,14 +21,18 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\headers\buffer.h" />
     <ClInclude Include="..\..\..\headers\disassembler.h" />
+    <ClInclude Include="..\..\..\headers\injection.h" />
     <ClInclude Include="..\..\..\headers\windows_thread_handler.h" />
     <ClInclude Include="..\..\..\headers\x86_instructions.h" />
+    <ClInclude Include="..\..\..\include\alterhook.h" />
     <ClInclude Include="..\..\..\include\alterhook\addresser.h" />
-    <ClInclude Include="..\..\..\include\alterhook\alterhook.h" />
-    <ClInclude Include="..\..\..\include\alterhook\api.h" />
     <ClInclude Include="..\..\..\include\alterhook\exceptions.h" />
+    <ClInclude Include="..\..\..\include\alterhook\hook.h" />
+    <ClInclude Include="..\..\..\include\alterhook\hook_chain.h" />
+    <ClInclude Include="..\..\..\include\alterhook\hook_map.h" />
     <ClInclude Include="..\..\..\include\alterhook\macros.h" />
     <ClInclude Include="..\..\..\include\alterhook\tools.h" />
+    <ClInclude Include="..\..\..\include\alterhook\trampoline.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\calling_conventions.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\concepts.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\function_traits.h" />
@@ -48,17 +52,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\..\..\src\addresser.cpp" />
-    <ClCompile Include="..\..\..\src\api.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-      </ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-      </ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-      </ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-      </ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\buffer.cpp" />
+    <ClCompile Include="..\..\..\src\hook.cpp" />
+    <ClCompile Include="..\..\..\src\hook_chain.cpp" />
     <ClCompile Include="..\..\..\src\misc.cpp" />
     <ClCompile Include="..\..\..\src\windows\other.cpp" />
     <ClCompile Include="..\..\..\src\X86\trampoline.cpp" />
@@ -79,13 +75,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -98,7 +94,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -146,7 +142,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
+      <PreprocessorDefinitions>ALTERHOOK_SHARED;ALTERHOOK_EXPORT;WIN32;_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -168,7 +164,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
+      <PreprocessorDefinitions>ALTERHOOK_SHARED;ALTERHOOK_EXPORT;WIN32;NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -192,7 +188,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
+      <PreprocessorDefinitions>ALTERHOOK_SHARED;ALTERHOOK_EXPORT;_DEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -214,7 +210,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
+      <PreprocessorDefinitions>ALTERHOOK_SHARED;ALTERHOOK_EXPORT;NDEBUG;ALTERHOOKWINDOWS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);ALTERHOOK_EXPORT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>

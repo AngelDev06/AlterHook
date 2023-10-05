@@ -56,12 +56,6 @@
     <ClInclude Include="..\..\..\include\alterhook\addresser.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\include\alterhook\alterhook.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\include\alterhook\api.h">
-      <Filter>Include</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\include\alterhook\exceptions.h">
       <Filter>Include</Filter>
     </ClInclude>
@@ -80,6 +74,24 @@
     <ClInclude Include="..\..\..\include\alterhook\utilities\concepts.h">
       <Filter>Include\utilities</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\hook.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\trampoline.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\headers\injection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\hook_chain.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\include\alterhook\hook_map.h">
+      <Filter>Include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\addresser.cpp">
@@ -94,13 +106,16 @@
     <ClCompile Include="..\..\..\src\windows\other.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\api.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\misc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\X86\trampoline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\hook.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\hook_chain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

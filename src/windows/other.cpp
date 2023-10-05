@@ -1,9 +1,7 @@
 #include <pch.h>
-#include "addresser.h"
 #include "exceptions.h"
-#include "tools.h"
 #define __alterhook_expose_impl
-#include "api.h"
+#include "trampoline.h"
 #include "windows_thread_handler.h"
 #include "x86_instructions.h"
 

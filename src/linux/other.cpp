@@ -3,10 +3,8 @@
 #include <pch.h>
 #include "exceptions.h"
 #include "linux_thread_handler.h"
-#include "addresser.h"
-#include "tools.h"
 #define __alterhook_expose_impl
-#include "api.h"
+#include "trampoline.h"
 #if utils_arm
   #include "arm_instructions.h"
 #else
@@ -91,6 +89,10 @@ namespace alterhook
 #if utils_clang
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wrange-loop-construct"
+#elif utils_gcc
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wrange-loop-construct"
+  #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
 
 #if utils_arm
@@ -198,10 +200,6 @@ namespace alterhook
       }
     }
   }
-#endif
-
-#if utils_clang
-  #pragma clang diagnostic pop
 #endif
 
   size_t             thread_freezer::ref_count = 0;
@@ -593,5 +591,11 @@ namespace alterhook
     __alterhook_flush_cache(address, sizeof(uint32_t));
   }
   #endif
+#endif
+
+#if utils_clang
+  #pragma clang diagnostic pop
+#elif utils_gcc
+  #pragma GCC diagnostic pop
 #endif
 } // namespace alterhook

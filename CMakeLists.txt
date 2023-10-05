@@ -27,12 +27,14 @@ endif()
 
 option(ALTERHOOK_SHARED "Use shared version of AlterHook")
 option(ALTERHOOK_TARGET_ARCH "Specifies the target architecture to use")
+option(ALTERHOOK_BUILD_TESTS "Determines whether to build the tests on folder 'tests/'" ON)
 set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM")
 
 set(
 	ALTERHOOK_PRIVATE_HEADERS
 	"headers/buffer.h"
 	"headers/disassembler.h"
+	"headers/injection.h"
 )
 
 set(
@@ -50,20 +52,23 @@ set(
 
 set(
 	ALTERHOOK_PUBLIC_HEADERS
+	"include/alterhook.h"
 	"include/alterhook/addresser.h"
-	"include/alterhook/alterhook.h"
-	"include/alterhook/api.h"
 	"include/alterhook/exceptions.h"
 	"include/alterhook/macros.h"
 	"include/alterhook/tools.h"
+	"include/alterhook/hook.h"
+	"include/alterhook/hook_chain.h"
+	"include/alterhook/hook_map.h"
 )
 
 set(
 	ALTERHOOK_CPP_FILES
 	"src/addresser.cpp"
-	"src/api.cpp"
 	"src/buffer.cpp"
 	"src/misc.cpp"
+	"src/hook.cpp"
+	"src/hook_chain.cpp"
 )
 
 get_property(ALTERHOOK_TARGET_ARCHS CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS)
@@ -112,10 +117,7 @@ source_group("PCH" ${ALTERHOOK_PCH}/pch.h)
 if (ALTERHOOK_SHARED)
 	add_library(AlterHook SHARED ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
 	target_compile_definitions(AlterHook PUBLIC ALTERHOOK_SHARED PRIVATE ALTERHOOK_EXPORT)
-
-	if (NOT WIN32)
-		set_target_properties(capstone PROPERTIES POSITION_INDEPENDENT_CODE ON)
-	endif()
+	set_target_properties(capstone PROPERTIES POSITION_INDEPENDENT_CODE ON)
 else()
 	add_library(AlterHook STATIC ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
 endif()
@@ -134,3 +136,54 @@ PRIVATE
 target_link_libraries(AlterHook PRIVATE capstone)
 
 target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH}/pch.h)
+
+if (MSVC)
+	target_compile_options(AlterHook PRIVATE /W3)
+else()
+	set(
+		ALTERHOOK_GNU_WARNINGS
+		-Wall
+		-Wextra
+		-pedantic
+		-Wcast-align 
+		-Wcast-qual 
+		-Wctor-dtor-privacy
+		-Wdisabled-optimization
+		-Wformat=2
+		-Winit-self
+		-Wlogical-op
+		-Wmissing-include-dirs
+		-Wnoexcept -Wold-style-cast
+		-Woverloaded-virtual
+		-Wredundant-decls
+		-Wsign-promo
+		-Wstrict-null-sentinel
+		-Wstrict-overflow=5
+		-Wundef
+		-Wno-unused
+		-Wno-variadic-macros
+		-Wno-parentheses
+		-fdiagnostics-show-option
+	)
+
+	target_compile_options(AlterHook PRIVATE ${ALTERHOOK_GNU_WARNINGS})
+endif()
+
+if (ALTERHOOK_BUILD_TESTS)
+	set(
+		TEST_FILES
+		"hooks.cpp"
+	)
+	set(
+		TEST_HEADERS
+		"tests/testcls.h"
+	)
+	enable_testing()
+	
+	foreach (TEST_FILE ${TEST_FILES})
+		string(REGEX REPLACE ".cpp$" "" TEST_BIN ${TEST_FILE})
+		add_executable(${TEST_BIN} "tests/${TEST_FILE}" ${TEST_HEADERS})
+		target_link_libraries(${TEST_BIN} PRIVATE AlterHook)
+		add_test(NAME "alterhook_${TEST_BIN}" COMMAND "${TEST_BIN}")
+	endforeach()
+endif()

@@ -4,12 +4,11 @@
 #include "exceptions.h"
 #include "disassembler.h"
 #include "buffer.h"
-#include "addresser.h"
 #include "tools.h"
-#include "api.h"
+#include "trampoline.h"
 #include "x86_instructions.h"
 
-#if utils_windows64
+#if utils_x64
   #define __alterhook_pass_alloc_arg(x) x
 #else
   #define __alterhook_pass_alloc_arg(x)
@@ -17,28 +16,31 @@
 
 #if utils_windows
   #define __alterhook_set_old_protect_or_validate_address(address)             \
-    (                                                                          \
-        [](std::byte* addr)                                                    \
-        {                                                                      \
-          if (!is_executable_address(addr))                                    \
-            throw(exceptions::invalid_address(addr));                          \
-        })(address)
+    do                                                                         \
+    {                                                                          \
+      if (!is_executable_address(address))                                     \
+        throw(exceptions::invalid_address(address));                           \
+    } while (false)
   #define __alterhook_copy_old_protect(other) ((void)0)
 #else
   #define __alterhook_set_old_protect_or_validate_address(address)             \
-    (                                                                          \
-        [this]                                                                 \
-        {                                                                      \
-          auto [status, value] = get_prot(ptarget);                            \
-          if (!status || !(value & PROT_EXEC))                                 \
-            throw(exceptions::invalid_address(ptarget));                       \
-          old_protect = value;                                                 \
-        })()
+    do                                                                         \
+    {                                                                          \
+      auto [status, value] = get_prot(address);                                \
+      if (!status || !(value & PROT_EXEC))                                     \
+        throw(exceptions::invalid_address(address));                           \
+      old_protect = value;                                                     \
+    } while (false)
   #define __alterhook_copy_old_protect(other) (old_protect = other.old_protect)
 #endif
 
 namespace alterhook
 {
+  void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
+  {
+    trampoline_buffer::deallocate(ptrampoline);
+  }
+
 #if !utils_windows
   std::pair<bool, int> ALTERHOOK_HIDDEN get_prot(const std::byte* address);
 #endif
@@ -62,6 +64,9 @@ namespace alterhook
 #if utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4244 4018 4267)
+#elif utils_gcc
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
 
   void trampoline::init(std::byte* target)
@@ -109,6 +114,7 @@ namespace alterhook
         *dispaddr = static_cast<uint32_t>(
             (instr.address + instr.size + has_rip->mem.disp) -
             (tramp_addr + instr.size));
+        copy_src = tmpbuff.data();
         finished = instr.id == X86_INS_JMP;
       }
       // clang-format off
@@ -259,6 +265,8 @@ namespace alterhook
 
 #if utils_msvc
   #pragma warning(pop)
+#elif utils_gcc
+  #pragma GCC diagnostic pop
 #endif
 
   std::string trampoline::str() const
@@ -279,8 +287,7 @@ namespace alterhook
     return stream.str();
   }
 
-  ALTERHOOK_HIDDEN static void trampcpy(std::byte* dest, const std::byte* src,
-                                        size_t size)
+  static void trampcpy(std::byte* dest, const std::byte* src, size_t size)
   {
     utils_assert(dest != src, "trampcpy: dest and source can't be the same");
     utils_assert(size, "trampcpy: size can't be 0");
