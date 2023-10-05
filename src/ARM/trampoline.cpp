@@ -4,15 +4,18 @@
 #include "exceptions.h"
 #include "disassembler.h"
 #include "arm_instructions.h"
-#include "addresser.h"
 #include "buffer.h"
-#include "tools.h"
 #include "linux_thread_handler.h"
 #define __alterhook_expose_impl
-#include "api.h"
+#include "trampoline.h"
 
 namespace alterhook
 {
+  void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
+  {
+    trampoline_buffer::deallocate(ptrampoline);
+  }
+
   ALTERHOOK_HIDDEN std::shared_mutex hook_lock{};
 
   std::pair<bool, int> get_prot(const std::byte* address);

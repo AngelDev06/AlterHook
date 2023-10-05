@@ -43,6 +43,13 @@
       }
     },
     {
+      "name": "test-base",
+      "hidden": true,
+      "cacheVariables": {
+        "ALTERHOOK_BUILD_TESTS": "ON"
+      }
+    },
+    {
       "name": "x64-debug",
       "displayName": "x64 Debug",
       "inherits": "windows-msvc-base",
@@ -178,6 +185,18 @@
       "name": "clang-x86-release-dll",
       "displayName": "Clang x86 Release DLL",
       "inherits": [ "clang-x86-release", "windows-dll" ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-windows-dll",
+      "displayName": "Windows DLL test",
+      "configurePreset": "x64-debug-dll",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
     }
   ]
 }

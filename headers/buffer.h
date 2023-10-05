@@ -10,7 +10,7 @@ namespace alterhook
   static constexpr size_t memory_slot_size = 32;
 #endif
 
-#if utils_windows64
+#if utils_x64
   #define __alterhook_alloc_arg std::byte* origin
 #else
   #define __alterhook_alloc_arg

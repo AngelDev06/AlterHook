@@ -4,15 +4,85 @@
 #include "buffer.h"
 #include "exceptions.h"
 
+#if !defined(NDEBUG) && (utils_x86 || utils_x64)
+  #define __alterhook_return_pslot(block)                                      \
+    do                                                                         \
+    {                                                                          \
+      auto pslottmp = block->get_slot();                                       \
+      pslottmp->buffer.fill(std::byte(0xCC));                                  \
+      return reinterpret_cast<std::byte*>(pslottmp);                           \
+    } while (false)
+#else
+  #define __alterhook_return_pslot(block)                                      \
+    return reinterpret_cast<std::byte*>(block->get_slot())
+#endif
+
+#if utils_x64
+  #define __alterhook_range_check(block)                                       \
+    block&& reinterpret_cast<std::byte*>(block) >                              \
+        minaddr&& reinterpret_cast<std::byte*>(block) < maxaddr
+#else
+  #define __alterhook_range_check(block) block
+  #define __alterhook_set_min_max_addr() ((void)0)
+  #define __alterhook_try_valloc()       try_valloc()
+#endif
+
+#if utils_windows64
+  #if utils_cpp20
+    #define __alterhook_unpack_static_tuple(...)                               \
+      static auto [__VA_ARGS__] = get_min_max_addr()
+  #else
+    #define __alterhook_unpack_static_tuple(...)                               \
+      static auto __tmp_tuple = get_min_max_addr();                            \
+      auto [__VA_ARGS__]      = __tmp_tuple
+  #endif
+
+  #define __alterhook_set_min_max_addr()                                       \
+    __alterhook_unpack_static_tuple(minaddr, maxaddr, ag);                     \
+    do                                                                         \
+    {                                                                          \
+      if (reinterpret_cast<uintptr_t>(origin) > max_memory_range &&            \
+          minaddr < origin - max_memory_range)                                 \
+        minaddr = origin - max_memory_range;                                   \
+      if (maxaddr > origin + max_memory_range)                                 \
+        maxaddr = origin + max_memory_range;                                   \
+    } while (false)
+
+  #define __alterhook_try_valloc() try_valloc(origin, minaddr, maxaddr, ag)
+
+  #define __alterhook_alloc_mem_block()                                        \
+    static_cast<memory_block*>(VirtualAlloc(reg, memory_block_size,            \
+                                            MEM_COMMIT | MEM_RESERVE,          \
+                                            PAGE_EXECUTE_READWRITE))
+  #define __alterhook_raise_alloc_exception()                                  \
+    throw(exceptions::virtual_alloc_exception(                                 \
+        GetLastError(), reg, memory_block_size, MEM_COMMIT | MEM_RESERVE,      \
+        PAGE_EXECUTE_READWRITE))
+#elif utils_x64
+  #define __alterhook_set_min_max_addr()                                       \
+    std::byte *minaddr =                                                       \
+                  reinterpret_cast<uintptr_t>(origin) > max_memory_range       \
+                      ? reinterpret_cast<std::byte*>(                          \
+                            utils_align(reinterpret_cast<uintptr_t>(origin) -  \
+                                            max_memory_range,                  \
+                                        memory_block_size))                    \
+                      : nullptr,                                               \
+              *maxaddr = reinterpret_cast<std::byte*>(utils_align(             \
+                  reinterpret_cast<uintptr_t>(origin) + max_memory_range,      \
+                  memory_block_size));                                         \
+    ((void)0)
+  #define __alterhook_try_valloc() try_valloc(origin, minaddr, maxaddr)
+#endif
+
 namespace alterhook
 {
 #if utils_windows
   constexpr size_t memory_block_size = 0x10'00;
-  #if utils_windows64
-  constexpr size_t max_memory_range = 0x40'00'00'00;
-  #endif
 #else
   inline const auto memory_block_size = sysconf(_SC_PAGE_SIZE);
+#endif
+#if utils_x64
+  constexpr size_t max_memory_range = 0x40'00'00'00;
 #endif
   // to enforce thread safety on allocations & deallocations
   static std::mutex buffer_lock;
@@ -68,41 +138,45 @@ namespace alterhook
 #endif
 
 #if utils_windows64
-  static std::byte* find_prev_free_region(std::byte* address,
-                                          std::byte* minaddr, DWORD ag)
+  static std::byte* try_valloc(std::byte* origin, std::byte* minaddr,
+                               std::byte* maxaddr, DWORD ag)
   {
+    std::byte*       result         = nullptr;
+    std::byte* const origin_aligned = reinterpret_cast<std::byte*>(
+        utils_align(reinterpret_cast<uintptr_t>(origin), ag));
+    std::byte*               region = origin_aligned - ag;
     MEMORY_BASIC_INFORMATION mbi;
-    for (uintptr_t regaddr =
-             utils_align(reinterpret_cast<uintptr_t>(address), ag) - ag;
-         regaddr >= reinterpret_cast<uintptr_t>(minaddr) &&
-         VirtualQuery(reinterpret_cast<void*>(regaddr), &mbi, sizeof(mbi));
-         regaddr = reinterpret_cast<uintptr_t>(mbi.AllocationBase) - ag)
+
+    for (; region >= minaddr && VirtualQuery(region, &mbi, sizeof(mbi));
+         region = static_cast<std::byte*>(mbi.AllocationBase) - ag)
     {
-      if (mbi.State == MEM_FREE)
-        return reinterpret_cast<std::byte*>(regaddr);
-      // needed to not underflow
+      if (mbi.State != MEM_FREE)
+        continue;
+      if ((result = static_cast<std::byte*>(
+               VirtualAlloc(region, memory_block_size, MEM_COMMIT | MEM_RESERVE,
+                            PAGE_EXECUTE_READWRITE))))
+        return result;
       if (reinterpret_cast<uintptr_t>(mbi.AllocationBase) < ag)
         break;
     }
-    return nullptr;
-  }
 
-  static std::byte* find_next_free_region(std::byte* address,
-                                          std::byte* maxaddr, DWORD ag)
-  {
-    MEMORY_BASIC_INFORMATION mbi;
-    for (uintptr_t regaddr =
-             utils_align(reinterpret_cast<uintptr_t>(address), ag) + ag;
-         regaddr <= reinterpret_cast<uintptr_t>(maxaddr) &&
-         VirtualQuery(reinterpret_cast<void*>(regaddr), &mbi, sizeof(mbi));
-         regaddr = utils_align(reinterpret_cast<uintptr_t>(mbi.AllocationBase) +
-                                   mbi.RegionSize + (ag - 1),
-                               ag))
+    region = origin_aligned + ag;
+    for (; region <= maxaddr && VirtualQuery(region, &mbi, sizeof(mbi));
+         region = reinterpret_cast<std::byte*>(
+             utils_align(reinterpret_cast<uintptr_t>(mbi.AllocationBase) +
+                             mbi.RegionSize + (ag - 1),
+                         ag)))
     {
-      if (mbi.State == MEM_FREE)
-        return reinterpret_cast<std::byte*>(regaddr);
+      if (mbi.State != MEM_FREE)
+        continue;
+      if ((result = static_cast<std::byte*>(
+               VirtualAlloc(region, memory_block_size, MEM_COMMIT | MEM_RESERVE,
+                            PAGE_EXECUTE_READWRITE))))
+        return result;
     }
-    return nullptr;
+    throw(exceptions::virtual_alloc_exception(
+        GetLastError(), region, memory_block_size, MEM_COMMIT | MEM_RESERVE,
+        PAGE_EXECUTE_READWRITE));
   }
 
   static std::tuple<std::byte*, std::byte*, DWORD> get_min_max_addr()
@@ -113,18 +187,66 @@ namespace alterhook
              static_cast<std::byte*>(info.lpMaximumApplicationAddress),
              info.dwAllocationGranularity };
   }
-#endif
+#elif utils_x64
+  static std::byte* try_valloc(std::byte* origin, std::byte* minaddr,
+                               std::byte* maxaddr)
+  {
+    std::byte*       result         = nullptr;
+    std::byte* const origin_aligned = reinterpret_cast<std::byte*>(
+        utils_align(reinterpret_cast<uintptr_t>(origin), memory_block_size));
+    std::byte* region = origin_aligned - memory_block_size;
 
-#if !defined(NDEBUG) && utils_x86
-  #define __alterhook_return_pslot                                             \
-    {                                                                          \
-      auto pslottmp = pblock->get_slot();                                      \
-      pslottmp->buffer.fill(std::byte(0xCC));                                  \
-      return reinterpret_cast<std::byte*>(pslottmp);                           \
+    while (region >= minaddr)
+    {
+      errno  = 0;
+      result = static_cast<std::byte*>(
+          mmap(region, memory_block_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0, 0));
+      if (!errno)
+        return result;
+      region -= memory_block_size;
     }
+
+    region = origin_aligned + memory_block_size;
+    while (region <= maxaddr)
+    {
+      errno  = 0;
+      result = static_cast<std::byte*>(
+          mmap(region, memory_block_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0, 0));
+      if (!errno)
+        return result;
+      region += memory_block_size;
+    }
+
+    throw(exceptions::mmap_exception(
+        errno, region, memory_block_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, 0, 0));
+  }
+#elif utils_windows
+  static std::byte* try_valloc()
+  {
+    if (void* result =
+            VirtualAlloc(nullptr, memory_block_size, MEM_COMMIT | MEM_RESERVE,
+                         PAGE_EXECUTE_READWRITE))
+      return static_cast<std::byte*>(result);
+
+    throw(exceptions::virtual_alloc_exception(
+        GetLastError(), nullptr, memory_block_size, MEM_COMMIT | MEM_RESERVE,
+        PAGE_EXECUTE_READWRITE));
+  }
 #else
-  #define __alterhook_return_pslot                                             \
-    return reinterpret_cast<std::byte*>(pblock->get_slot())
+  static std::byte* try_valloc()
+  {
+    if (void* result =
+            mmap(nullptr, memory_block_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                 MAP_PRIVATE | MAP_ANONYMOUS, 0, 0))
+      return static_cast<std::byte*>(result);
+
+    throw(exceptions::mmap_exception(errno, nullptr, memory_block_size,
+                                     PROT_READ | PROT_WRITE | PROT_EXEC,
+                                     MAP_PRIVATE | MAP_ANONYMOUS, 0, 0));
+  }
 #endif
 
   memory_block* trampoline_buffer::buffer = nullptr;
@@ -132,84 +254,26 @@ namespace alterhook
   std::byte* trampoline_buffer::allocate(__alterhook_alloc_arg)
   {
     std::scoped_lock lock{ buffer_lock };
-#if utils_windows64
-    static auto [minaddr, maxaddr, ag] = get_min_max_addr();
-    if (reinterpret_cast<uintptr_t>(origin) > max_memory_range &&
-        minaddr < origin - max_memory_range)
-      minaddr = origin - max_memory_range;
-    if (maxaddr > origin + max_memory_range)
-      maxaddr = origin + max_memory_range;
-  #define __alterhook_range_check                                              \
-    &&reinterpret_cast<std::byte*>(pblock) >                                   \
-        minaddr&& reinterpret_cast<std::byte*>(pblock) < maxaddr
-  #define __alterhook_alloc_mem_block()                                        \
-    static_cast<memory_block*>(VirtualAlloc(reg, memory_block_size,            \
-                                            MEM_COMMIT | MEM_RESERVE,          \
-                                            PAGE_EXECUTE_READWRITE))
-  #define __alterhook_raise_alloc_exception()                                  \
-    throw(exceptions::virtual_alloc_exception(                                 \
-        GetLastError(), reg, memory_block_size, MEM_COMMIT | MEM_RESERVE,      \
-        PAGE_EXECUTE_READWRITE))
-#else
-  #define __alterhook_range_check
-  #if !utils_windows
-    #define __alterhook_alloc_mem_block()                                      \
-      static_cast<memory_block*>(mmap(nullptr, memory_block_size,              \
-                                      PROT_READ | PROT_WRITE | PROT_EXEC,      \
-                                      MAP_PRIVATE | MAP_ANONYMOUS, 0, 0))
-    #define __alterhook_raise_alloc_exception()                                \
-      throw(exceptions::mmap_exception(errno, nullptr, memory_block_size,      \
-                                       PROT_READ | PROT_WRITE | PROT_EXEC,     \
-                                       MAP_PRIVATE | MAP_ANONYMOUS, 0, 0))
-  #else
-    #define __alterhook_alloc_mem_block()                                      \
-      static_cast<memory_block*>(VirtualAlloc(nullptr, memory_block_size,      \
-                                              MEM_COMMIT | MEM_RESERVE,        \
-                                              PAGE_EXECUTE_READWRITE))
-    #define __alterhook_raise_alloc_exception()                                \
-      throw(exceptions::virtual_alloc_exception(                               \
-          GetLastError(), nullptr, memory_block_size,                          \
-          MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE))
-  #endif
-#endif
+    __alterhook_set_min_max_addr();
 
     memory_block* pblock = nullptr;
-    for (memory_block* pblocktmp = buffer; pblock __alterhook_range_check;
-         pblock                  = pblock->next)
+    for (memory_block* itr = buffer; __alterhook_range_check(itr);
+         itr               = itr->next)
     {
-      if (pblocktmp->free)
+      if (itr->free)
       {
-        pblock = pblocktmp;
+        pblock = itr;
         break;
       }
     }
-    if (pblock)
-      __alterhook_return_pslot;
 
-#if utils_windows64
-    std::byte* reg = origin;
-    while (reg >= minaddr && (reg = find_prev_free_region(reg, minaddr, ag)) &&
-           !(pblock = __alterhook_alloc_mem_block()))
-      ;
     if (!pblock)
     {
-      reg = origin;
-      while (reg <= maxaddr &&
-             (reg = find_next_free_region(reg, minaddr, ag)) &&
-             !(pblock = __alterhook_alloc_mem_block()))
-        ;
-    }
-#else
-    pblock = __alterhook_alloc_mem_block();
-#endif
-
-    if (pblock)
-    {
+      pblock = reinterpret_cast<memory_block*>(__alterhook_try_valloc());
       pblock->init();
-      __alterhook_return_pslot;
     }
 
-    __alterhook_raise_alloc_exception();
+    __alterhook_return_pslot(pblock);
   }
 
   void trampoline_buffer::deallocate(void* src) noexcept

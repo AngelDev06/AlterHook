@@ -62,7 +62,7 @@ namespace alterhook
       FN, 0xE, SEPERATOR)SEPERATOR()             \
   __alterhook_for_hex_digit0(                    \
       FN, 0xF, SEPERATOR)
-// clang-format on
+  // clang-format on
 
 #define __alterhook_vtable_element(hex)                                        \
   reinterpret_cast<intptr_t>(&index_func<hex * sizeof(intptr_t)>)
@@ -103,15 +103,29 @@ namespace alterhook
   static table_t   custom_vtable  = __alterhook_custom_vtable_set();
   static table_t   vpointer_array = __alterhook_vpointer_array_set();
 
+#if utils_gcc
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
+#endif
+
+  // clang-format off
+
   class virtual_function_array
   {
   private:
-    __alterhook_generate_virtual_functions() public
-        : typedef void (virtual_function_array::*vmethod_t)();
+    __alterhook_generate_virtual_functions() 
+  public: 
+    typedef void (virtual_function_array::*vmethod_t)();
     typedef vmethod_t vtable_t[table_size];
 
     static vtable_t array;
   };
+
+  // clang-format on
+
+#if utils_gcc
+  #pragma GCC diagnostic pop
+#endif
 
   virtual_function_array::vtable_t virtual_function_array::array =
       __alterhook_virtual_function_array_set();

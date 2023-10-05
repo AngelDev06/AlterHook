@@ -3,7 +3,7 @@
 #pragma once
 
 // macro definitions
-#include "macros.h"
+#include "alterhook/macros.h"
 
 // standard headers
 #include <cstddef>
@@ -15,10 +15,11 @@
 #include <sstream>
 #include <string_view>
 #include <memory>
-#include <bitset>
 #include <array>
 #include <list>
 #include <unordered_map>
+#include <cstring>
+#include <mutex>
 #include <shared_mutex>
 #if utils_cpp20
   #include <bit>
@@ -27,10 +28,13 @@
 #endif
 
 // utilities
-#include "utilities/utils.h"
+#include "alterhook/utilities/utils.h"
 
 // api
-#include "addresser.h"
-#include "exceptions.h"
-#include "tools.h"
-#include "api.h"
+#include "alterhook/addresser.h"
+#include "alterhook/exceptions.h"
+#include "alterhook/tools.h"
+#include "alterhook/trampoline.h"
+#include "alterhook/hook.h"
+#include "alterhook/hook_chain.h"
+#include "alterhook/hook_map.h"

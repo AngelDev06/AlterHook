@@ -114,5 +114,27 @@
       "displayName": "Linux x86 Release SO",
       "inherits": [ "linux-x86-release", "linux-so" ]
     }
+  ],
+  "testPresets": [
+    {
+      "name": "test-linux-x64-so",
+      "displayName": "Linux x64 SO test",
+      "configurePreset": "linux-x64-debug-so",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    },
+    {
+      "name": "test-linux-x86-so",
+      "displayName": "Linux x86 SO test",
+      "configurePreset": "linux-x86-debug-so",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    }
   ]
 }
