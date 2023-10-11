@@ -175,7 +175,21 @@ namespace alterhook
       original_wrap  = nullptr;
     }
   }
-}
+
+  bool hook::operator==(const hook& other) const noexcept
+  {
+    return std::forward_as_tuple(ptarget, __alterhook_get_dtr(), enabled) ==
+           std::forward_as_tuple(
+               other.ptarget, __alterhook_get_other_dtr(other), other.enabled);
+  }
+
+  bool hook::operator!=(const hook& other) const noexcept
+  {
+    return std::forward_as_tuple(ptarget, __alterhook_get_dtr(), enabled) !=
+           std::forward_as_tuple(
+               other.ptarget, __alterhook_get_other_dtr(other), other.enabled);
+  }
+} // namespace alterhook
 
 #if utils_msvc
   #pragma warning(pop)

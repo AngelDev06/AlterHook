@@ -37,6 +37,46 @@ namespace alterhook
           "The arguments the detour accepts aren't compatible with the "
           "original function");
     }
+
+    template <typename detour, typename... detours, typename original,
+              typename... originals>
+    utils_consteval void assert_valid_detour_and_original_pairs(
+        utils::type_sequence<detour, detours...>,
+        utils::type_sequence<original, originals...>)
+    {
+      typedef utils::clean_type_t<detour>   cdetour;
+      typedef utils::clean_type_t<original> coriginal;
+      static_assert(
+          ((std::is_same_v<utils::fn_return_t<cdetour>,
+                           utils::fn_return_t<utils::clean_type_t<detours>>> &&
+            std::is_same_v<
+                utils::fn_return_t<coriginal>,
+                utils::fn_return_t<utils::clean_type_t<originals>>>)&&...) &&
+              std::is_same_v<utils::fn_return_t<cdetour>,
+                             utils::fn_return_t<coriginal>>,
+          "The return types of the detours and the original function need to "
+          "be the same");
+#if utils_cc_assertions
+      static_assert(
+          ((utils::compatible_calling_convention_with<
+                utils::clean_type_t<detours>, utils::clean_type_t<originals>> &&
+            utils::compatible_calling_convention_with<
+                cdetour, utils::clean_type_t<originals>> &&
+            utils::compatible_calling_convention_with<
+                utils::clean_type_t<detours>, coriginal>)&&...) &&
+              utils::compatible_calling_convention_with<cdetour, coriginal>,
+          "The calling conventions of the detours and the original function "
+          "aren't compatible");
+#endif
+      static_assert(
+          ((utils::compatible_function_arguments_with<
+                utils::clean_type_t<detours>, utils::clean_type_t<originals>> &&
+            utils::compatible_function_arguments_with<
+                utils::clean_type_t<detours>, coriginal>)&&...) &&
+              utils::compatible_function_arguments_with<cdetour, coriginal>,
+          "The arguments of the detours and the original function aren't "
+          "compatible");
+    }
   } // namespace helpers
 
 #if utils_cpp20

@@ -31,6 +31,7 @@
     <ClInclude Include="..\..\..\include\alterhook\hook_chain.h" />
     <ClInclude Include="..\..\..\include\alterhook\hook_map.h" />
     <ClInclude Include="..\..\..\include\alterhook\macros.h" />
+    <ClInclude Include="..\..\..\include\alterhook\modifier.h" />
     <ClInclude Include="..\..\..\include\alterhook\tools.h" />
     <ClInclude Include="..\..\..\include\alterhook\trampoline.h" />
     <ClInclude Include="..\..\..\include\alterhook\utilities\calling_conventions.h" />
@@ -64,6 +65,9 @@
       <Project>{0418da81-a05d-4eaf-8f54-e1b692522aa9}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -75,7 +79,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>ClangCL</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">

@@ -398,6 +398,14 @@
 #define utils_print(...)                                                       \
   std::cout << utils_map_seperated(__utils_print_helper, <<, __VA_ARGS__)
 
+#define __utils_call(x, y)                                  x y
+#define __utils_expand_2(...)                               0, 0
+#define __utils_is_call_operator2(item, dummy, result, ...) result
+#define __utils_is_call_operator(item, success, failure)                       \
+  __utils_call(__utils_is_call_operator2, (item, success, failure))
+#define utils_is_call_operator(item, success, failure)                         \
+  __utils_is_call_operator(__utils_expand_2 item, success, failure)
+
 #define __utils_define_fields0(type, identifier)                               \
   type utils_concat(m_, identifier);
 #define __utils_define_fields1(pair) __utils_define_fields0 pair

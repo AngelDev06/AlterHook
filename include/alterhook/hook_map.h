@@ -207,6 +207,9 @@ namespace alterhook
     using adapter::hash_function;
     using adapter::key_eq;
 
+    bool operator==(const hook_map_base& other) const noexcept;
+    bool operator!=(const hook_map_base& other) const noexcept;
+
   private:
     void swap(hook_chain&)                         = delete;
     void swap(list_iterator, base&, list_iterator) = delete;
@@ -430,7 +433,7 @@ namespace alterhook
     {
     }
 
-    concurrent_hook_map_base(concurrent_hook_map_base&& other)
+    concurrent_hook_map_base(concurrent_hook_map_base&& other) noexcept
         : concurrent_hook_map_base(std::move(other),
                                    std::unique_lock(other.map_lock))
     {
@@ -446,7 +449,7 @@ namespace alterhook
     size_t     enabled_size() const noexcept;
     size_t     disabled_size() const noexcept;
     std::byte* get_target() const noexcept;
-    explicit operator bool() const noexcept;
+    explicit   operator bool() const noexcept;
 
     // setters
     template <typename trg>
@@ -460,6 +463,9 @@ namespace alterhook
     void swap(concurrent_hook_map_base& other);
     void merge(concurrent_hook_map_base& other);
     void clear();
+
+    bool operator==(const concurrent_hook_map_base& other) const noexcept;
+    bool operator!=(const concurrent_hook_map_base& other) const noexcept;
 
   private:
     concurrent_hook_map_base(const concurrent_hook_map_base&       other,
@@ -1173,6 +1179,26 @@ namespace alterhook
   }
 
   template <typename T>
+  bool helpers::hook_map_base<T>::operator==(
+      const hook_map_base& other) const noexcept
+  {
+    return std::equal(adapter::begin(), adapter::end(), other.adapter::begin(),
+                      other.adapter::end(),
+                      [](const auto& left, const auto& right)
+                      {
+                        return std::tie(left.first, left.second.get()) ==
+                               std::tie(right.first, right.second.get());
+                      });
+  }
+
+  template <typename T>
+  bool helpers::hook_map_base<T>::operator!=(
+      const hook_map_base& other) const noexcept
+  {
+    return !operator==(other);
+  }
+
+  template <typename T>
   typename helpers::regular_hook_map_base<T>::iterator
       helpers::regular_hook_map_base<T>::erase(const_iterator pos)
   {
@@ -1495,6 +1521,24 @@ namespace alterhook
   {
     std::unique_lock lock{ map_lock };
     base::clear();
+  }
+
+  template <typename T>
+  inline bool helpers::concurrent_hook_map_base<T>::operator==(
+      const concurrent_hook_map_base& other) const noexcept
+  {
+    std::shared_lock lock{ map_lock };
+    std::shared_lock lock2{ other.map_lock };
+    return base::operator==(other);
+  }
+
+  template <typename T>
+  inline bool helpers::concurrent_hook_map_base<T>::operator!=(
+      const concurrent_hook_map_base& other) const noexcept
+  {
+    std::shared_lock lock{ map_lock };
+    std::shared_lock lock2{ other.map_lock };
+    return base::operator!=(other);
   }
 
   template <typename T>

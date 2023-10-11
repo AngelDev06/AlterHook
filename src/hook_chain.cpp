@@ -1875,7 +1875,118 @@ namespace alterhook
     starts_enabled = src == include::disabled;
   }
 
-  void hook_chain::join_last()
+  void hook_chain::push_back_impl(const std::byte*            detour,
+                                  const helpers::orig_buff_t& buffer,
+                                  bool                        enable_hook)
+  {
+    auto [to, other, entry] =
+        enable_hook ? std::tie(enabled, disabled, enabled.emplace_back())
+                    : std::tie(disabled, enabled, disabled.emplace_back());
+    list_iterator itr = std::prev(to.end());
+
+    if (enable_hook)
+    {
+      __alterhook_def_thumb_var(ptarget);
+      const std::byte* const original =
+          itr == enabled.begin() ? __alterhook_add_thumb_bit(ptrampoline.get())
+                                 : std::prev(itr)->pdetour;
+      entry.init(*this, itr, detour, original, buffer);
+      join_last();
+    }
+    else
+      entry.init(*this, itr, detour, buffer);
+
+    bool touch_back = false;
+    if (itr == to.begin())
+    {
+      if (other.empty())
+        starts_enabled = enable_hook;
+      else
+        touch_back = true;
+    }
+    else if (std::prev(itr)->has_other)
+      touch_back = true;
+
+    if (!touch_back)
+      return;
+    hook& otherback     = other.back();
+    otherback.has_other = true;
+    otherback.other     = itr;
+  }
+
+  void hook_chain::push_front_impl(const std::byte*            detour,
+                                   const helpers::orig_buff_t& buffer,
+                                   bool                        enable_hook)
+  {
+    auto [to, other, entry] =
+        enable_hook ? std::tie(enabled, disabled, enabled.emplace_front())
+                    : std::tie(disabled, enabled, disabled.emplace_front());
+    list_iterator itr = to.begin();
+
+    if (enable_hook)
+    {
+      __alterhook_add_thumb_bit(ptarget);
+      entry.init(*this, itr, detour,
+                 __alterhook_add_thumb_bit(ptrampoline.get()), buffer);
+      join_first();
+    }
+    else
+      entry.init(*this, itr, detour, buffer);
+
+    if (starts_enabled != enable_hook && !other.empty())
+    {
+      entry.has_other = true;
+      entry.other     = other.begin();
+    }
+    starts_enabled = enable_hook;
+  }
+
+  typename hook_chain::hook&
+      hook_chain::insert_impl(list_iterator pos, const std::byte* detour,
+                              const helpers::orig_buff_t& buffer, include trg)
+  {
+    auto [to, other]  = trg == include::enabled
+                            ? std::forward_as_tuple(enabled, disabled)
+                            : std::forward_as_tuple(disabled, enabled);
+    list_iterator itr = to.emplace(pos);
+
+    if (trg == include::enabled)
+    {
+      __alterhook_def_thumb_var(ptarget);
+      const std::byte* const original =
+          itr == enabled.begin() ? __alterhook_add_thumb_bit(ptrampoline.get())
+                                 : std::prev(itr)->pdetour;
+      itr->init(*this, itr, detour, original, buffer);
+      join(itr);
+    }
+    else
+      itr->init(*this, itr, detour, buffer);
+
+    if (itr == to.begin())
+    {
+      if (starts_enabled != itr->enabled)
+      {
+        list_iterator i = other.begin();
+        while (!i->has_other)
+          ++i;
+        i->other = itr;
+      }
+    }
+    else
+    {
+      list_iterator itrprev = std::prev(itr);
+      if (itrprev->has_other)
+      {
+        list_iterator i = itrprev->other;
+        while (!i->has_other)
+          ++i;
+        i->other = itr;
+      }
+    }
+    return *itr;
+  }
+
+  void hook_chain::join_last(size_t drop_on_exception)
   {
     list_iterator itr = std::prev(enabled.end());
     try
@@ -1891,7 +2002,7 @@ namespace alterhook
     }
     catch (...)
     {
-      enabled.pop_back();
+      enabled.resize(enabled.size() - drop_on_exception);
       throw;
     }
   }
@@ -1981,5 +2092,17 @@ namespace alterhook
       return;
     pchain->uninject(current);
     pchain->toggle_status(current);
+  }
+
+  bool hook_chain::hook::operator==(const hook& other) const noexcept
+  {
+    return std::tie(pchain, pdetour, enabled) ==
+           std::tie(other.pchain, other.pdetour, other.enabled);
+  }
+
+  bool hook_chain::hook::operator!=(const hook& other) const noexcept
+  {
+    return std::tie(pchain, pdetour, enabled) !=
+           std::tie(other.pchain, other.pdetour, other.enabled);
   }
 } // namespace alterhook
