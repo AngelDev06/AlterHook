@@ -3,6 +3,7 @@
 #include <pch.h>
 #include "exceptions.h"
 #include "disassembler.h"
+#include "modifier.h"
 #if utils_arm
   #include "arm_instructions.h"
 #endif
@@ -52,7 +53,7 @@ namespace alterhook
              << "\nIT INSTRUCTION COUNT: " << std::dec << instruction_count()
              << "\nIT REMAINING INSTRUCTION COUNT: " << m_remaining_instructions
              << "\nIT BLOCK:";
-      
+
       for (const cs_insn& instr : arm.disasm(m_size))
         stream << "\n\t0x" << std::hex << std::setfill('0') << std::setw(8)
                << instr.address << ": " << instr.mnemonic << '\t'
@@ -119,4 +120,10 @@ namespace alterhook
       return stream.str();
     }
   } // namespace exceptions
+
+  hook_manager& hook_manager::get()
+  {
+    static hook_manager instance{};
+    return instance;
+  }
 } // namespace alterhook

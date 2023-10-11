@@ -78,6 +78,9 @@ namespace alterhook
     void set_original(orig& original);
     void set_original(std::nullptr_t);
 
+    bool operator==(const hook& other) const noexcept;
+    bool operator!=(const hook& other) const noexcept;
+
   private:
     friend class hook_chain;
 #if !utils_x64
