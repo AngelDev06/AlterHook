@@ -59,10 +59,9 @@ namespace alterhook
 
     ALTERHOOK_API static hook_manager& get();
     managed_concurrent_hook_map&       operator[](std::byte* target);
-    template <typename K, typename trg, typename dtr, typename orig>
-    void insert(K&& key, trg&& target, dtr&& detour, orig& original);
-    template <typename K, typename trg, typename dtr, typename orig, typename... types>
-    void insert(K&& key, trg&& target, dtr&& detour, orig& original,
+    template <typename trg, typename K, typename dtr, typename orig,
+              typename... types>
+    void insert(trg&& target, K&& key, dtr&& detour, orig& original,
                 types&&... rest);
     void erase(std::byte* target);
 
@@ -96,25 +95,25 @@ namespace alterhook
     return at(key);
   }
 
-  template <typename K, typename trg, typename dtr, typename orig>
-  inline void hook_manager::insert(K&& key, trg&& target, dtr&& detour,
-                                   orig& original)
+  template <typename trg, typename K, typename dtr, typename orig,
+            typename... types>
+  void hook_manager::insert(trg&& target, K&& key, dtr&& detour, orig& original,
+                            types&&... rest)
   {
     std::unique_lock lock{ manager_lock };
-    std::byte* const address = nullptr;
+    std::byte*       address = nullptr;
 
     if constexpr (std::is_same_v<utils::remove_cvref_t<trg>, std::byte*>)
       address = target;
     else
       address = get_target_address(std::forward<trg>(target));
 
-    auto [itr, status] = try_emplace(address, address, std::forward<K>(key),
-                                     std::forward<dtr>(detour), original);
-    if (!status)
-      itr->insert(std::forward<K>(key), std::forward<dtr>(detour), original);
+    auto [itr, status] = base::try_emplace(address, address);
+    itr->second.insert(std::forward<K>(key), std::forward<dtr>(detour),
+                       original, std::forward<types>(rest)...);
   }
 
-  inline void hook_manager::erase(std::byte* target) 
+  inline void hook_manager::erase(std::byte* target)
   {
     std::unique_lock lock{ manager_lock };
     base::erase(target);
@@ -132,8 +131,9 @@ namespace alterhook
   {                                                                            \
     namespace __modifier_helpers                                               \
     {                                                                          \
-      template <typename R, typename origcls, typename... args>                \
-      class original_wrapper_##tag<R(cv origcls*, args...)>                    \
+      template <typename R, typename origcls, typename... args,                \
+                typename derived>                                              \
+      class original_wrapper_##tag<R(cv origcls*, args...), derived>           \
       {                                                                        \
       public:                                                                  \
         R name(args... values) cv;                                             \
@@ -141,9 +141,10 @@ namespace alterhook
       protected:                                                               \
         static decltype(get(tag{})) original_##tag;                            \
       };                                                                       \
-      template <typename R, typename origcls, typename... args>                \
-      decltype(get(tag{}))                                                     \
-          original_wrapper_##tag<R(cv origcls*, args...)>::original_##tag{};   \
+      template <typename R, typename origcls, typename... args,                \
+                typename derived>                                              \
+      decltype(get(tag{})) original_wrapper_##tag<R(cv origcls*, args...),     \
+                                                  derived>::original_##tag{};  \
     }                                                                          \
   }
 
@@ -152,7 +153,7 @@ namespace alterhook
   {                                                                            \
     namespace __modifier_helpers                                               \
     {                                                                          \
-      template <typename T>                                                    \
+      template <typename T, typename T2>                                       \
       class original_wrapper_##tag;                                            \
     }                                                                          \
   }                                                                            \
@@ -165,7 +166,8 @@ namespace alterhook
 #define __alterhook_inherit_from_original_wrapper_impl(tag, ...)               \
 public                                                                         \
   __modifier_helpers::original_wrapper_##tag<                                  \
-      utils::clean_function_type_t<decltype(get(__modifier_helpers::tag{}))>>
+      utils::clean_function_type_t<decltype(get(__modifier_helpers::tag{}))>,  \
+      derived>
 
 #define __alterhook_inherit_from_original_wrapper_impl2(callback, tag, ...)    \
   __alterhook_inherit_from_original_wrapper_impl(tag, __VA_ARGS__)
@@ -182,11 +184,12 @@ public                                                                         \
   {                                                                            \
     namespace __modifier_helpers                                               \
     {                                                                          \
-      template <typename R, typename origcls, typename... args>                \
-      R original_wrapper_##tag<R(cv origcls*, args...)>::name(                 \
+      template <typename R, typename origcls, typename... args,                \
+                typename derived>                                              \
+      R original_wrapper_##tag<R(cv origcls*, args...), derived>::name(        \
           args... values) cv                                                   \
       {                                                                        \
-        return (static_cast<cv base_name&>(*this).*                            \
+        return (static_cast<cv base_name<derived>&>(*this).*                   \
                 original_##tag)(std::forward<args>(values)...);                \
       }                                                                        \
     }                                                                          \
@@ -244,9 +247,11 @@ public                                                                         \
  * bring inherited original wrapper methods to the scope
  */
 #define __alterhook_make_original_wrapper_methods_available_impl(tag, name)    \
-  using __modifier_helpers::original_wrapper_##tag<                            \
-      utils::clean_function_type_t<decltype(get(                               \
-          __modifier_helpers::tag{}))>>::name;
+  typedef __modifier_helpers::original_wrapper_##tag<                          \
+      utils::clean_function_type_t<decltype(get(__modifier_helpers::tag{}))>,  \
+      derived>                                                                 \
+      base_wrapper_##tag;                                                      \
+  using base_wrapper_##tag::name;
 
 #define __alterhook_make_original_wrapper_methods_available_impl2(             \
     callback, tag, name, ...)                                                  \
@@ -254,6 +259,15 @@ public                                                                         \
 
 #define __alterhook_make_original_wrapper_methods_available(data)              \
   __alterhook_make_original_wrapper_methods_available_impl2 data
+
+/*
+ * generate insert calls
+ */
+#define __alterhook_make_insertion(modifier_name, tag, name)                   \
+  instance.insert(                                                             \
+      get(__modifier_helpers::tag{}), #modifier_name "::" #name,               \
+      static_cast<decltype(get(__modifier_helpers::tag{}))>(&derived::name),   \
+      base_wrapper_##tag::original_##tag);
 
 /*
  * TAG generation along with additional info such as which type of method getter
@@ -299,6 +313,25 @@ public                                                                         \
   __alterhook_call(__alterhook_setup_original_wrapper_implementation_impl,     \
                    (__alterhook_expand extra, __alterhook_expand data))
 
+#define __alterhook_generate_insertion_impl(modifier_name, callback, tag,      \
+                                            name, ...)                         \
+  __utils_defer(__alterhook_make_insertion)(modifier_name, tag, name)
+
+#define __alterhook_generate_insertion(data, modifier_name)                    \
+  __alterhook_call(__alterhook_generate_insertion_impl,                        \
+                   (modifier_name, __alterhook_expand data))
+
+/*
+ * ACTIVATE METHOD
+ */
+#define __alterhook_define_modifier_activate(info, modifier_name)              \
+  static void activate_modifier()                                              \
+  {                                                                            \
+    auto& instance = ::alterhook::hook_manager::get();                         \
+    __alterhook_call2(utils_map_ud, (__alterhook_generate_insertion,           \
+                                     modifier_name, __alterhook_expand info))  \
+  }
+
 /*
  * MODIFIER BASE CLASS
  */
@@ -306,6 +339,7 @@ public                                                                         \
                                          modifier_target)                      \
   namespace                                                                    \
   {                                                                            \
+    template <typename derived>                                                \
     class base_name                                                            \
         : public modifier_target,                                              \
           __alterhook_call2(utils_map_list,                                    \
@@ -313,16 +347,18 @@ public                                                                         \
                              __alterhook_expand info))                         \
     {                                                                          \
     public:                                                                    \
+      typedef base_name original;                                              \
       __alterhook_call2(utils_map,                                             \
                         (__alterhook_make_original_wrapper_methods_available,  \
                          __alterhook_expand info))                             \
+          __alterhook_define_modifier_activate(info, modifier_name)            \
     };                                                                         \
   }                                                                            \
   __alterhook_call2(utils_map_ud,                                              \
                     (__alterhook_setup_original_wrapper_implementation,        \
                      (modifier_target, base_name),                             \
                      __alterhook_expand info)) class modifier_name             \
-      : public base_name
+      : public base_name<modifier_name>
 
 #define __alterhook_define_modifier(info, modifier_name, modifier_target)      \
   __alterhook_define_modifier_impl(info, utils_concat(modifier_, __COUNTER__), \

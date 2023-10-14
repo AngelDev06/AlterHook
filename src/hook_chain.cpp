@@ -1986,23 +1986,28 @@ namespace alterhook
     return *itr;
   }
 
-  void hook_chain::join_last(size_t drop_on_exception)
+  void hook_chain::join_last_unchecked(size_t enabled_count)
   {
-    list_iterator itr = std::prev(enabled.end());
+    std::unique_lock lock{ hook_lock };
+    list_iterator    itr = std::prev(enabled.end());
+    if (enabled_count == enabled.size())
+    {
+      thread_freezer freeze{ *this, true };
+      __alterhook_inject(itr->pdetour, true);
+    }
+    else
+      __alterhook_patch_jmp(itr->pdetour);
+  }
+
+  void hook_chain::join_last()
+  {
     try
     {
-      std::unique_lock lock{ hook_lock };
-      if (itr == enabled.begin())
-      {
-        thread_freezer freeze{ *this, true };
-        __alterhook_inject(itr->pdetour, true);
-      }
-      else
-        __alterhook_patch_jmp(itr->pdetour);
+      join_last_unchecked();
     }
     catch (...)
     {
-      enabled.resize(enabled.size() - drop_on_exception);
+      enabled.pop_back();
       throw;
     }
   }
@@ -2104,5 +2109,11 @@ namespace alterhook
   {
     return std::tie(pchain, pdetour, enabled) !=
            std::tie(other.pchain, other.pdetour, other.enabled);
+  }
+
+  std::reference_wrapper<typename hook_chain::hook> hook_chain::empty_ref_wrap()
+  {
+    static hook empty_hook{};
+    return std::ref(empty_hook);
   }
 } // namespace alterhook

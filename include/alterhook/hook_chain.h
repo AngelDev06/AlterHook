@@ -322,32 +322,33 @@ namespace alterhook
                     std::tuple<detour_t, original_t, types...>&& args);
     template <typename dfirst, typename... detours, typename ofirst,
               typename... originals, size_t... indexes>
-    void init_chain(std::index_sequence<indexes...>,
-                    std::pair<std::tuple<dfirst, detours...>,
+    void  init_chain(std::index_sequence<indexes...>,
+                     std::pair<std::tuple<dfirst, detours...>,
                               std::tuple<ofirst, originals...>>&& args);
-    void init_chain();
-    void join_last(size_t drop_on_exception = 1);
-    void join_first();
-    void join(list_iterator itr);
-    void unbind_range(list_iterator first, list_iterator last,
-                      unbind_range_callback& callback);
-    void unbind(list_iterator position);
-    void uninject_all();
-    void uninject_range(list_iterator first, list_iterator last);
-    void uninject(list_iterator position);
-    void bind(list_iterator pos, list_iterator oldpos, bool to_enabled);
-    void inject_range(list_iterator pos, list_iterator first,
-                      list_iterator last);
-    void inject_back(list_iterator first, list_iterator last);
-    void toggle_status(list_iterator first, list_iterator last);
-    void toggle_status(list_iterator position);
-    void toggle_status_all(include src);
-    void push_back_impl(const std::byte*            detour,
-                        const helpers::orig_buff_t& buffer, bool enable_hook);
-    void push_front_impl(const std::byte*            detour,
+    void  init_chain();
+    void  join_last_unchecked(size_t enabled_count = 1);
+    void  join_last();
+    void  join_first();
+    void  join(list_iterator itr);
+    void  unbind_range(list_iterator first, list_iterator last,
+                       unbind_range_callback& callback);
+    void  unbind(list_iterator position);
+    void  uninject_all();
+    void  uninject_range(list_iterator first, list_iterator last);
+    void  uninject(list_iterator position);
+    void  bind(list_iterator pos, list_iterator oldpos, bool to_enabled);
+    void  inject_range(list_iterator pos, list_iterator first,
+                       list_iterator last);
+    void  inject_back(list_iterator first, list_iterator last);
+    void  toggle_status(list_iterator first, list_iterator last);
+    void  toggle_status(list_iterator position);
+    void  toggle_status_all(include src);
+    void  push_back_impl(const std::byte*            detour,
                          const helpers::orig_buff_t& buffer, bool enable_hook);
+    void  push_front_impl(const std::byte*            detour,
+                          const helpers::orig_buff_t& buffer, bool enable_hook);
     hook& insert_impl(list_iterator pos, const std::byte* detour,
-                     const helpers::orig_buff_t& buffer, include trg);
+                      const helpers::orig_buff_t& buffer, include trg);
     template <typename detour_t, typename original_t, size_t... d_indexes,
               size_t... o_indexes, typename... types>
     void append_impl(transfer to, std::index_sequence<d_indexes...>,
@@ -370,8 +371,13 @@ namespace alterhook
       memcpy(backup.data(), other.backup.data(), backup.size());
     }
 
-    list_iterator append_item(const hook& h, transfer to = transfer::disabled);
-    static void   set_item(hook& left, const hook& right);
+    list_iterator append_hook(const hook& h, transfer trg = transfer::disabled);
+    template <typename itr>
+    void append_items(itr first, itr last, transfer trg = transfer::enabled);
+    template <typename dtr, typename orig>
+    static hook                         hook_from(dtr&& detour, orig& original);
+    static void                         set_item(hook& left, const hook& right);
+    static std::reference_wrapper<hook> empty_ref_wrap();
   };
 
   class ALTERHOOK_API hook_chain::hook
@@ -420,6 +426,8 @@ namespace alterhook
   private:
     friend class hook_chain;
     friend struct hook_chain::unbind_range_callback;
+    template <typename T, size_t N>
+    friend class utils::static_vector;
     list_iterator        current{};
     list_iterator        other{};
     hook_chain*          pchain    = nullptr;
@@ -697,61 +705,65 @@ namespace alterhook
     helpers::assert_valid_detour_and_original_pairs(
         utils::type_sequence<dfirst, detours...>(),
         utils::type_sequence<ofirst, originals...>());
-    std::list<hook>* trg   = nullptr;
-    std::list<hook>* other = nullptr;
-    list_iterator    itr{};
-    list_iterator    itrcurrent{};
+    auto [trg, other] = to == transfer::enabled ? std::tie(enabled, disabled)
+                                                : std::tie(disabled, enabled);
+    hook&         first_entry = trg.emplace_back();
+    list_iterator itr         = std::prev(trg.end());
+    list_iterator itrcurrent  = itr;
+    size_t        count       = 1;
 
-    if (to == transfer::enabled)
+    try
     {
-      trg   = &enabled;
-      other = &disabled;
-      __alterhook_def_thumb_var(ptarget);
-      hook* entry = &enabled.emplace_back();
-      itr         = std::prev(enabled.end());
-      itrcurrent  = itr;
-      const std::byte* const first_original =
-          itr == enabled.begin() ? __alterhook_add_thumb_bit(ptrampoline.get())
-                                 : std::prev(itr)->pdetour;
-      entry->init(
-          *this, itr,
-          get_target_address(std::forward<dfirst>(std::get<0>(args.first))),
-          first_original, std::get<0>(args.second), true);
+      if (to == transfer::enabled)
+      {
+        __alterhook_def_thumb_var(ptarget);
+        const std::byte* original =
+            itr == enabled.begin()
+                ? __alterhook_add_thumb_bit(ptrampoline.get())
+                : std::prev(itr)->pdetour;
+        hook* entry = nullptr;
+        first_entry.init(
+            *this, itr,
+            get_target_address(std::forward<dfirst>(std::get<0>(args.first))),
+            original, std::get<0>(args.second), true);
+        original = first_entry.pdetour;
 
-      const std::byte* prev_detour = entry->pdetour;
-      ((entry = &enabled.emplace_back(),
-        entry->init(*this, ++itrcurrent,
-                    get_target_address(std::forward<detours>(
-                        std::get<indexes + 1>(args.first))),
-                    prev_detour, std::get<indexes + 1>(args.second), true),
-        prev_detour = entry->pdetour),
-       ...);
-      join_last(sizeof...(detours) + 1);
+        ((entry = &enabled.emplace_back(),
+          entry->init(*this, ++itrcurrent,
+                      get_target_address(std::forward<detours>(
+                          std::get<indexes + 1>(args.first))),
+                      original, std::get<indexes + 1>(args.second), true),
+          original = entry->pdetour, ++count),
+         ...);
+        join_last_unchecked(count);
+      }
+      else
+      {
+        hook* entry = nullptr;
+        first_entry.init(
+            *this, itr,
+            get_target_address(std::forward<dfirst>(std::get<0>(args.first))),
+            std::get<0>(args.second));
+
+        ((entry = &disabled.emplace_back(),
+          entry->init(*this, ++itrcurrent,
+                      get_target_address(std::forward<detours>(
+                          std::get<indexes + 1>(args.first))),
+                      std::get<indexes + 1>(args.second)),
+          ++count),
+         ...);
+      }
     }
-    else
+    catch (...)
     {
-      trg         = &disabled;
-      other       = &enabled;
-      hook* entry = &disabled.emplace_back();
-      itr         = std::prev(disabled.end());
-      itrcurrent  = itr;
-      entry->init(
-          *this, itr,
-          get_target_address(std::forward<dfirst>(std::get<0>(args.first))),
-          std::get<0>(args.second));
-
-      ((entry = &disabled.emplace_back(),
-        entry->init(*this, ++itrcurrent,
-                    get_target_address(std::forward<detours>(
-                        std::get<indexes + 1>(args.first))),
-                    std::get<indexes + 1>(args.second))),
-       ...);
+      trg.resize(trg.size() - count);
+      throw;
     }
 
     bool touch_back = false;
-    if (itr == trg->begin())
+    if (itr == trg.begin())
     {
-      if (other->empty())
+      if (other.empty())
         starts_enabled = static_cast<bool>(to);
       else
         touch_back = true;
@@ -761,7 +773,7 @@ namespace alterhook
 
     if (!touch_back)
       return;
-    hook& otherback     = other->back();
+    hook& otherback     = other.back();
     otherback.has_other = true;
     otherback.other     = itr;
   }
@@ -904,6 +916,83 @@ namespace alterhook
     new (&buffer) helpers::original_wrapper(original);
     push_front_impl(get_target_address(std::forward<dtr>(detour)), buffer,
                     enable_hook);
+  }
+
+  template <typename itr>
+  void hook_chain::append_items(itr first, itr last, transfer trg)
+  {
+    if (first == last)
+      return;
+    auto [to, other] = trg == transfer::enabled ? std::tie(enabled, disabled)
+                                                : std::tie(disabled, enabled);
+    hook&         first_entry = to.emplace_back();
+    size_t        count       = 1;
+    list_iterator hitr        = std::prev(to.end());
+    list_iterator hitrcurrent = hitr;
+
+    try
+    {
+      if (trg == transfer::enabled)
+      {
+        __alterhook_def_thumb_var(ptarget);
+        const std::byte* original =
+            enabled.empty() ? __alterhook_add_thumb_bit(ptrampoline.get())
+                            : std::prev(hitr)->pdetour;
+        hook* entry = nullptr;
+        first_entry.init(*this, hitr, first->pdetour, original,
+                         first->origbuff);
+        original = first_entry.pdetour;
+        ++first;
+
+        for (; first != last; ++first, ++count, original = entry->pdetour)
+        {
+          entry = &enabled.emplace_back();
+          entry->init(*this, ++hitrcurrent, first->pdetour, original,
+                      first->origbuff);
+        }
+        join_last_unchecked(count);
+      }
+      else
+      {
+        first_entry.init(*this, hitrcurrent, first->pdetour, first->origbuff);
+        ++first;
+
+        for (; first != last; ++first, ++count)
+          disabled.emplace_back().init(*this, ++hitrcurrent, first->pdetour,
+                                       first->origbuff);
+      }
+    }
+    catch (...)
+    {
+      to.resize(to.size() - count);
+      throw;
+    }
+
+    bool touch_back = false;
+    if (hitr == to.begin())
+    {
+      if (other.empty())
+        starts_enabled = static_cast<bool>(trg);
+      else
+        touch_back = true;
+    }
+    else if (std::prev(hitr)->has_other)
+      touch_back = true;
+
+    if (!touch_back)
+      return;
+    hook& otherback     = other.back();
+    otherback.has_other = true;
+    otherback.other     = hitr;
+  }
+
+  template <typename dtr, typename orig>
+  typename hook_chain::hook hook_chain::hook_from(dtr&& detour, orig& original)
+  {
+    hook h{};
+    h.pdetour = get_target_address(std::forward<dtr>(detour));
+    new (&h.origbuff) helpers::original_wrapper(original);
+    return h;
   }
 
   /*
@@ -1302,68 +1391,16 @@ namespace alterhook
     return disabled.back();
   }
 
-  inline hook_chain::list_iterator hook_chain::append_item(const hook& h,
-                                                           transfer    to)
+  inline hook_chain::list_iterator hook_chain::append_hook(const hook& h,
+                                                           transfer    trg)
   {
-    utils_assert(to != transfer::both,
-                 "hook_chain::append_item: to can't be the both flag");
-    list_iterator    result{};
-    list_iterator    itrprev{};
-    std::list<hook>* trg   = nullptr;
-    std::list<hook>* other = nullptr;
-
-    if (to == transfer::enabled)
-    {
-      trg    = &enabled;
-      other  = &disabled;
-      result = (enabled.emplace_back(), std::prev(enabled.end()));
-
-      if (result == enabled.begin())
-      {
-        __alterhook_def_thumb_var(ptarget);
-        result->init(*this, result, h.pdetour,
-                     __alterhook_add_thumb_bit(ptrampoline.get()), h.origbuff,
-                     true);
-      }
-      else
-      {
-        itrprev = std::prev(result);
-        result->init(*this, result, h.pdetour, itrprev->pdetour, h.origbuff,
-                     true);
-      }
-      join_last();
-    }
-    else
-    {
-      trg    = &disabled;
-      other  = &enabled;
-      result = (disabled.emplace_back(), std::prev(disabled.end()));
-      result->init(*this, result, h.pdetour, h.origbuff);
-    }
-
-    bool touch_back = false;
-
-    if (result == trg->begin())
-    {
-      if (other->empty())
-        starts_enabled = to == transfer::enabled;
-      else
-        touch_back = true;
-    }
-    else
-    {
-      itrprev = std::prev(result);
-      if (itrprev->has_other)
-        touch_back = true;
-    }
-
-    if (touch_back)
-    {
-      hook& otherback     = other->back();
-      otherback.has_other = true;
-      otherback.other     = result;
-    }
-    return result;
+    utils_assert(trg != transfer::both,
+                 "hook_chain::append_hook: to can't be the both flag");
+    auto [currentitr, enable_hook] =
+        trg == transfer::enabled ? std::pair(std::prev(enabled.end()), true)
+                                 : std::pair(std::prev(disabled.end()), false);
+    push_back_impl(h.pdetour, h.origbuff, enable_hook);
+    return ++currentitr;
   }
 
   inline void hook_chain::set_item(hook& left, const hook& right)

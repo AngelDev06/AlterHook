@@ -128,6 +128,11 @@ namespace alterhook
 
     using adapter::adapter;
 
+    hook_map_base(std::byte* target);
+
+    template <__alterhook_is_target(trg)>
+    hook_map_base(trg&& target);
+
     template <__alterhook_are_key_detour_and_original_triplets(fkey, dtr, orig,
                                                                types)>
     hook_map_base(std::byte* target, fkey&& first_key, dtr&& detour,
@@ -210,6 +215,21 @@ namespace alterhook
     bool operator==(const hook_map_base& other) const noexcept;
     bool operator!=(const hook_map_base& other) const noexcept;
 
+  protected:
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(transfer trg, K&& key, dtr&& detour, orig& original,
+                types&&... rest);
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(K&& key, dtr&& detour, orig& original, types&&... rest);
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(transfer trg, tuple&& first, types&&... rest);
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(tuple&& first, types&&... rest);
+
   private:
     void swap(hook_chain&)                         = delete;
     void swap(list_iterator, base&, list_iterator) = delete;
@@ -220,6 +240,23 @@ namespace alterhook
                   std::index_sequence<d_indexes...>,
                   std::index_sequence<o_indexes...>,
                   std::tuple<types...>&& args);
+    template <typename key_t, typename detour_t, typename original_t,
+              size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
+              typename... types>
+    auto insert_impl(transfer to, std::index_sequence<k_indexes...>,
+                     std::index_sequence<d_indexes...>,
+                     std::index_sequence<o_indexes...>,
+                     std::tuple<key_t, detour_t, original_t, types...>&& args);
+    template <typename kfirst, typename... keys, typename dfirst,
+              typename... detours, typename ofirst, typename... originals,
+              size_t... indexes>
+    auto insert_impl(
+        transfer to, std::index_sequence<indexes...>,
+        std::tuple<std::tuple<kfirst, keys...>, std::tuple<dfirst, detours...>,
+                   std::tuple<ofirst, originals...>>&& args);
+
+    template <size_t N, typename type, typename args_t>
+    bool handle_emplacement(bool enable_hook, args_t& args);
   };
 
   template <typename T>
@@ -279,11 +316,25 @@ namespace alterhook
     void splice(const K1& newpos, const K2& oldpos);
     template <typename K1, typename K2>
     void swap(const K1& left, const K2& right);
-    template <__alterhook_is_key_detour_and_original(K, dtr, orig)>
-    insert_ret_t insert(K&& k, dtr&& detour, orig& original,
-                        transfer to = transfer::enabled);
-    iterator     erase(const_iterator pos);
-    iterator     erase(const_iterator first, const_iterator last);
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(transfer trg, K&& key, dtr&& detour, orig& original,
+                types&&... rest);
+
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(K&& key, dtr&& detour, orig& original, types&&... rest);
+
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(transfer trg, tuple&& first, types&&... rest);
+
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(tuple&& first, types&&... rest);
+
+    iterator erase(const_iterator pos);
+    iterator erase(const_iterator first, const_iterator last);
     template <typename K>
     size_type erase(const K& k);
     using hook_chain::splice;
@@ -541,9 +592,19 @@ namespace alterhook
     template <typename K>
     void splice(const K& newpos, const K& oldpos);
 
-    template <__alterhook_is_key_detour_and_original(K, dtr, orig)>
-    bool insert(K&& k, dtr&& detour, orig& original,
-                transfer to = transfer::enabled);
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(transfer trg, K&& key, dtr&& detour, orig& original,
+                types&&... rest);
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(K&& key, dtr&& detour, orig& original, types&&... rest);
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(transfer trg, tuple&& first, types&&... rest);
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(tuple&& first, types&&... rest);
     template <typename callable,
               __alterhook_is_key_detour_and_original(K, dtr, orig)>
     bool insert_or_visit(K&& k, dtr&& detour, orig& original, callable&& func,
@@ -616,9 +677,19 @@ namespace alterhook
     void swap(const K1& left, const K2& right);
     using base::swap;
 
-    template <__alterhook_is_key_detour_and_original(K, dtr, orig)>
-    bool insert(K&& k, dtr&& detour, orig& original,
-                transfer to = transfer::enabled);
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(transfer trg, K&& key, dtr&& detour, orig& original,
+                types&&... rest);
+    template <__alterhook_are_key_detour_and_original_triplets(K, dtr, orig,
+                                                               types)>
+    auto insert(K&& key, dtr&& detour, orig& original, types&&... rest);
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(transfer trg, tuple&& first, types&&... rest);
+    template <__alterhook_are_key_detour_and_original_stl_triplets(tuple,
+                                                                   types)>
+    auto insert(tuple&& first, types&&... rest);
     template <typename K>
     size_type erase(const K& k);
     template <typename K, typename callable>
@@ -966,6 +1037,236 @@ namespace alterhook
   }
 
   template <typename T>
+  template <typename key_t, typename detour_t, typename original_t,
+            size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
+            typename... types>
+  auto helpers::hook_map_base<T>::insert_impl(
+      transfer trg, std::index_sequence<k_indexes...>,
+      std::index_sequence<d_indexes...>, std::index_sequence<o_indexes...>,
+      std::tuple<key_t, detour_t, original_t, types...>&& args)
+  {
+    return insert_impl(
+        trg, std::make_index_sequence<sizeof...(d_indexes)>(),
+        std::tuple(std::forward_as_tuple(
+                       std::forward<key_t>(std::get<0>(args)),
+                       std::forward<std::tuple_element_t<
+                           k_indexes,
+                           std::tuple<key_t, detour_t, original_t, types...>>>(
+                           std::get<k_indexes>(args))...),
+                   std::forward_as_tuple(
+                       std::forward<detour_t>(std::get<1>(args)),
+                       std::forward<std::tuple_element_t<
+                           d_indexes,
+                           std::tuple<key_t, detour_t, original_t, types...>>>(
+                           std::get<d_indexes>(args))...),
+                   std::forward_as_tuple(
+                       std::forward<original_t>(std::get<2>(args)),
+                       std::forward<std::tuple_element_t<
+                           o_indexes,
+                           std::tuple<key_t, detour_t, original_t, types...>>>(
+                           std::get<o_indexes>(args))...)));
+  }
+
+  template <typename T>
+  template <typename kfirst, typename... keys, typename dfirst,
+            typename... detours, typename ofirst, typename... originals,
+            size_t... indexes>
+  auto helpers::hook_map_base<T>::insert_impl(
+      transfer trg, std::index_sequence<indexes...>,
+      std::tuple<std::tuple<kfirst, keys...>, std::tuple<dfirst, detours...>,
+                 std::tuple<ofirst, originals...>>&& args)
+  {
+    const bool enable_hook = trg == transfer::enabled;
+
+    if constexpr (sizeof...(keys) == 0)
+    {
+      if constexpr (utils::multi_hash_map<T>)
+      {
+        base::push_back(std::forward<dfirst>(std::get<0>(std::get<1>(args))),
+                        std::forward<ofirst>(std::get<0>(std::get<2>(args))),
+                        enable_hook);
+        try
+        {
+          return T::emplace(
+              std::forward<kfirst>(std::get<0>(std::get<0>(args))),
+              std::ref(enable_hook ? base::eback() : base::dback()));
+        }
+        catch (...)
+        {
+          base::pop_back(trg);
+          throw;
+        }
+      }
+      else if constexpr (utils::regular_hash_map<T>)
+      {
+        auto [result, status] =
+            T::try_emplace(std::forward<kfirst>(std::get<0>(std::get<0>(args))),
+                           base::empty_ref_wrap());
+        if (!status)
+          return std::pair(result, status);
+        try
+        {
+          base::push_back(std::forward<dfirst>(std::get<0>(std::get<1>(args))),
+                          std::forward<ofirst>(std::get<0>(std::get<2>(args))),
+                          enable_hook);
+        }
+        catch (...)
+        {
+          T::erase(result);
+          throw;
+        }
+        result->second = std::ref(enable_hook ? base::eback() : base::dback());
+        return std::pair(result, status);
+      }
+      else
+      {
+        static_assert(utils::concurrent_hash_map<T>,
+                      "not a concurrent map provided to insert as fallback");
+        base::push_back(std::forward<dfirst>(std::get<0>(std::get<1>(args))),
+                        std::forward<ofirst>(std::get<0>(std::get<2>(args))),
+                        enable_hook);
+        try
+        {
+          return T::try_emplace_or_cvisit(
+              std::forward<kfirst>(std::get<0>(std::get<0>(args))),
+              std::ref(enable_hook ? base::eback() : base::dback()),
+              [&](const auto& ref) { base::pop_back(trg); });
+        }
+        catch (...)
+        {
+          base::pop_back(trg);
+          throw;
+        }
+      }
+    }
+    else if constexpr (utils::multi_hash_map<T>)
+    {
+      list_iterator current =
+          std::prev(enable_hook ? base::eend() : base::dend());
+      base::append(
+          trg,
+          std::forward_as_tuple(
+              std::forward<dfirst>(std::get<0>(std::get<1>(args))),
+              std::forward<ofirst>(std::get<0>(std::get<2>(args)))),
+          std::forward_as_tuple(
+              std::forward<detours>(std::get<indexes + 1>(std::get<1>(args))),
+              std::forward<originals>(
+                  std::get<indexes + 1>(std::get<2>(args))))...);
+      try
+      {
+        T::emplace(std::forward<kfirst>(std::get<0>(std::get<0>(args))),
+                   std::ref(*(++current)));
+        (T::emplace(
+             std::forward<keys>(std::get<indexes + 1>(std::get<0>(args))),
+             std::ref(*(++current))),
+         ...);
+      }
+      catch (...)
+      {
+        base::erase(current, enable_hook ? base::eend() : base::dend());
+        throw;
+      }
+      return size_t{ sizeof...(keys) + 1 };
+    }
+    else if constexpr (utils::regular_hash_map<T>)
+    {
+      utils::static_vector<typename base::hook, sizeof...(keys) + 1>
+          tba_hooks{};
+      utils::static_vector<typename T::iterator, sizeof...(keys) + 1> sources{};
+      auto [result, status] =
+          T::try_emplace(std::forward<kfirst>(std::get<0>(std::get<0>(args))),
+                         base::empty_ref_wrap());
+      if (status)
+      {
+        tba_hooks.push_back(base::hook_from(
+            std::forward<dfirst>(std::get<0>(std::get<1>(args))),
+            std::forward<ofirst>(std::get<0>(std::get<2>(args)))));
+        sources.push_back(result);
+      }
+
+      try
+      {
+        ((std::tie(result, status) = T::try_emplace(
+              std::forward<keys>(std::get<indexes + 1>(std::get<0>(args))),
+              base::empty_ref_wrap()),
+          status ? (tba_hooks.push_back(base::hook_from(
+                        std::forward<detours>(
+                            std::get<indexes + 1>(std::get<1>(args))),
+                        std::forward<originals>(
+                            std::get<indexes + 1>(std::get<2>(args))))),
+                    sources.push_back(result), void())
+                 : void()),
+         ...);
+
+        base::append_items(tba_hooks.begin(), tba_hooks.end(), trg);
+      }
+      catch (...)
+      {
+        for (auto itr : sources)
+          T::erase(itr);
+        throw;
+      }
+
+      list_iterator hitr = enable_hook ? base::eend() : base::dend();
+      for (size_t i = sources.size(); i != 0; --i)
+        sources[i - 1]->second = std::ref(*(--hitr));
+      return sources.size();
+    }
+    else
+    {
+      base::push_back(std::forward<dfirst>(std::get<0>(std::get<1>(args))),
+                      std::forward<ofirst>(std::get<0>(std::get<2>(args))),
+                      enable_hook);
+      bool   result = handle_emplacement<0, kfirst>(enable_hook, args);
+      size_t count  = 0;
+
+      if (!result)
+        base::pop_back(trg);
+      else
+        ++count;
+
+      ((base::push_back(
+            std::forward<detours>(std::get<indexes + 1>(std::get<1>(args))),
+            std::forward<originals>(std::get<indexes + 1>(std::get<2>(args))),
+            enable_hook),
+        result = handle_emplacement<indexes + 1, keys>(enable_hook, args),
+        !result ? base::pop_back(trg) : (++count, void())),
+       ...);
+      return count;
+    }
+  }
+
+  template <typename T>
+  template <size_t N, typename type, typename args_t>
+  bool helpers::hook_map_base<T>::handle_emplacement(bool    enable_hook,
+                                                     args_t& args)
+  {
+    try
+    {
+      return T::try_emplace(
+          std::forward<type>(std::get<N>(std::get<0>(args))),
+          std::ref(enable_hook ? base::eback() : base::dback()));
+    }
+    catch (...)
+    {
+      base::pop_back(static_cast<transfer>(enable_hook));
+      throw;
+    }
+  }
+
+  template <typename T>
+  helpers::hook_map_base<T>::hook_map_base(std::byte* target) : base(target)
+  {
+  }
+
+  template <typename T>
+  template <__alterhook_is_target_impl(trg)>
+  helpers::hook_map_base<T>::hook_map_base(trg&& target)
+      : hook_map_base(get_target_address(std::forward<trg>(target)))
+  {
+  }
+
+  template <typename T>
   template <__alterhook_are_key_detour_and_original_triplets_impl(fkey, dtr,
                                                                   orig, types)>
   helpers::hook_map_base<T>::hook_map_base(std::byte* target, fkey&& first_key,
@@ -1047,7 +1348,7 @@ namespace alterhook
       : hook_chain(other.get_target())
   {
     for (const auto& [k, v] : static_cast<const adapter&>(other))
-      adapter::emplace(k, *append_item(v));
+      adapter::emplace(k, *append_hook(v));
   }
 
   template <typename T>
@@ -1056,7 +1357,7 @@ namespace alterhook
       : adapter(alloc), hook_chain(other.get_target())
   {
     for (const auto& [k, v] : static_cast<const adapter&>(other))
-      adapter::emplace(k, *append_item(v));
+      adapter::emplace(k, *append_hook(v));
   }
 
   template <typename T>
@@ -1113,7 +1414,7 @@ namespace alterhook
         for (typename adapter::const_iterator otherend = other.adapter::end();
              otheritr != otherend; ++otheritr)
           adapter::insert_or_assign(otheritr->first,
-                                    std::ref(*append_item(otheritr->second)));
+                                    std::ref(*append_hook(otheritr->second)));
       }
     }
     return *this;
@@ -1199,6 +1500,72 @@ namespace alterhook
   }
 
   template <typename T>
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::hook_map_base<T>::insert(transfer trg, K&& key, dtr&& detour,
+                                         orig& original, types&&... rest)
+  {
+    return insert_impl(
+        trg, utils::make_index_sequence_with_step<sizeof...(rest) + 3, 3, 3>(),
+        utils::make_index_sequence_with_step<sizeof...(rest) + 3, 4, 3>(),
+        utils::make_index_sequence_with_step<sizeof...(rest) + 3, 5, 3>(),
+        std::forward_as_tuple(std::forward<K>(key), std::forward<dtr>(detour),
+                              original, std::forward<types>(rest)...));
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::hook_map_base<T>::insert(K&& key, dtr&& detour, orig& original,
+                                         types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<K>(key),
+                  std::forward<dtr>(detour), original,
+                  std::forward<types>(rest)...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::hook_map_base<T>::insert(transfer trg, tuple&& first,
+                                         types&&... rest)
+  {
+    return insert_impl(
+        trg, std::make_index_sequence<sizeof...(rest)>(),
+        std::tuple(
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<tuple>>>(
+                    std::get<0>(first)),
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
+                    std::get<0>(rest))...),
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<1, utils::remove_cvref_t<tuple>>>(
+                    std::get<1>(first)),
+                std::forward<
+                    std::tuple_element_t<1, utils::remove_cvref_t<types>>>(
+                    std::get<1>(rest))...),
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<2, utils::remove_cvref_t<tuple>>>(
+                    std::get<2>(first)),
+                std::forward<
+                    std::tuple_element_t<2, utils::remove_cvref_t<types>>>(
+                    std::get<2>(rest))...)));
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::hook_map_base<T>::insert(tuple&& first, types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<tuple>(first),
+                  std::forward<types>(rest)...);
+  }
+
+  template <typename T>
   typename helpers::regular_hook_map_base<T>::iterator
       helpers::regular_hook_map_base<T>::erase(const_iterator pos)
   {
@@ -1248,21 +1615,54 @@ namespace alterhook
   }
 
   template <typename T>
-  template <__alterhook_is_key_detour_and_original_impl(K, dtr, orig)>
-  typename helpers::regular_hook_map_base<T>::insert_ret_t
-      helpers::regular_hook_map_base<T>::insert(K&& k, dtr&& detour,
-                                                orig& original, transfer to)
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::regular_hook_map_base<T>::insert(transfer trg, K&& key,
+                                                 dtr&& detour, orig& original,
+                                                 types&&... rest)
   {
-    if constexpr (!utils::multi_hash_map<T>)
-    {
-      if (base::count(k))
-        return std::pair(iterator(), false);
-    }
-    list_iterator pos =
-        to == transfer::enabled ? hook_chain::eend() : hook_chain::dend();
-    hook& h = hook_chain::insert(pos, std::forward<dtr>(detour), original, to);
-    return static_cast<insert_ret_t>(
-        T::emplace(std::forward<K>(k), std::ref(h)));
+    auto result =
+        base::insert(trg, std::forward<K>(key), std::forward<dtr>(detour),
+                     original, std::forward<types>(rest)...);
+    if constexpr (sizeof...(rest) == 0)
+      return static_cast<insert_ret_t>(result);
+    else
+      return result;
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::regular_hook_map_base<T>::insert(K&& key, dtr&& detour,
+                                                 orig& original,
+                                                 types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<K>(key),
+                  std::forward<dtr>(detour), original,
+                  std::forward<types>(rest)...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::regular_hook_map_base<T>::insert(transfer trg, tuple&& first,
+                                                 types&&... rest)
+  {
+    auto result = base::insert(trg, std::forward<tuple>(first),
+                               std::forward<types>(rest)...);
+    if constexpr (sizeof...(rest) == 0)
+      return static_cast<insert_ret_t>(result);
+    else
+      return result;
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::regular_hook_map_base<T>::insert(tuple&& first, types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<tuple>(first),
+                  std::forward<types>(rest)...);
   }
 
   template <typename T>
@@ -1637,18 +2037,49 @@ namespace alterhook
   }
 
   template <typename T>
-  template <__alterhook_is_key_detour_and_original_impl(K, dtr, orig)>
-  bool helpers::custom_concurrent_hook_map_base<T>::insert(K&& k, dtr&& detour,
-                                                           orig&    original,
-                                                           transfer to)
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::custom_concurrent_hook_map_base<T>::insert(
+      transfer trg, K&& key, dtr&& detour, orig& original, types&&... rest)
   {
     std::unique_lock lock{ base::map_lock };
-    if (T::count(k))
-      return false;
-    list_iterator pos =
-        to == transfer::enabled ? hook_chain::eend() : hook_chain::dend();
-    hook& h = hook_chain::insert(pos, std::forward<dtr>(detour), original, to);
-    return T::emplace(std::forward<K>(k), std::ref(h));
+    return base::insert(trg, std::forward<K>(key), std::forward<dtr>(detour),
+                        original, std::forward<types>(rest)...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::custom_concurrent_hook_map_base<T>::insert(K&&   key,
+                                                           dtr&& detour,
+                                                           orig& original,
+                                                           types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<K>(key),
+                  std::forward<dtr>(detour), original,
+                  std::forward<types>(rest)...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::custom_concurrent_hook_map_base<T>::insert(transfer trg,
+                                                           tuple&&  first,
+                                                           types&&... rest)
+  {
+    std::unique_lock lock{ base::map_lock };
+    return base::insert(trg, std::forward<tuple>(first),
+                        std::forward<types>(rest)...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::custom_concurrent_hook_map_base<T>::insert(tuple&& first,
+                                                           types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<tuple>(first),
+                  std::forward<types>(rest)...);
   }
 
   template <typename T>
@@ -1941,24 +2372,62 @@ namespace alterhook
   }
 
   template <typename T>
-  template <__alterhook_is_key_detour_and_original_impl(K, dtr, orig)>
-  bool helpers::default_concurrent_hook_map_base<T>::insert(K&& k, dtr&& detour,
-                                                            orig&    original,
-                                                            transfer to)
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::default_concurrent_hook_map_base<T>::insert(
+      transfer trg, K&& key, dtr&& detour, orig& original, types&&... rest)
   {
     std::unique_lock lock{ base::map_lock };
+    auto             result =
+        base::insert(trg, std::forward<K>(key), std::forward<dtr>(detour),
+                     original, std::forward<types>(rest)...);
 
-    if constexpr (!utils::multi_hash_map<T>)
-    {
-      if (T::count(k))
-        return false;
-    }
+    if constexpr (sizeof...(rest) == 0)
+      return result.second;
+    else
+      return result;
+  }
 
-    list_iterator pos =
-        to == transfer::enabled ? hook_chain::eend() : hook_chain::dend();
-    hook& h = hook_chain::insert(pos, std::forward<dtr>(detour), original, to);
-    T::emplace(std::forward<K>(k), std::ref(h));
-    return true;
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_triplets_impl(K, dtr, orig,
+                                                                  types)>
+  auto helpers::default_concurrent_hook_map_base<T>::insert(K&&   key,
+                                                            dtr&& detour,
+                                                            orig& original,
+                                                            types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<K>(key),
+                  std::forward<dtr>(detour), original,
+                  std::forward<types>(rest)...);
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::default_concurrent_hook_map_base<T>::insert(transfer trg,
+                                                            tuple&&  first,
+                                                            types&&... rest)
+  {
+    std::unique_lock lock{ base::map_lock };
+    auto             result = base::insert(trg, std::forward<tuple>(first),
+                                           std::forward<types>(rest)...);
+
+    if constexpr (utils::multi_hash_map<T>)
+      return true;
+    else if constexpr (sizeof...(types) == 0)
+      return result.second;
+    else
+      return result;
+  }
+
+  template <typename T>
+  template <__alterhook_are_key_detour_and_original_stl_triplets_impl(tuple,
+                                                                      types)>
+  auto helpers::default_concurrent_hook_map_base<T>::insert(tuple&& first,
+                                                            types&&... rest)
+  {
+    return insert(transfer::enabled, std::forward<tuple>(first),
+                  std::forward<types>(rest)...);
   }
 
   template <typename T>

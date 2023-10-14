@@ -660,10 +660,11 @@ namespace utils
 
     template <
         typename T,
-        bool = takes_alloc_param<T>&& takes_hasher_param<T>&& __utils_has_types(
-                   key_type, mapped_type, value_type, hasher, key_equal,
-                   allocator_type, pointer, const_pointer, reference,
-                   const_reference, size_type, difference_type) &&
+        bool = takes_alloc_param<T> && takes_hasher_param<T> &&
+               __utils_has_types(key_type, mapped_type, value_type, hasher,
+                                 key_equal, allocator_type, pointer,
+                                 const_pointer, reference, const_reference,
+                                 size_type, difference_type) &&
                __utils_has_const_methods(
                    get_allocator, empty, size, max_size, hash_function, key_eq,
                    count, max_load_factor, load_factor, bucket_count) &&
@@ -738,7 +739,7 @@ namespace utils
                                          insert_or_assign, insert_or_assignr,
                                          erase, erasek, merge, access) &&
                      __utils_has_const_methods(equal_range, at) &&
-                     hash_map_impl<T>&& forward_iterable_impl<T>>
+                     hash_map_impl<T> && forward_iterable_impl<T>>
     inline constexpr bool regular_hash_map_impl = false;
     template <typename T>
     inline constexpr bool regular_hash_map_impl<T, true> =
@@ -759,7 +760,7 @@ namespace utils
     template <typename T, bool = __utils_has_methods(insert, inserti, insertr,
                                                      erase, erasek, merge) &&
                                  __utils_has_const_methods(equal_range) &&
-                                 hash_map_impl<T>&& forward_iterable_impl<T>>
+                                 hash_map_impl<T> && forward_iterable_impl<T>>
     inline constexpr bool multi_hash_map_impl = false;
     template <typename T>
     inline constexpr bool multi_hash_map_impl<T, true> =
@@ -878,13 +879,13 @@ namespace utils
 
   template <typename... types>
   inline constexpr bool detour_and_storage_pairs =
-      helpers::dtr_storage_pairs_helper2<!stl_tuples_or_pairs<types...>,
-                                         types...>;
+      helpers::dtr_storage_pairs_helper2<
+          !stl_tuples_or_pairs<types...> || sizeof...(types) == 0, types...>;
 
   template <typename key, typename... types>
   inline constexpr bool key_detour_and_storage_triplets =
-      helpers::key_dtr_storage_pairs_helper2<!(stl_tuple<types> && ...), key,
-                                             types...>;
+      helpers::key_dtr_storage_pairs_helper2<
+          !(stl_tuple<types> && ...) || sizeof...(types) == 0, key, types...>;
 #else
   template <typename... types>
   concept detour_and_storage_pairs =
