@@ -60,6 +60,7 @@ set(
 	"include/alterhook/hook.h"
 	"include/alterhook/hook_chain.h"
 	"include/alterhook/hook_map.h"
+	"include/alterhook/modifier.h"
 )
 
 set(
@@ -173,10 +174,12 @@ if (ALTERHOOK_BUILD_TESTS)
 	set(
 		TEST_FILES
 		"hooks.cpp"
+		"modifiers.cpp"
 	)
 	set(
 		TEST_HEADERS
 		"tests/testcls.h"
+		"tests/modifiers.h"
 	)
 	enable_testing()
 	

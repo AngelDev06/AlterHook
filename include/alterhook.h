@@ -38,3 +38,4 @@
 #include "alterhook/hook.h"
 #include "alterhook/hook_chain.h"
 #include "alterhook/hook_map.h"
+#include "alterhook/modifier.h"

@@ -197,6 +197,36 @@
         "noTestsAction": "error",
         "stopOnFailure": true
       }
+    },
+    {
+      "name": "test-clang-windows-dll",
+      "displayName": "Windows Clang DLL test",
+      "configurePreset": "clang-x64-debug-dll",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    },
+    {
+      "name": "test-x86-windows-dll",
+      "displayName": "Windows x86 DLL test",
+      "configurePreset": "x86-debug-dll",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    },
+    {
+      "name": "test-clang-x86-windows-dll",
+      "displayName": "Windows Clang x86 DLL test",
+      "configurePreset": "clang-x86-debug-dll",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
     }
   ]
 }
