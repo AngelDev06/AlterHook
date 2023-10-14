@@ -25,7 +25,8 @@
 
 make_enum(func_called, originalcls_func, originalcls_func2, detourcls_func,
           detourcls_func2, detourcls_func3, detourcls_func4, detourcls_func5,
-          detourcls_func6)
+          detourcls_func6, modifier1_func, modifier1_func2, target_multiply_by,
+          modifier2_multiply_by)
 
 std::stack<func_called> call_stack;
 std::tuple<int, int, int> origresult;
