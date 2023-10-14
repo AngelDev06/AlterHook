@@ -1925,7 +1925,7 @@ namespace alterhook
 
     if (enable_hook)
     {
-      __alterhook_add_thumb_bit(ptarget);
+      __alterhook_def_thumb_var(ptarget);
       entry.init(*this, itr, detour,
                  __alterhook_add_thumb_bit(ptrampoline.get()), buffer);
       join_first();
