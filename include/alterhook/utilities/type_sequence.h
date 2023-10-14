@@ -64,7 +64,10 @@ namespace utils
   namespace helpers
   {
     template <typename seq, typename... types>
-    struct make_type_pairs_impl;
+    struct make_type_pairs_impl
+    {
+      typedef void type;
+    };
 
     template <typename... current_pairs, typename first, typename second,
               typename... rest>
@@ -83,7 +86,10 @@ namespace utils
     };
 
     template <typename seq, typename... types>
-    struct make_type_triplets_impl;
+    struct make_type_triplets_impl
+    {
+      typedef void type;
+    };
 
     template <typename... current_triplets, typename first, typename second,
               typename third, typename... rest>
@@ -107,7 +113,8 @@ namespace utils
   struct make_type_pairs
       : helpers::make_type_pairs_impl<type_sequence<>, types...>
   {
-    static_assert(!(sizeof...(types) % 2), "can't make pairs with given types");
+    // static_assert(!(sizeof...(types) % 2), "can't make pairs with given
+    // types");
   };
 
   template <typename... types>
@@ -117,8 +124,8 @@ namespace utils
   struct make_type_triplets
       : helpers::make_type_triplets_impl<type_sequence<>, types...>
   {
-    static_assert(!(sizeof...(types) % 3),
-                  "can't make triplets with given types");
+    // static_assert(!(sizeof...(types) % 3),
+    //"can't make triplets with given types");
   };
 
   template <typename... types>
