@@ -4,7 +4,7 @@ include(FetchContent)
 FetchContent_Declare(
 	capstone
 	GIT_REPOSITORY https://github.com/AngelDev06/capstone
-	GIT_TAG c99a233f08729ddc469066ebbaced69283cd58ec
+	GIT_TAG 5fa0abd0be8b4023f90e9da4f0c70a7f2b008587
 )
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)

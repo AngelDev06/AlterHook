@@ -5,6 +5,12 @@
 #include <sstream>
 #include <alterhook.h>
 
+#if utils_msvc
+  #define noinline __declspec(noinline)
+#else
+  #define noinline __attribute__((noinline))
+#endif
+
 #define __add_case(arg, name)                                                  \
   case name::arg: return #name "::" #arg;
 
@@ -26,10 +32,12 @@
 make_enum(func_called, originalcls_func, originalcls_func2, detourcls_func,
           detourcls_func2, detourcls_func3, detourcls_func4, detourcls_func5,
           detourcls_func6, modifier1_func, modifier1_func2, target_multiply_by,
-          modifier2_multiply_by)
+          modifier2_multiply_by, target_private_power_all,
+          modifier2_private_power_all, target_return_sum, modifier2_return_sum)
 
 std::stack<func_called> call_stack;
 std::tuple<int, int, int> origresult;
+std::tuple<float, float, float> forigresult;
 
 // clang-format on
 
@@ -62,14 +70,14 @@ struct originalcls
 {
   int x, y, z;
 
-  void func()
+  noinline void func()
   {
     origresult = { x, y, z };
     std::cout << "originalcls::func\n";
     call_stack.push(func_called::originalcls_func);
   }
 
-  void func2()
+  noinline void func2()
   {
     origresult = { x, y, z };
     std::cout << "originalcls::func2\n";

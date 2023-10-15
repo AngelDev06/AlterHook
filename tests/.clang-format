@@ -45,3 +45,4 @@ SortIncludes: false
 Macros:
 - modifier(a, b, c, d)=myclass
 - modifier(a, b, c)=myclass
+- modifier(a, b, c, d, e, f)=myclass
