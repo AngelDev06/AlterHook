@@ -6,9 +6,9 @@ namespace alterhook
 {
   namespace helpers
   {
-    class ALTERHOOK_HIDDEN disassembler_iterator
+    class ALTERHOOK_HIDDEN weak_disassembler_iterator
     {
-    private:
+    protected:
       csh              handle  = 0;
       const std::byte* code    = nullptr;
       uint64_t         address = 0;
@@ -17,18 +17,17 @@ namespace alterhook
       bool             status  = false;
 
     public:
-      disassembler_iterator() {}
+      weak_disassembler_iterator() {}
 
-      disassembler_iterator(csh handle, const std::byte* orig_code,
-                            size_t code_size)
+      weak_disassembler_iterator(cs_insn* instr, csh handle,
+                                 const std::byte* orig_code, size_t code_size)
           : handle(handle), code(orig_code),
-            address(reinterpret_cast<uintptr_t>(orig_code)), size(code_size)
+            address(reinterpret_cast<uintptr_t>(orig_code)), size(code_size),
+            instr(instr)
       {
-        if (!size)
+        if (!code_size)
           return;
-        // since this is a C api we have to manually check if everything went ok
-        // and throw an exception if not
-        if (!(instr = cs_malloc(handle)))
+        if (!instr)
           throw(
               exceptions::disassembler_iter_init_fail(code, cs_errno(handle)));
         status =
@@ -38,19 +37,6 @@ namespace alterhook
           throw(exceptions::disassembler_disasm_fail(code, error));
       }
 
-      ~disassembler_iterator() noexcept
-      {
-        if (instr)
-          cs_free(instr, 1);
-      }
-
-      const cs_insn& operator*() const noexcept
-      {
-        utils_assert(instr,
-                     "Attempt to dereference an uninitialized instruction");
-        return *instr;
-      }
-
       const cs_insn* operator->() const noexcept
       {
         utils_assert(instr,
@@ -58,8 +44,13 @@ namespace alterhook
         return instr;
       }
 
-      disassembler_iterator& operator++()
+      const cs_insn& operator*() const noexcept { return *operator->(); }
+
+      weak_disassembler_iterator& operator++()
       {
+        utils_assert(
+            instr,
+            "Attempt to increment an uninitialized instruction iterator");
         status =
             cs_disasm_iter(handle, reinterpret_cast<const uint8_t**>(&code),
                            &size, &address, instr);
@@ -68,9 +59,38 @@ namespace alterhook
         return *this;
       }
 
+      explicit operator bool() const noexcept { return status; }
+
       bool operator==(std::nullptr_t) const noexcept { return !status; }
 
       bool operator!=(std::nullptr_t) const noexcept { return status; }
+    };
+
+    class ALTERHOOK_HIDDEN disassembler_iterator
+        : public weak_disassembler_iterator
+    {
+    public:
+      typedef weak_disassembler_iterator base;
+
+      disassembler_iterator() {}
+
+      disassembler_iterator(csh handle, const std::byte* orig_code,
+                            size_t code_size)
+          : base(cs_malloc(handle), handle, orig_code, code_size)
+      {
+      }
+
+      ~disassembler_iterator() noexcept
+      {
+        if (instr)
+          cs_free(instr, 1);
+      }
+
+      disassembler_iterator& operator++()
+      {
+        base::operator++();
+        return *this;
+      }
     };
   } // namespace helpers
 
@@ -85,7 +105,8 @@ namespace alterhook
     size_t disasm_size = 0;
 
   public:
-    typedef helpers::disassembler_iterator iterator;
+    typedef helpers::disassembler_iterator      iterator;
+    typedef helpers::weak_disassembler_iterator weak_iterator;
 
 #if utils_x86 || utils_x64
     disassembler(const std::byte* start_address, bool detail = true)
@@ -169,5 +190,23 @@ namespace alterhook
 #if utils_arm
     bool is_thumb() const noexcept { return thumb; }
 #endif
+
+    weak_iterator follow_instruction(const cs_insn& instr, size_t size)
+    {
+      utils_assert(memchr(instr.detail->groups, X86_GRP_BRANCH_RELATIVE,
+                          instr.detail->groups_count),
+                   "Tried to follow a non-branch relative instruction");
+      cs_x86&          detail         = instr.detail->x86;
+      const cs_x86_op *operands_begin = detail.operands,
+                      *operands_end   = detail.operands + detail.op_count;
+      const cs_x86_op* result         = std::find_if(
+          operands_begin, operands_end,
+          [](const cs_x86_op& operand) { return operand.type == X86_OP_IMM; });
+      if (result == operands_end)
+        return {};
+
+      return weak_iterator(const_cast<cs_insn*>(&instr), handle,
+                           reinterpret_cast<std::byte*>(result->imm), size);
+    }
   };
 } // namespace alterhook

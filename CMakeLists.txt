@@ -171,22 +171,13 @@ else()
 endif()
 
 if (ALTERHOOK_BUILD_TESTS)
-	set(
-		TEST_FILES
-		"hooks.cpp"
-		"modifiers.cpp"
-	)
-	set(
-		TEST_HEADERS
-		"tests/testcls.h"
-		"tests/modifiers.h"
-	)
 	enable_testing()
-	
-	foreach (TEST_FILE ${TEST_FILES})
-		string(REGEX REPLACE ".cpp$" "" TEST_BIN ${TEST_FILE})
-		add_executable(${TEST_BIN} "tests/${TEST_FILE}" ${TEST_HEADERS})
-		target_link_libraries(${TEST_BIN} PRIVATE AlterHook)
+	add_subdirectory(tests)
+
+	foreach (TEST_PROJECT ${ALTERHOOK_TEST_PROJECTS})
+		separate_arguments(TEST_PROJECT)
+		list(GET TEST_PROJECT 0 TEST_CPP_FILE)
+		string(REGEX REPLACE ".cpp$" "" TEST_BIN ${TEST_CPP_FILE})
 		add_test(NAME "alterhook_${TEST_BIN}" COMMAND "${TEST_BIN}")
 	endforeach()
 endif()
