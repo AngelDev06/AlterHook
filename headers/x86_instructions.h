@@ -4,6 +4,7 @@
 
 namespace alterhook
 {
+  // clang-format off
   utils_pack_begin()
 
   struct utils_packed JMP_SHORT
@@ -14,12 +15,23 @@ namespace alterhook
     JMP_SHORT(uint8_t offset) : offset(offset) {}
   };
 
+  // clang-format on
+
   struct utils_packed JMP
   {
     uint8_t  opcode = 0xE9;
     uint32_t offset = 0;
 
     JMP(uint32_t offset) : offset(offset) {}
+  };
+
+  struct utils_packed MOV
+  {
+    uint8_t  reg    : 3;
+    uint8_t  opcode : 5;
+    uint32_t imm = 0;
+
+    MOV(uint8_t reg, uint32_t imm) : reg(reg), opcode(0b10111), imm(imm) {}
   };
 
   struct utils_packed JMP_ABS
@@ -72,8 +84,10 @@ namespace alterhook
     uint32_t jmp_imm    = 0;
     uint64_t address    = 0;
 
-    JCC_ABS(uint8_t opcode, uint64_t address) : opcode(opcode), address(address) {}
+    JCC_ABS(uint8_t opcode, uint64_t address) : opcode(opcode), address(address)
+    {
+    }
   };
 
   utils_pack_end()
-}
+} // namespace alterhook

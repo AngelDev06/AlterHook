@@ -61,6 +61,22 @@ namespace alterhook
     return true;
   }
 
+  static uint8_t x86_reg_bit_num(x86_reg reg)
+  {
+    switch (reg)
+    {
+    case X86_REG_EAX: return 0;
+    case X86_REG_ECX: return 1;
+    case X86_REG_EDX: return 2;
+    case X86_REG_EBX: return 3;
+    case X86_REG_ESP: return 4;
+    case X86_REG_EBP: return 5;
+    case X86_REG_ESI: return 6;
+    case X86_REG_EDI: return 7;
+    default: return 0xFF;
+    }
+  }
+
 #if utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4244 4018 4267)
@@ -98,6 +114,8 @@ namespace alterhook
           reinterpret_cast<uintptr_t>(ptrampoline.get()) + tramp_pos;
       const cs_x86_op *operands_begin = detail.operands,
                       *operands_end   = detail.operands + detail.op_count;
+      const size_t   instr_size       = instr.size;
+      const uint64_t instr_address    = instr.address;
       addr                            = instr.address + instr.size;
 
 #if utils_x64
@@ -123,12 +141,13 @@ namespace alterhook
       if (memchr(instr.detail->groups, X86_GRP_BRANCH_RELATIVE,
                  instr.detail->groups_count))
       {
+        // clang-format on
         auto imm_op = std::find_if(operands_begin, operands_end,
-                                     [](const cs_x86_op& element)
-                                     { return element.type == X86_OP_IMM; });
+                                   [](const cs_x86_op& element)
+                                   { return element.type == X86_OP_IMM; });
         utils_assert(imm_op != operands_end,
-                       "(unreachable) The immediate operand of a relative "
-                       "branch instruction wasn't found");
+                     "(unreachable) The immediate operand of a relative "
+                     "branch instruction wasn't found");
 
         // clang-format on
         if (memchr(instr.detail->groups, X86_GRP_JUMP,
@@ -190,43 +209,69 @@ namespace alterhook
                               instr.detail->groups_count),
                        "(unreachable) An instruction of branch relative group "
                        "is neither a call nor a jump");
+          const int64_t dest = imm_op->imm;
+
+#if !utils_windows && utils_x86
+          auto itr = x86.follow_instruction(instr, memory_slot_size);
+          if (itr && instr.id == X86_INS_MOV && detail.op_count == 2 &&
+              detail.operands[0].type == X86_OP_REG &&
+              detail.operands[1].type == X86_OP_MEM &&
+              detail.operands[1].mem.base == X86_REG_ESP &&
+              detail.operands[1].mem.disp == 0)
+          {
+            uint8_t register_used = x86_reg_bit_num(detail.operands[0].reg);
+            ++itr;
+            if (itr->id == X86_INS_RET)
+            {
+              new (tmpbuff.data())
+                  MOV(register_used,
+                      static_cast<uint32_t>(instr_address + instr_size));
+              copy_size = sizeof(MOV);
+              goto CALL_HANDLING_END;
+            }
+          }
+#endif
+
 #if utils_x64
-          new (tmpbuff.data()) CALL_ABS(static_cast<uint64_t>(imm_op->imm));
+          new (tmpbuff.data()) CALL_ABS(static_cast<uint64_t>(dest));
           copy_size = sizeof(CALL_ABS);
 #else
-          new (tmpbuff.data()) CALL(
-              static_cast<uint32_t>(imm_op->imm - (tramp_addr + sizeof(CALL))));
+          new (tmpbuff.data())
+              CALL(static_cast<uint32_t>(dest - (tramp_addr + sizeof(CALL))));
           copy_size = sizeof(CALL);
+#endif
+#if !utils_windows && utils_x86
+        CALL_HANDLING_END:
 #endif
           copy_src = tmpbuff.data();
         }
       }
       else if (memchr(instr.detail->groups, X86_GRP_RET,
                       instr.detail->groups_count))
-        finished = instr.address >= branch_dest;
+        finished = instr_address >= branch_dest;
 
-      if (instr.address < branch_dest && copy_size != instr.size)
+      if (instr_address < branch_dest && copy_size != instr_size)
         throw(exceptions::instructions_in_branch_handling_fail(target));
       if ((tramp_pos + copy_size) > memory_slot_size)
         throw(exceptions::trampoline_max_size_exceeded(
             target, tramp_pos + copy_size, memory_slot_size));
 
       positions.push_back(
-          { instr.address - reinterpret_cast<uintptr_t>(target), tramp_pos });
+          { instr_address - reinterpret_cast<uintptr_t>(target), tramp_pos });
       memcpy(reinterpret_cast<void*>(tramp_addr), copy_src, copy_size);
       tramp_pos += copy_size;
 
       if (finished)
         break;
-      if (((instr.address + instr.size) -
+      if (((instr_address + instr_size) -
            reinterpret_cast<uintptr_t>(target)) >= sizeof(JMP))
       {
 #if utils_x64
-        new (tmpbuff.data()) JMP_ABS(instr.address + instr.size);
+        new (tmpbuff.data()) JMP_ABS(instr_address + instr_size);
         copy_size = sizeof(JMP_ABS);
 #else
         new (tmpbuff.data())
-            JMP(static_cast<uint32_t>((instr.address + instr.size) -
+            JMP(static_cast<uint32_t>((instr_address + instr_size) -
                                       (tramp_addr + copy_size + sizeof(JMP))));
         copy_size = sizeof(JMP);
 #endif
