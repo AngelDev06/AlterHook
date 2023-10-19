@@ -70,7 +70,17 @@ namespace utils
     utils_concat(utils_concat(__utils_define, cc), _overloads)(cc, cv, ref,    \
                                                                exception)
 
-        __utils_member_call_cv_ref_noexcept(__utils_define_all_cc_overloads)
+        // clang-format off
+    __utils_member_call_cv_ref_noexcept(__utils_define_all_cc_overloads) 
+      
+    template <typename R, typename... args>
+    inline constexpr bool __thiscall_check<thiscall_pfn_tag<R>(args...)> = true;
+    // clang-format on
+
+    template <typename R, typename... args>
+    inline constexpr bool
+        __thiscall_check<thiscall_pfn_tag<R>(args...) noexcept> = true;
+
   } // namespace helpers
 
   #define __utils_define_cc_checks_api(name)                                   \
@@ -97,8 +107,8 @@ namespace utils
     if constexpr (name<T>)                                                     \
       return calling_convention::utils_concat(__, name2);
   #define __utils_ret_cc(pair) __utils_ret_cc0 pair
-      utils_map(__utils_ret_cc, (is_cdecl_v, CDECL), (is_clrcall_v, CLRCALL),
-                (is_fastcall_v, FASTCALL), (is_thiscall_v, THISCALL),
+      utils_map(__utils_ret_cc, (is_thiscall_v, THISCALL), (is_cdecl_v, CDECL),
+                (is_clrcall_v, CLRCALL), (is_fastcall_v, FASTCALL),
                 (is_vectorcall_v, VECTORCALL))
     }
   }
@@ -210,5 +220,47 @@ namespace utils
       template <calling_convention cc, typename T>
       using add_calling_convention_t =
           typename add_calling_convention<cc, T>::type;
+
+  namespace helpers
+  {
+    template <typename T, calling_convention cc>
+    struct value_wrapper
+    {
+      T value;
+
+      template <typename... types>
+      value_wrapper(types&&... args) : value(std::forward<types>(args)...)
+      {
+      }
+
+      value_wrapper(const T& arg) : value(arg) {}
+
+      value_wrapper(T&& arg) : value(std::move(arg)) {}
+
+      operator T() const noexcept { return value; }
+
+      operator T&() noexcept { return value; }
+
+      operator const T&() const noexcept { return value; }
+    };
+
+    template <calling_convention cc>
+    struct value_wrapper<void, cc>
+    {
+    };
+  } // namespace helpers
+
+  #define __utils_add_cc_tag(cc, name, enum_val, ...)                          \
+    template <typename R>                                                      \
+    using name = helpers::value_wrapper<R, calling_convention::enum_val>;
+
+  #define __utils_emit_tags_impl(emit_name, name, enum_val)                    \
+    utils_concat(__utils_emit_, emit_name)(__utils_add_cc_tag, name, enum_val, )
+  #define __utils_emit_tags(args) __utils_emit_tags_impl args
+
+  utils_map(__utils_emit_tags, (cdecl, c_decl, __CDECL),
+            (clrcall, clrcall, __CLRCALL), (fastcall, fastcall, __FASTCALL),
+            (stdcall, stdcall, __STDCALL), (thiscall, thiscall, __THISCALL),
+            (vectorcall, vectorcall, __VECTORCALL))
 } // namespace utils
 #endif

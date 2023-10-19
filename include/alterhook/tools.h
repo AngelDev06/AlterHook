@@ -90,14 +90,18 @@ namespace alterhook
 #endif
   {
     typedef utils::remove_cvref_t<T> fn_t;
+    if constexpr (utils::captureless_lambda<fn_t>)
+      return reinterpret_cast<std::byte*>(
+          static_cast<utils::captureless_lambda_actual_func_ptr_type_t<fn_t>>(
+              fn));
 #if utils_clang && utils_windows
-    if constexpr (utils::member_function_type<fn_t>)
+    else if constexpr (utils::member_function_type<fn_t>)
       return reinterpret_cast<std::byte*>(addresser::address_of_regular(fn));
     else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
       return reinterpret_cast<std::byte*>(
           addresser::address_of_regular(&fn_t::operator()));
 #else
-    if constexpr (utils::member_function_type<fn_t>)
+    else if constexpr (utils::member_function_type<fn_t>)
       return reinterpret_cast<std::byte*>(addresser::address_of(fn));
     else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
       return reinterpret_cast<std::byte*>(
@@ -155,25 +159,6 @@ namespace alterhook
 
   namespace helpers
   {
-#if utils_cc_assertions
-  #if utils_cpp20
-    template <utils::calling_convention CC, utils::non_capturing_lambda T>
-    inline constexpr auto lambda_calling_convention(T&& obj) noexcept
-  #else
-    template <utils::calling_convention CC, typename T,
-              std::enable_if_t<utils::non_capturing_lambda<T>, size_t> = 0>
-    inline constexpr auto lambda_calling_convention(T&& obj) noexcept
-  #endif
-    {
-      typedef utils::helpers::lambda_to_fn_t<
-          utils::helpers::call_overload_t<utils::remove_cvref_t<T>>>
-          fn_type;
-      typedef std::add_pointer_t<utils::add_calling_convention_t<CC, fn_type>>
-          final_fn_type;
-      return static_cast<final_fn_type>(obj);
-    }
-#endif
-
     struct original
     {
       virtual original& operator=(std::nullptr_t null)      = 0;
