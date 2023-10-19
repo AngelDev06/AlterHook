@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.21)
 
 project(
 	AlterHookTests
@@ -23,4 +23,11 @@ foreach (TEST_PROJECT ${ALTERHOOK_TEST_PROJECTS})
 	string(REGEX REPLACE ".cpp$" "" TEST_BIN ${TEST_CPP_FILE})
 	add_executable(${TEST_BIN} ${TEST_PROJECT})
 	target_link_libraries(${TEST_BIN} PRIVATE AlterHook)
+	if (MSVC AND ALTERHOOK_SHARED)
+		add_custom_command(
+			TARGET ${TEST_BIN} POST_BUILD 
+			COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${TEST_BIN}> $<TARGET_RUNTIME_DLLS:${TEST_BIN}>
+			COMMAND_EXPAND_LISTS
+		)
+	endif()
 endforeach()

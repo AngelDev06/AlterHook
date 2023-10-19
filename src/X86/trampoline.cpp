@@ -61,6 +61,7 @@ namespace alterhook
     return true;
   }
 
+#if !utils_windows && utils_x86
   static uint8_t x86_reg_bit_num(x86_reg reg)
   {
     switch (reg)
@@ -76,6 +77,7 @@ namespace alterhook
     default: return 0xFF;
     }
   }
+#endif
 
 #if utils_msvc
   #pragma warning(push)

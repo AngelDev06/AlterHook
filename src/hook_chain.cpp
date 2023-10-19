@@ -1027,8 +1027,6 @@ namespace alterhook
       }
     }
 
-    list_iterator current_newpos = newpos;
-
     struct splice_callback : unbind_range_callback
     {
       hook_chain*      current;
@@ -1287,8 +1285,6 @@ namespace alterhook
     {
       const list_iterator newfirst = first;
       bool                search   = false;
-      const list_iterator last_current =
-          lastprev->enabled ? enabled.end() : disabled.end();
       list_iterator search_begin{};
       auto [first_current, first_other] = first.enabled
                                               ? std::pair(&enabled, &disabled)

@@ -108,6 +108,119 @@ namespace utils
   {
   };
 
+  namespace helpers
+  {
+    template <typename T>
+    struct remove_first_arg;
+
+    template <typename R, typename first, typename... rest>
+    struct remove_first_arg<R(first, rest...)>
+    {
+      typedef R type(rest...);
+    };
+
+    template <typename T>
+    using remove_first_arg_t = typename remove_first_arg<T>::type;
+
+#if !utils_cpp20
+    template <typename T, typename = void>
+    inline constexpr bool captureless_lambda_impl = false;
+    template <typename T>
+    inline constexpr bool captureless_lambda_impl<
+        T,
+        std::void_t<
+            decltype(&T::operator()),
+            clean_function_type_t<decltype(&T::operator())>,
+            decltype(static_cast<std::add_pointer_t<helpers::remove_first_arg_t<
+                         clean_function_type_t<decltype(&T::operator())>>>>(
+                std::declval<T>()))>> = true;
+#endif
+  } // namespace helpers
+
+#if utils_cpp20
+  template <typename T>
+  concept captureless_lambda = requires(T instance) {
+    &T::operator();
+    typename clean_function_type_t<decltype(&T::operator())>;
+    static_cast<std::add_pointer_t<helpers::remove_first_arg_t<
+        clean_function_type_t<decltype(&T::operator())>>>>(instance);
+  };
+#else
+  template <typename T>
+  inline constexpr bool captureless_lambda =
+      helpers::captureless_lambda_impl<T>;
+#endif
+
+  namespace helpers
+  {
+    template <typename T>
+    struct captureless_lambda_clean_type_impl;
+
+#define __utils_forward_cv(func, exception)                                    \
+  func(const, exception) func(, exception)
+#define __utils_gen_clct_impl_overloads(func)                                  \
+  __utils_forward_cv(func, ) __utils_forward_cv(func, noexcept)
+
+#if utils_cc_assertions
+  #define __utils_clct_impl(cc, cc_val, cv, exception)                         \
+    template <typename R, typename cls, typename... args>                      \
+    struct captureless_lambda_clean_type_impl<value_wrapper<                   \
+        R, calling_convention::cc_val> (cls::*)(args...) cv exception>         \
+    {                                                                          \
+      typedef R cc type(args...) exception;                                    \
+      typedef value_wrapper<R, calling_convention::cc_val>                     \
+          cc actual_type(args...) exception;                                  \
+    };
+
+  #define __utils_clct_thiscall_impl(cc, cc_val, cv, exception)                \
+    template <typename R, typename cls, typename... args>                      \
+    struct captureless_lambda_clean_type_impl<value_wrapper<                   \
+        R, calling_convention::cc_val> (cls::*)(args...) cv exception>         \
+    {                                                                          \
+      typedef thiscall_pfn_tag<R> type(args...) exception;                     \
+      typedef thiscall_pfn_tag<value_wrapper<R, calling_convention::cc_val>>   \
+          actual_type(args...) exception;                                      \
+    };
+
+  #define __utils_emit_cc(cv, exception)                                       \
+    __utils_emit_cdecl(__utils_clct_impl, __CDECL, cv, exception)              \
+        __utils_emit_clrcall(__utils_clct_impl, __CLRCALL, cv, exception)      \
+            __utils_emit_fastcall(__utils_clct_impl, __FASTCALL, cv,           \
+                                  exception)                                   \
+                __utils_emit_stdcall(__utils_clct_impl, __STDCALL, cv,         \
+                                     exception)                                \
+                    __utils_emit_thiscall(__utils_clct_thiscall_impl,          \
+                                          __THISCALL, cv, exception)           \
+                        __utils_emit_vectorcall(__utils_clct_impl,             \
+                                                __VECTORCALL, cv, exception)
+    __utils_gen_clct_impl_overloads(__utils_emit_cc)
+#endif
+
+#define __utils_emit_non_cc(cv, exception)                                     \
+  template <typename R, typename cls, typename... args>                        \
+  struct captureless_lambda_clean_type_impl<R (cls::*)(args...) cv exception>  \
+  {                                                                            \
+    typedef R type(args...) exception;                                         \
+    typedef R actual_type(args...) exception;                                  \
+  };
+
+        __utils_gen_clct_impl_overloads(__utils_emit_non_cc)
+  } // namespace helpers
+
+  template <typename T>
+  struct captureless_lambda_func_type
+      : helpers::captureless_lambda_clean_type_impl<decltype(&T::operator())>
+  {
+  };
+
+  template <typename T>
+  using capturless_lambda_func_type_t =
+      typename captureless_lambda_func_type<T>::type;
+
+  template <typename T>
+  using captureless_lambda_actual_func_type_t =
+      typename captureless_lambda_func_type<T>::actual_type;
+
   template <typename T>
   using unwrap_stl_function_t = typename unwrap_stl_function<T>::type;
 
@@ -153,36 +266,83 @@ namespace utils
 
 #if utils_cc_assertions
     template <typename R, typename... args>
-    struct function_traits_impl<helpers::thiscall_pfn_tag<R>(args...)>
+    struct function_traits_impl<thiscall_pfn_tag<R>(args...)>
         : function_traits_impl<R(args...)>
     {
     };
 #endif
+
+#if utils_cpp20
+    template <typename T>
+    struct clean_type
+    {
+      typedef T type;
+    };
+
+    template <typename T>
+    requires std::is_function_v<std::remove_pointer_t<T>>
+    struct clean_type<T> : std::remove_pointer<T>
+    {
+    };
+
+    template <captureless_lambda T>
+    struct clean_type<T> : captureless_lambda_func_type<T>
+    {
+    };
+
+  #if utils_cc_assertions
+    template <typename R, typename... args>
+    struct clean_type<R(__thiscall*)(args...)>
+    {
+      typedef thiscall_pfn_tag<R> type(args...);
+    };
+
+    template <typename R, typename... args>
+    struct clean_type<R(__thiscall*)(args...) noexcept>
+    {
+      typedef thiscall_pfn_tag<R> type(args...) noexcept;
+    };
+  #endif
+#else
+    template <typename T, bool = std::is_function_v<std::remove_pointer_t<T>>,
+              bool = captureless_lambda<T>>
+    struct clean_type
+    {
+      typedef T type;
+    };
+
+    template <typename T>
+    struct clean_type<T, true, false> : std::remove_pointer<T>
+    {
+    };
+
+    template <typename T>
+    struct clean_type<T, false, true>
+    {
+      typedef capturless_lambda_func_type_t<T> type;
+    };
+
+  #if utils_cc_assertions
+    template <typename R, typename... args>
+    struct clean_type<R(__thiscall*)(args...), false, false>
+    {
+      typedef thiscall_pfn_tag<R> type(args...);
+    };
+
+    template <typename R, typename... args>
+    struct clean_type<R(__thiscall*)(args...) noexcept, false, false>
+    {
+      typedef thiscall_pfn_tag<R> type(args...) noexcept;
+    };
+  #endif
+#endif
   } // namespace helpers
 
-  template <typename T, bool = std::is_function_v<std::remove_pointer_t<T>>>
-  struct clean_type
-  {
-    typedef T type;
-  };
-
   template <typename T>
-  struct clean_type<T, true> : std::remove_pointer<T>
+  struct clean_type : helpers::clean_type<T>
   {
-  };
-#if utils_cc_assertions
-  template <typename R, typename... args>
-  struct clean_type<R(__thiscall*)(args...), false>
-  {
-    typedef helpers::thiscall_pfn_tag<R> type(args...);
   };
 
-  template <typename R, typename... args>
-  struct clean_type<R(__thiscall*)(args...) noexcept, false>
-  {
-    typedef helpers::thiscall_pfn_tag<R> type(args...) noexcept;
-  };
-#endif
   template <typename T>
   using clean_type_t = typename clean_type<remove_cvref_t<T>>::type;
 
@@ -450,111 +610,33 @@ namespace utils
   namespace helpers
   {
     template <typename T>
-    struct convert_to_fn_pointer_impl;
-#define __utils_convert_to_fn_pointer_impl(calling_convention, cv, ref,        \
-                                           exception)                          \
-  template <typename R, typename cls, typename... args>                        \
-  struct convert_to_fn_pointer_impl<R (calling_convention cls::*)(args...)     \
-                                        cv ref exception>                      \
-  {                                                                            \
-    typedef R(calling_convention* type)(cv cls*, args...) exception;           \
-  };
-
-    __utils_member_call_cv_ref_noexcept(__utils_convert_to_fn_pointer_impl)
-  } // namespace helpers
-
-#if utils_cpp20
-  template <member_function_type T>
-  struct convert_to_fn_pointer : helpers::convert_to_fn_pointer_impl<T>
-  {
-  };
-#else
-  template <typename T, typename = void>
-  struct convert_to_fn_pointer;
-
-  template <typename T>
-  struct convert_to_fn_pointer<T, std::enable_if_t<member_function_type<T>>>
-      : helpers::convert_to_fn_pointer_impl<T>
-  {
-  };
-#endif
-  template <typename T>
-  using convert_to_fn_pointer_t = typename convert_to_fn_pointer<T>::type;
-
-  namespace helpers
-  {
-    template <typename T>
-    struct lambda_to_fn;
-
-#define __utils_lambda_to_fn_overloads(cc, cv, ref, exception)                 \
-  template <typename ret, typename cls, typename... args>                      \
-  struct lambda_to_fn<ret (cc cls::*)(args...) cv ref exception>               \
-  {                                                                            \
-    typedef ret cc type(args...) exception;                                    \
-  };
-#define __utils_lambda_to_fn(cc, cv, ref, exception)                           \
-  __utils_lambda_to_fn_overloads(, cv, ref, exception)
-#define __utils_lambda_to_fn__cdecl(cc, cv, ref, exception)                    \
-  __utils_lambda_to_fn_overloads(cc, cv, ref, exception)
-#define __utils_lambda_to_fn__clrcall(cc, cv, ref, exception)                  \
-  __utils_lambda_to_fn_overloads(cc, cv, ref, exception)
-#define __utils_lambda_to_fn__fastcall(cc, cv, ref, exception)                 \
-  __utils_lambda_to_fn_overloads(cc, cv, ref, exception)
-#define __utils_lambda_to_fn__stdcall(cc, cv, ref, exception)                  \
-  __utils_lambda_to_fn_overloads(cc, cv, ref, exception)
-#define __utils_lambda_to_fn__thiscall(cc, cv, ref, exception)                 \
-  template <typename ret, typename cls, typename... args>                      \
-  struct lambda_to_fn<ret (cc cls::*)(args...) cv ref exception>               \
-  {                                                                            \
-    typedef ret type(args...) exception;                                       \
-  };
-#define __utils_lambda_to_fn__vectorcall(cc, cv, ref, exception)               \
-  __utils_lambda_to_fn_overloads(cc, cv, ref, exception)
-
-#define __utils_lambda_to_fn_all_overloads(cc, cv, ref, exception)             \
-  utils_concat(__utils_lambda_to_fn, cc)(cc, cv, ref, exception)
-
-    __utils_member_call_cv_ref_noexcept(__utils_lambda_to_fn_all_overloads)
-
-        template <typename T>
-        using lambda_to_fn_t = typename lambda_to_fn<T>::type;
-  } // namespace helpers
-
-// only non-capturing lambdas are objects that can be casted to function
-// pointers (and maybe user types that define operator ret(*)(args...) but we
-// can't check these somehow)
-#if utils_cpp20
-  template <typename T>
-  concept non_capturing_lambda = requires(std::remove_cvref_t<T> lmbd) {
-    typename fn_return_t<std::remove_cvref_t<T>>;
-    requires utils::fn_object_v<std::remove_cvref_t<T>>;
+    struct add_thiscall_if_needed
     {
-      static_cast<std::add_pointer_t<helpers::lambda_to_fn_t<
-          helpers::call_overload_t<std::remove_cvref_t<T>>>>>(lmbd)
+      typedef T type;
     };
-  };
-#else
-  namespace helpers
-  {
-    template <typename T, typename = void>
-    inline constexpr bool non_capturing_lambda_sfinae_2 = false;
-    template <typename T>
-    inline constexpr bool non_capturing_lambda_sfinae_2<
-        T, std::void_t<
-               decltype(static_cast<std::add_pointer_t<helpers::lambda_to_fn_t<
-                            helpers::call_overload_t<remove_cvref_t<T>>>>>(
-                   std::declval<remove_cvref_t<T>>()))>> = true;
 
-    template <typename T, typename = void>
-    inline constexpr bool non_capturing_lambda_sfinae = false;
-    template <typename T>
-    inline constexpr bool non_capturing_lambda_sfinae<
-        T, std::void_t<fn_return_t<remove_cvref_t<T>>>> =
-        fn_object_v<remove_cvref_t<T>> && non_capturing_lambda_sfinae_2<T>;
+#if utils_cc_assertions
+    template <typename R, typename... args>
+    struct add_thiscall_if_needed<thiscall_pfn_tag<R> (*)(args...)>
+    {
+      typedef R(__thiscall* type)(args...);
+    };
+
+    template <typename R, typename... args>
+    struct add_thiscall_if_needed<thiscall_pfn_tag<R> (*)(args...) noexcept>
+    {
+      typedef R(__thiscall* type)(args...) noexcept;
+    };
+#endif
   } // namespace helpers
 
   template <typename T>
-  inline constexpr bool non_capturing_lambda =
-      helpers::non_capturing_lambda_sfinae<T>;
-#endif
+  using captureless_lambda_func_ptr_type_t =
+      typename helpers::add_thiscall_if_needed<
+          std::add_pointer_t<capturless_lambda_func_type_t<T>>>::type;
+
+  template <typename T>
+  using captureless_lambda_actual_func_ptr_type_t =
+      typename helpers::add_thiscall_if_needed<
+          std::add_pointer_t<captureless_lambda_actual_func_type_t<T>>>::type;
 } // namespace utils
