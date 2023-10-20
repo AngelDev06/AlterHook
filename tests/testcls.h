@@ -31,9 +31,10 @@
 
 make_enum(func_called, originalcls_func, originalcls_func2, detourcls_func,
           detourcls_func2, detourcls_func3, detourcls_func4, detourcls_func5,
-          detourcls_func6, modifier1_func, modifier1_func2, target_multiply_by,
-          modifier2_multiply_by, target_private_power_all,
-          modifier2_private_power_all, target_return_sum, modifier2_return_sum, lambda)
+          detourcls_func6, detourcls_func7, detourcls_func8, modifier1_func,
+          modifier1_func2, target_multiply_by, modifier2_multiply_by,
+          target_private_power_all, modifier2_private_power_all,
+          target_return_sum, modifier2_return_sum, lambda)
 
 std::stack<func_called> call_stack;
 std::tuple<int, int, int> origresult;
@@ -98,6 +99,8 @@ std::function<void __add_fastcall(originalcls*)> original3;
 std::function<void __add_fastcall(originalcls*)> original4;
 std::function<void __add_fastcall(originalcls*)> original5;
 std::function<void __add_fastcall(originalcls*)> original6;
+std::function<void __add_fastcall(originalcls*)> original7;
+std::function<void __add_fastcall(originalcls*)> original8;
 
 struct detourcls : originalcls
 {
@@ -141,5 +144,19 @@ struct detourcls : originalcls
     std::cout << "detourcls::func6\n";
     call_stack.push(func_called::detourcls_func6);
     original6(this);
+  }
+
+  void func7()
+  {
+    std::cout << "detourcls::func7\n";
+    call_stack.push(func_called::detourcls_func7);
+    original7(this);
+  }
+
+  void func8()
+  {
+    std::cout << "detourcls::func8\n";
+    call_stack.push(func_called::detourcls_func8);
+    original8(this);
   }
 };

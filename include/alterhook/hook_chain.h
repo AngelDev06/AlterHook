@@ -135,9 +135,9 @@ namespace alterhook
     }
 
     void swap(hook_chain& other);
-    void merge(hook_chain& other, bool at_back = false);
+    void merge(hook_chain& other, bool at_back = true);
 
-    void merge(hook_chain&& other, bool at_back = false)
+    void merge(hook_chain&& other, bool at_back = true)
     {
       merge(other, at_back);
     }
