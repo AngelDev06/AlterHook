@@ -525,7 +525,7 @@ namespace alterhook
       std::throw_with_nested(exceptions::mprotect_exception(
           errno, prot_addr, prot_len, protection));
     *reinterpret_cast<uint32_t*>(address) = reinterpret_cast<uintptr_t>(detour);
-    mprotect(prot_addr, prot_len, protection);
+    mprotect(prot_addr, prot_len, old_protect);
     __alterhook_flush_cache(address, sizeof(uint32_t));
   }
 #else
@@ -586,8 +586,8 @@ namespace alterhook
     if (mprotect(prot_addr, prot_len, protection) == -1)
       std::throw_with_nested(exceptions::mprotect_exception(
           errno, prot_addr, prot_len, protection));
-    *reinterpret_cast<uint32_t*>(address) = reinterpret_cast<uintptr_t>(detour);
-    mprotect(prot_addr, prot_len, protection);
+    *reinterpret_cast<uint32_t*>(address) = detour - (target + sizeof(JMP));
+    mprotect(prot_addr, prot_len, old_protect);
     __alterhook_flush_cache(address, sizeof(uint32_t));
   }
   #endif

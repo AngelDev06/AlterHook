@@ -13,6 +13,7 @@ set(
 	ALTERHOOK_TEST_PROJECTS
 	"hooks.cpp testcls.h"
 	"modifiers.cpp modifiers.h testcls.h"
+	"hook_chains.cpp testcls.h"
 )
 
 set(ALTERHOOK_TEST_PROJECTS ${ALTERHOOK_TEST_PROJECTS} PARENT_SCOPE)
