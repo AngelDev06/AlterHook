@@ -1093,7 +1093,7 @@ namespace alterhook
       list_iterator& othernewpos = to_enabled ? disablednewpos : enablednewpos;
       list_iterator  i           = newpos;
 
-      while (!i->has_other && i != to_current->end())
+      while (i != to_current->end() && !i->has_other)
         ++i;
       othernewpos = i != to_current->end() ? i->other : to_other->end();
     }
@@ -1174,6 +1174,10 @@ namespace alterhook
 
     if (has_enabled)
     {
+      const bool in_list_splice         = &other == this;
+      bool       stop_splicing_enabled  = false;
+      bool       stop_splicing_disabled = false;
+
       // transfer everything (and keep track of last_enabled)
       for (auto itr = iterator(list_iterator(), first_enabled, true);
            itr != last;)
@@ -1183,13 +1187,21 @@ namespace alterhook
         if (itr.enabled)
           last_enabled = lastprev;
 
-        auto [oldtrgpos, trgpos, trglist, othertrglist] =
+        auto [oldtrgpos, trgpos, trglist, othertrglist, stop_splicing] =
             itr.enabled ? std::tie(enabledoldtrgpos, enablednewpos, enabled,
-                                   other.enabled)
+                                   other.enabled, stop_splicing_enabled)
                         : std::tie(disabledoldtrgpos, disablednewpos, disabled,
-                                   other.disabled);
+                                   other.disabled, stop_splicing_disabled);
 
         oldtrgpos = std::next(static_cast<list_iterator>(itr));
+
+        if (in_list_splice &&
+            (stop_splicing || (stop_splicing = itr == trgpos)))
+        {
+          ++itr;
+          continue;
+        }
+
         trglist.splice(trgpos, othertrglist,
                        std::exchange(itr, std::next(itr)));
       }
@@ -1205,7 +1217,7 @@ namespace alterhook
             __alterhook_inject_other(other, other.backup.data(), false);
           }
           else
-            __alterhook_patch_other_jmp(other, first_enabled->pdetour);
+            __alterhook_patch_other_jmp(other, first_enabled->poriginal);
         }
         else
         {
@@ -1285,7 +1297,7 @@ namespace alterhook
     {
       const list_iterator newfirst = first;
       bool                search   = false;
-      list_iterator search_begin{};
+      list_iterator       search_begin{};
       auto [first_current, first_other] = first.enabled
                                               ? std::pair(&enabled, &disabled)
                                               : std::pair(&disabled, &enabled);

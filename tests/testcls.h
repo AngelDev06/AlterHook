@@ -64,6 +64,7 @@ void verify_call_stack(types... args)
   (check_corrupted_call_stack(current_size, call_stack.size() - 1, args,
                               call_stack.top()),
    ...);
+  assert(call_stack.size() == 0);
 }
 
 struct originalcls
