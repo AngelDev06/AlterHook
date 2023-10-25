@@ -16,6 +16,7 @@ It has the following properties:
 	- [Trampoline](#trampoline)
     - [Hook](#hook)
     - [Hook Chain](#hook-chain)
+    - [Hook Map](#hook-map)
 
 ## Compilation
 ### With CMake
@@ -314,3 +315,68 @@ for (auto itr = chain.dbegin(); itr != chain.dend(); ++itr)
   std::cout << hook.get_detour() << '\n';
 ```
 And more!
+
+### Hook Map
+A hash map and hook chain adapter that allows for average constant time lookup of a hook using a custom key. It accepts almost the same template parameters `std::unordered_map` and other similar hash map implementations accept but with a few differences:
+- It doesn't have mapped type parameter, since it will by design use a reference to a hook entry as a mapped type.
+- It has a hash_map parameter which allows you to customize the hash map to adapt. It will by default use `std::unordered_map` but it can also use `std::unordered_multimap` and the boost.Unordered containers. It was tested with:
+    - `std::unordered_map`
+    - `std::unordered_multimap`
+    - `boost::unordered_map`
+    - `boost::unordered_multimap`
+    - `boost::unordered_flat_map`
+    - `boost::unordered_node_map`
+    - `boost::concurrent_flat_map`
+- It has a boolean flag as a last template parameter that tells whether to activate thread-safe mode (yes this is the only container that can be used concurrently) which is by default set to true when using a concurrent map (like `boost::concurrent_flat_map`) or false otherwise.
+
+There are a few aliases the might be useful:
+- `alterhook::hook_map_using` takes key and container to adapt
+- `alterhook::concurrent_hook_map` takes key and turns on thread-safe mode
+- `alterhook::concurrent_hook_map_using` takes key, container to adapt and turns on thread-safe mode
+
+What's cool about this container is that its api depends on the hash map it adapts.
+For example when adapting `boost::concurrent_flat_map` it will not allow the use of `operator[]` to lookup elements but it will instead use the [visitation based api](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent_visitation_based_api) provided by the hash map. Or when using `boost::unordered_flat_map` it will not have the bucket api implemented as it's an open-addressing container.
+
+Since it's an adapter and not a real container, it uses custom iterators that when dereferenced return `std::pair<const key&, typename alterhook::hook_chain::hook&>` so you can freely do `auto [k, v] = *itr;` without minding copies.
+
+This class inherits the constructors of both the hash map and the hook chain so you can construct it like:
+```cpp
+alterhook::hook_map<std::string> map{
+    &originalcls::func, 
+    std::forward_as_tuple("entry1", &detourcls::func, original),
+    std::forward_as_tuple("entry2", &detourcls::func2, original2)
+};
+```
+Which is like the hook_chain constructor but it expects keys to be passed along each entry as well either in triplets like in the example or 'as is'. Or you can construct it like
+```cpp
+alterhook::hook_map<std::string> map{ 10 };
+```
+Which constructs the container with n buckets.
+
+Showcase:
+```cpp
+alterhook::concurrent_hook_map<std::string> map{
+    &originalcls::func, 
+    std::forward_as_tuple("entry1", &detourcls::func, original1),
+    std::forward_as_tuple("entry2", &detourcls::func2, original2)
+};
+
+// inserts two hooks with specified keys to the disabled list
+map.insert(alterhook::hook_chain::transfer::disabled,
+           std::forward_as_tuple("entry3", &detourcls::func3, original3),
+           std::forward_as_tuple("entry4", &detourcls::func4, original4));
+
+// swap entry3 with entry1
+map.swap("entry3", "entry1");
+
+// visit all entries and print their info.
+// note that looping over the container with a range-based for loop is NOT possible 
+// as on thread-safe mode iterators are removed
+map.visit_all(
+     [](const auto& item)
+     {
+       std::cout << item.first << ": " << item.second.get_target() << ", "
+                 << item.second.get_detour() << ", "
+                 << item.second.is_enabled() << '\n';
+     });
+```
