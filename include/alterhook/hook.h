@@ -130,7 +130,7 @@ namespace alterhook
       : hook(get_target_address(std::forward<trg>(target)),
              std::forward<dtr>(detour), original, enable_hook)
   {
-    helpers::assert_valid_detour_original_pair<dtr, trg>();
+    helpers::assert_valid_target_and_detour_pair<trg, dtr>();
   }
 
   template <__alterhook_is_target_and_detour_impl(trg, dtr)>
@@ -138,7 +138,7 @@ namespace alterhook
       : hook(get_target_address(std::forward<trg>(target)),
              std::forward<dtr>(detour), enable_hook)
   {
-    helpers::assert_valid_detour_original_pair<dtr, trg>();
+    helpers::assert_valid_target_and_detour_pair<trg, dtr>();
   }
 
   template <__alterhook_is_detour_impl(dtr)>
