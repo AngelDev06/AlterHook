@@ -149,10 +149,45 @@ So the following should compile fine:
 ```cpp
 static std::function<void(originalcls*)> original{};
 alterhook::hook hook{ &originalcls::func2,
-                          [](originalcls* self)
-                          {
-                            std::cout << "hooked!\n";
-                            original(self);
-                          },
-                          original };
+                      [](originalcls* self)
+                      {
+                        std::cout << "hooked!\n";
+                        original(self);
+                      },
+                      original };
 ```
+"But wait, when I try to compile this using the MSVC compiler on windows x86 it errors at compile time with"
+![Screenshot 2023-10-25 153827](https://github.com/AngelDev06/AlterHook/assets/134562527/f4c5ab76-82a2-4e10-a6cb-46edf5f94337)
+
+The reason for this is that the library makes use of a feature only captureless lambdas have which is to be able to `static_cast` them to a raw function pointer.
+This is useful because the library can now make use of the raw function pointer as the detour and place a jump instruction that leads to that. However on windows x86 things get interesting when calling conventions are involved. You can checkout [this article](https://devblogs.microsoft.com/oldnewthing/20150220-00/?p=44623) which explains in detail what goes on with lambdas and calling conventions but to make it short, the calling convention depends on the type of the raw function pointer you cast it to. So if the function pointer has `__vectorcall` set as the calling convention, the compiler will return a version of the lambda that uses the said calling convention. Therefore considering that by default the library casts it to a function pointer of unspecified calling convention, the compiler will use the default one which is `__cdecl`. And as the error message says it is incompatible with the calling convention of the target, which since it's a method it is set to `__thiscall` by default.
+
+To fix this, you can tag the lambda with the calling convention you want to use by using some utility tags provided by the library as a return type. For example:
+```cpp
+static std::function<void(originalcls*)> original{};
+alterhook::hook hook{ &originalcls::func2,
+                      [](originalcls* self) -> alterhook::utils::fastcall<void>
+                      {
+                        std::cout << "hooked!\n";
+                        original(self);
+			return {};
+                      },
+                      original };
+```
+A few things to mind here:
+- The calling convention used in this example is `__fastcall` because MSVC doesn't allow casting a lambda to a function pointer of `__thiscall`. If you are using clang instead you can just use `alterhook::utils::thiscall<void>` as you would normally. It doesn't make much difference in this case since the calling conventions are fully compatible on functions that take one argument.
+- The tag tells the library to cast it to a function pointer of the calling convention specified, so in this case it will cast it to `__fastcall`.
+- Since the return type is no longer just `void`, you now have to manually put a return statement. Otherwise the compiler will complain.
+
+"Am I done here?"
+
+No, because the original callback is also of calling convention `__cdecl` by default so you will now get this error message:
+![Screenshot 2023-10-25 160433](https://github.com/AngelDev06/AlterHook/assets/134562527/cad6b6fd-1c80-4b41-ad2b-158ee2d61aad)
+
+To fix that one simply specify `__fastcall` as the calling convention to the original callback like:
+```cpp
+static std::function<void __fastcall (originalcls*)> original{};
+```
+And now everything should compile and run successfully!
+
+Beware though that calling convention utilities and assertions are only provided for windows x86 (other platforms don't need them), so you may want to wrap stuff in macros if you want to write portable code.
