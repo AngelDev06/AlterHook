@@ -305,6 +305,9 @@ namespace alterhook
     }
 
 #if utils_x64
+    // if prelay is already set, we don't touch it
+    if (prelay)
+      return;
     prelay = ptrampoline.get() + tramp_pos;
     new (prelay) JMP_ABS();
 #endif
@@ -418,10 +421,14 @@ namespace alterhook
   trampoline::trampoline(trampoline&& other) noexcept
       : ptarget(std::exchange(other.ptarget, nullptr)),
         ptrampoline(std::move(other.ptrampoline)),
-        patch_above(other.patch_above), tramp_size(other.tramp_size),
-        positions(other.positions)
+        patch_above(std::exchange(other.patch_above, false)),
+        tramp_size(std::exchange(other.tramp_size, 0)),
+        positions(std::move(other.positions))
   {
     __alterhook_copy_old_protect(other);
+#if utils_x64
+    prelay = std::exchange(other.prelay, nullptr);
+#endif
   }
 
   trampoline& trampoline::operator=(const trampoline& other)
@@ -459,12 +466,13 @@ namespace alterhook
     {
       ptarget     = std::exchange(other.ptarget, nullptr);
       ptrampoline = std::move(other.ptrampoline);
-      patch_above = other.patch_above;
-      tramp_size  = other.tramp_size;
+      patch_above = std::exchange(other.patch_above, false);
+      tramp_size  = std::exchange(other.tramp_size, 0);
       positions   = other.positions;
+      other.positions.clear();
       __alterhook_copy_old_protect(other);
 #if utils_x64
-      prelay = other.prelay;
+      prelay = std::exchange(other.prelay, nullptr);
 #endif
     }
     return *this;

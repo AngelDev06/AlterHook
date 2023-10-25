@@ -169,7 +169,7 @@ namespace utils
     {                                                                          \
       typedef R cc type(args...) exception;                                    \
       typedef value_wrapper<R, calling_convention::cc_val>                     \
-          cc actual_type(args...) exception;                                  \
+          cc actual_type(args...) exception;                                   \
     };
 
   #define __utils_clct_thiscall_impl(cc, cc_val, cv, exception)                \
@@ -566,14 +566,17 @@ namespace utils
                                  T2>;
 #endif
 
+    /*
+     * on windows x86 verify that arguments are compatible
+     * that means for example if you are trying to hook a thiscall function of
+     * arity greater than 1 with a fastcall one you should include an argument
+     * of size == sizeof(void*) as a second argument to avoid issues. on other
+     * platforms we just check that all arguments are identical, no calling
+     * convention headache for them
+     */
     template <typename T1, typename T2>
     utils_consteval bool have_compatible_fn_args()
     {
-// on x64 the calling convention is defaulted to 4-register parameter passing
-// and we can't get the right results via template overloading. so best we can
-// do is verify that all args are the same (it is pretty much enough since there
-// is no such need as an additional argument to store 'edx' when trying to hook
-// a __thiscall function with a __fastcall one on x64)
 #if utils_cc_assertions
       if constexpr (!compatible_calling_convention_with<T1, T2> ||
                     fn_calling_convention_v<T1> == fn_calling_convention_v<T2>)

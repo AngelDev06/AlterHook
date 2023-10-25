@@ -691,6 +691,12 @@ namespace alterhook
   void hook_chain::swap(list_iterator left, hook_chain& other,
                         list_iterator right)
   {
+    utils_assert(left->pchain == this,
+                 "hook_chain::swap: the left iterator passed is outside the "
+                 "range of `this` object");
+    utils_assert(right->pchain == &other,
+                 "hook_chain::swap: the right iterator passed is outside the "
+                 "range of `other` object");
     if (&other == this && left->enabled == right->enabled && left == right)
       return;
     std::list<hook>& lefttrg  = left->enabled ? enabled : disabled;
@@ -786,6 +792,68 @@ namespace alterhook
 
   void hook_chain::swap(hook_chain& other)
   {
+    {
+#if !utils_x64
+      bool injected_first_range = false;
+#endif
+
+      std::unique_lock lock{ hook_lock };
+      thread_freezer   freeze{ nullptr };
+      if (!other.enabled.empty())
+      {
+        __alterhook_patch_jmp(other.enabled.back().pdetour);
+        __alterhook_def_thumb_var(ptarget);
+        hook& hfront     = other.enabled.front();
+        hfront.poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+        *hfront.origwrap = hfront.poriginal;
+#if !utils_x64
+        injected_first_range = true;
+#endif
+      }
+
+      if (!enabled.empty())
+      {
+        // patch_jmp is noexcept on x64 so no need to try-catch
+#if !utils_x64
+        if (injected_first_range)
+        {
+          try
+          {
+            __alterhook_patch_other_jmp(other, enabled.back().pdetour);
+            __alterhook_def_thumb_var(other.ptarget);
+            hook& hfront = enabled.front();
+            hfront.poriginal =
+                __alterhook_add_thumb_bit(other.ptrampoline.get());
+            *hfront.origwrap = hfront.poriginal;
+          }
+          catch (...)
+          {
+            try
+            {
+              __alterhook_patch_jmp(enabled.back().pdetour);
+            }
+            catch (...)
+            {
+              toggle_status_all(include::enabled);
+              enabled = std::move(other.enabled);
+              disabled.swap(other.disabled);
+              throw;
+            }
+            throw;
+          }
+        }
+        else
+#endif
+        {
+          __alterhook_patch_other_jmp(other, enabled.back().pdetour);
+          __alterhook_def_thumb_var(other.ptarget);
+          hook& hfront     = enabled.front();
+          hfront.poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
+          *hfront.origwrap = hfront.poriginal;
+        }
+      }
+    }
+
     enabled.swap(other.enabled);
     disabled.swap(other.disabled);
     std::swap(starts_enabled, other.starts_enabled);
@@ -1083,6 +1151,9 @@ namespace alterhook
         first.enabled
             ? std::tie(enabled, disabled, enablednewpos, disablednewpos)
             : std::tie(disabled, enabled, disablednewpos, enablednewpos);
+    auto [last_current_src, last_current_src_other] =
+        last.enabled ? std::tie(other.enabled, other.disabled)
+                     : std::tie(other.disabled, other.enabled);
 
     if (&other == this && last.enabled == to_enabled && newpos == last)
       return;
@@ -1104,11 +1175,11 @@ namespace alterhook
     }
 
     list_iterator bind_pos{};
+    list_iterator lastprev{};
     list_iterator range_begin   = first;
     list_iterator range_end     = last;
     list_iterator first_enabled = range_begin;
     list_iterator last_enabled  = range_end;
-    list_iterator lastprev      = std::prev(range_end);
     bool          has_enabled   = false;
     bool          should_bind   = false;
     // when an exception is thrown, this is used to transfer all elements back
@@ -1167,6 +1238,7 @@ namespace alterhook
         while (range_begin != range_end && !range_begin->has_other)
         {
           range_begin->pchain = this;
+          lastprev            = range_begin;
           disabled.splice(disablednewpos, other.disabled,
                           std::exchange(range_begin, std::next(range_begin)));
         }
@@ -1175,6 +1247,7 @@ namespace alterhook
         {
           disabledoldtrgpos   = std::next(range_begin);
           range_begin->pchain = this;
+          lastprev            = range_begin;
           disabled.splice(disablednewpos, other.disabled, range_begin);
           first_enabled = range_begin->other;
           has_enabled   = true;
@@ -1185,12 +1258,14 @@ namespace alterhook
         while (!range_begin->has_other)
         {
           range_begin->pchain = this;
+          lastprev            = range_begin;
           disabled.splice(disablednewpos, other.disabled,
                           std::exchange(range_begin, std::next(range_begin)));
         }
 
         disabledoldtrgpos   = std::next(range_begin);
         range_begin->pchain = this;
+        lastprev            = range_begin;
         disabled.splice(disablednewpos, other.disabled, range_begin);
         first_enabled = range_begin->other;
         if (first_enabled != range_end)
@@ -1350,9 +1425,7 @@ namespace alterhook
 
       if (has_old_other)
       {
-        if (last == iterator(other.disabled.end(), other.enabled.end(),
-                             last.enabled) ||
-            last.enabled == oldother->enabled)
+        if (last == last_current_src.end() || last.enabled == oldother->enabled)
           oldother->has_other = false;
         else
         {

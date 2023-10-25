@@ -120,6 +120,7 @@ namespace alterhook
 
   void hook::enable()
   {
+    const std::byte* const dtr = __alterhook_get_dtr();
     utils_assert(__alterhook_get_dtr(), "hook::enable: invalid detour");
     if (!enabled)
     {
@@ -155,6 +156,7 @@ namespace alterhook
 
   void hook::set_detour(std::byte* detour)
   {
+    utils_assert(ptarget, "Attempt to set the detour of an uninitialized hook");
     if (detour == __alterhook_get_dtr())
       return;
     __alterhook_set_dtr(detour);

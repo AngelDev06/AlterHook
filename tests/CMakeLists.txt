@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
+include(FetchContent)
+FetchContent_Declare(
+	googletest
+	GIT_REPOSITORY https://github.com/google/googletest
+	GIT_TAG f8d7d77
+)
 
 project(
 	AlterHookTests
@@ -6,29 +12,35 @@ project(
 )
 
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-	message(FATAL_ERROR "Can't build alterhook tests as top-level'")
+	message(FATAL_ERROR "Can't build alterhook tests as top-level")
 endif()
 
-set(
-	ALTERHOOK_TEST_PROJECTS
-	"hooks.cpp testcls.h"
-	"modifiers.cpp modifiers.h testcls.h"
-	"hook_chains.cpp testcls.h"
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+add_executable(
+	AlterHookTests
+	"hooks.cpp"
+	"hook_chains.cpp"
+	"testcls.h"
 )
 
-set(ALTERHOOK_TEST_PROJECTS ${ALTERHOOK_TEST_PROJECTS} PARENT_SCOPE)
+target_link_libraries(
+	AlterHookTests
+PRIVATE
+	AlterHook
+	GTest::gtest_main
+)
 
-foreach (TEST_PROJECT ${ALTERHOOK_TEST_PROJECTS})
-	separate_arguments(TEST_PROJECT)
-	list(GET TEST_PROJECT 0 TEST_CPP_FILE)
-	string(REGEX REPLACE ".cpp$" "" TEST_BIN ${TEST_CPP_FILE})
-	add_executable(${TEST_BIN} ${TEST_PROJECT})
-	target_link_libraries(${TEST_BIN} PRIVATE AlterHook)
-	if (MSVC AND ALTERHOOK_SHARED)
-		add_custom_command(
-			TARGET ${TEST_BIN} POST_BUILD 
-			COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${TEST_BIN}> $<TARGET_RUNTIME_DLLS:${TEST_BIN}>
-			COMMAND_EXPAND_LISTS
-		)
-	endif()
-endforeach()
+if (MSVC AND ALTERHOOK_SHARED)
+	add_custom_command(
+		TARGET AlterHookTests POST_BUILD 
+		COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:AlterHookTests> $<TARGET_RUNTIME_DLLS:AlterHookTests>
+		COMMAND_EXPAND_LISTS
+	)
+endif()
+
+include(GoogleTest)
+gtest_discover_tests(AlterHookTests)
