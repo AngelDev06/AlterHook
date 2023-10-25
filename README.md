@@ -15,6 +15,7 @@ It has the following properties:
 - [API Showcase](#api-showcase)
 	- [Trampoline](#trampoline)
     - [Hook](#hook)
+    - [Hook Chain](#hook-chain)
 
 ## Compilation
 ### With CMake
@@ -127,7 +128,7 @@ Additionally since this is c++ it has the following properties:
 - Can accept non-capturing lambdas as detours
 - Automatically disables the hook when it goes out of scope
 - No manual conversions are needed, any reinterpret casts required are handled by the library.
-- Compile time checks are performed to ensure that the detour and the original callback types are compatible (i.e. they have compatible calling conventions/arguments and same return types)
+- Compile time checks are performed to ensure that the target, detour and the original callback types are compatible (i.e. they have compatible calling conventions/arguments and same return types)
 - If an error occurs an exception will be thrown which you can catch via a simple try catch block.
 
 Apart from that it has a relatively easy to use API.
@@ -191,3 +192,125 @@ static std::function<void __fastcall (originalcls*)> original{};
 And now everything should compile and run successfully!
 
 Beware though that calling convention utilities and assertions are only provided for windows x86 (other platforms don't need them), so you may want to wrap stuff in macros if you want to write portable code.
+
+### Hook Chain
+A powerful api meant for storing a chain of detours and original callbacks to the same target. 
+
+Most people are familiar with the multihook approach which basically means hooking on top of an already activated hook. While this method may be functional, it can be very error prone. What if the first hook gets disabled? That will also disable the rest of the hooks as the target's first bytes will have been replaced by the backup it made previously. What if you disable the second hook when the first one is already disabled? It will re-enable the first one! This is because the second hook will have made a backup of the jump instruction that leads to the first hook which it will copy back to the target when it gets disabled.
+
+The hook chain class is designed to put an end to this. **<ins>Any hook added in the chain can be disabled or enabled from any position without affecting the rest of the hooks.</ins>** Apart from that it also allows reordering the container as needed. That means changing the order of enabled or disabled hooks and swapping them as well as transferring them from one chain to another. erasing or appending a hook at any position will also not affect the rest of the chain.
+
+To construct an instance of the `alterhook::hook_chain` class you have two styles to choose:
+- Passing all arguments (target, detours and callbacks) as is
+```cpp
+alterhook::hook_chain chain1{ &originalcls::func, 
+                              &detourcls::func, original,
+                              &detourcls::func2, original2,
+                              &detourcls::func3, original3 };
+```
+- Or grouping the detours and callbacks in tuple-like objects
+```cpp
+alterhook::hook_chain chain2{
+    &originalcls::func2, 
+    std::forward_as_tuple(&detourcls::func4, original4),
+    std::forward_as_tuple(&detourcls::func5, original5),
+    std::forward_as_tuple(&detourcls::func6, original6)
+};
+// or
+alterhook::hook_chain chain2{
+    &originalcls::func2, 
+    std::make_pair(&detourcls::func4, std::ref(original4)),
+    std::make_pair(&detourcls::func5, std::ref(original5)),
+    std::make_pair(&detourcls::func6, std::ref(original6))
+};
+```
+
+After construction the hooks will be immediately enabled and linked. A few things to note however:
+- The hooks are passed to the chain in the construction order. That means that the last pair passed will be the last hook in the chain (which you can access via `chain.back()`)
+- The hooks' detours are invoked in reverse order. Which means that the last hook in the chain will have its detour invoked first and the first hook's detour will be invoked last.
+- Unlike in the `alterhook::hook` class, here specifying the original callback is NOT optional. Not providing a callback will result in a compilation error. If your detour does not use the callback to call the original, it can result in detours not being called. So it's important to **<ins>always call the original.</ins>**
+- The container stores references to the callbacks to set them to point to the next detour or the target function when a reordering occurs.
+- When a hook gets disabled or enabled it will not affect order. So when the hook gets re-enabled or re-disabled it will go back to its previous position.
+- Hooking operations use locks (like the rest of the library), but the container itself **<ins>isn't thread-safe.</ins>** Therefore you should not attempt to do write operations to the container concurrently from different threads.
+- Under the hood the container maintains two **<ins>linked lists</ins>**, one for the enabled hooks and one for the disabled. So keep that in mind when using the provided `operator[]` overload. It will have to iterate the container in order to find the element needed, as fast random access is not supported.
+- By default when using range-based loops, it will iterate over both the enabled and the disabled hooks in the range from begin to end. You can choose to use special iterators to only iterate over the enabled or the disabled ones like `chain.ebegin()` which gets the begin iterator of the enabled list. The special list iterators are bidirectional unlike the default iterator which is only forward.
+
+A few useful operations you can do with the container are:
+- inserting
+```cpp
+// will add a hook right before the second enabled hook
+chain.insert(
+      std::next(chain.ebegin()),
+      [](originalcls* self)
+      {
+        std::cout << "lambda\n";
+        original(self);
+      },
+      original);
+
+// will add multiple hooks on the back (defaults to enabled)
+chain.append(&detourcls::func2, original2, &detourcls::func3, original3);
+
+// will add a hook to the front (defaults to enabled)
+chain.push_front(&detourcls::func4, original4);
+```
+- erasing
+```cpp
+// will erase the second hook (enabled or disabled)
+chain.erase(std::next(chain.begin()));
+
+// will erase only the enabled hooks starting from the third one till the last
+chain.erase(std::next(chain.ebegin(), 2), chain.eend());
+
+// will erase the following range (both enabled and disabled
+chain.erase(std::next(chain.begin()), chain.end());
+
+// will erase the last element
+chain.pop_back();
+```
+- enabling/disabling hooks
+```cpp
+// enables all hooks
+chain.enable_all();
+
+// disables second hook
+chain[1].disable();
+```
+- splicing/swapping
+```cpp
+// transfer all of the enabled hooks but the last one at the end of the disabled list (also disables them because of it)
+chain.splice(chain.dend(), chain.ebegin(), std::prev(chain.eend()),
+             alterhook::hook_chain::transfer::disabled);
+
+// puts the first disabled hook before the first enabled one (also enables it because of it)
+chain.splice(chain.ebegin(), chain.dbegin());
+
+// transfers all hooks from a different `hook_chain` to the beggining of the current chain 
+// (it maintains the status of the hooks, as the hooks that are enabled go to the enabled chain and the others in the disabled chain respectively)
+chain.splice(chain.ebegin(), chain2, 
+             std::next(chain2.begin()), 
+             chain2.end());
+
+// swaps the hooks of `chain` with the hooks of `chain2`
+// however it doesn't swap the targets!
+chain.swap(chain2);
+
+// swaps the first element of `chain` with the last enabled element of `chain2`
+// it also makes sure to swap status if needed, i.e. when swapping an enabled hook with a disabled one it makes sure to disable the enabled one and enable the other one
+chain.swap(chain.begin(), chain2, std::prev(chain2.eend()));
+```
+- iterating
+```cpp
+// iterate over the entire chain (both enabled and disabled hooks)
+for (auto& hook : chain)
+  std::cout << hook.get_detour() << '\n';
+
+// iterate over all the enabled hooks
+for (auto itr = chain.ebegin(); itr != chain.eend(); ++itr)
+  std::cout << hook.get_detour() << '\n';
+
+// iterate over all the disabled hooks
+for (auto itr = chain.dbegin(); itr != chain.dend(); ++itr)
+  std::cout << hook.get_detour() << '\n';
+```
+And more!
