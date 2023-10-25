@@ -77,6 +77,61 @@ namespace alterhook
           "The arguments of the detours and the original function aren't "
           "compatible");
     }
+
+    template <typename trg, typename... detours>
+    utils_consteval void
+        assert_valid_target_and_detours(utils::type_sequence<detours...>)
+    {
+      typedef utils::clean_type_t<trg> ctrg;
+      static_assert(
+          (std::is_same_v<utils::fn_return_t<ctrg>,
+                          utils::fn_return_t<utils::clean_type_t<detours>>> &&
+           ...),
+          "The return types of the target and the detour need to be the same");
+#if utils_cc_assertions
+      static_assert((utils::compatible_calling_convention_with<
+                         ctrg, utils::clean_type_t<detours>> &&
+                     ...),
+                    "The calling conventions of the detours and the target "
+                    "function aren't compatible");
+#endif
+      static_assert((utils::compatible_function_arguments_with<
+                         utils::clean_type_t<detours>, ctrg> &&
+                     ...),
+                    "The arguments of the detours and the target function "
+                    "aren't compatible");
+    }
+
+    template <typename iseq, typename tseq>
+    struct extract_detour_sequence_impl;
+
+    template <size_t... indexes, typename tseq>
+    struct extract_detour_sequence_impl<std::index_sequence<indexes...>, tseq>
+    {
+      typedef utils::type_sequence<utils::type_at_t<indexes, tseq>...> type;
+    };
+
+    template <typename... types>
+    struct extract_detour_sequence
+        : extract_detour_sequence_impl<
+              utils::make_index_sequence_with_step<sizeof...(types)>,
+              utils::type_sequence<types...>>
+    {
+    };
+
+    template <typename... types>
+    using extract_detour_sequence_t =
+        typename extract_detour_sequence<types...>::type;
+
+    template <typename... tuples>
+    struct extract_detour_sequence_from_tuples
+    {
+      typedef utils::type_sequence<std::tuple_element_t<0, tuples>...> type;
+    };
+
+    template <typename... tuples>
+    using extract_detour_sequence_from_tuples_t =
+        typename extract_detour_sequence_from_tuples<tuples...>::type;
   } // namespace helpers
 
 #if utils_cpp20

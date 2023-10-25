@@ -259,7 +259,9 @@
     (*reinterpret_cast<uint64_t*>(prelay + 6) =                                \
          reinterpret_cast<uintptr_t>(dtr))
   #define __alterhook_get_dtr()                                                \
-    reinterpret_cast<std::byte*>(*reinterpret_cast<uint64_t*>(prelay + 6))
+    (prelay ? reinterpret_cast<std::byte*>(                                    \
+                  *reinterpret_cast<uint64_t*>(prelay + 6))                    \
+            : nullptr)
   #define __alterhook_get_other_dtr(other)                                     \
     reinterpret_cast<std::byte*>(*reinterpret_cast<uint64_t*>(other.prelay + 6))
   #define __alterhook_get_real_dtr()            prelay
@@ -267,9 +269,8 @@
   #define __alterhook_copy_dtr(other)                                          \
     (*reinterpret_cast<uint64_t*>(prelay + 6) =                                \
          *reinterpret_cast<uint64_t*>(other.prelay + 6))
-  #define __alterhook_exchange_dtr(other)                                      \
-    (*reinterpret_cast<uint64_t*>(prelay + 6) = std::exchange(                 \
-         *reinterpret_cast<uint64_t*>(other.prelay + 6), uint64_t{}))
+// detour is already exchange via the prelay so no need to redo the operation
+  #define __alterhook_exchange_dtr(other) ((void)0)
 #endif
 
 #if utils_arm

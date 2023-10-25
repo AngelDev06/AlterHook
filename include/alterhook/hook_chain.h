@@ -575,6 +575,8 @@ namespace alterhook
                    std::forward<dtr>(detour), original,
                    std::forward<types>(rest)...)
   {
+    helpers::assert_valid_target_and_detours<trg>(
+        helpers::extract_detour_sequence_t<dtr, orig, types...>());
   }
 
   template <__alterhook_are_detour_and_original_stl_pairs_impl(pair, types)>
@@ -608,6 +610,8 @@ namespace alterhook
       : hook_chain(get_target_address(std::forward<trg>(target)),
                    std::forward<pair>(first), std::forward<types>(rest)...)
   {
+    helpers::assert_valid_target_and_detours<trg>(
+        helpers::extract_detour_sequence_from_tuples_t<pair, types...>());
   }
 
   template <__alterhook_is_original_impl(orig)>
@@ -821,6 +825,7 @@ namespace alterhook
   hook_chain::hook& hook_chain::insert(list_iterator position, dtr&& detour,
                                        orig& original, include trg)
   {
+    helpers::assert_valid_detour_original_pair<dtr, orig>();
     utils_assert(trg != include::both,
                  "hook_chain::insert: base cannot be the both flag");
     helpers::orig_buff_t buffer{};
