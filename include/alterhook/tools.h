@@ -38,6 +38,25 @@ namespace alterhook
           "original function");
     }
 
+    template <typename trg, typename dtr>
+    utils_consteval void assert_valid_target_and_detour_pair()
+    {
+      typedef utils::clean_type_t<trg> ctrg;
+      typedef utils::clean_type_t<dtr> cdtr;
+      static_assert(
+          std::is_same_v<utils::fn_return_t<ctrg>, utils::fn_return_t<cdtr>>,
+          "The return type of the target and the detour function need to be "
+          "the same");
+#if utils_cc_assertions
+      static_assert(utils::compatible_calling_convention_with<ctrg, cdtr>,
+                    "The calling conventions of the target and the detour "
+                    "function need to be compatible");
+#endif
+      static_assert(utils::compatible_function_arguments_with<cdtr, ctrg>,
+                    "The arguments the detour accepts aren't compatible with "
+                    "the target function");
+    }
+
     template <typename detour, typename... detours, typename original,
               typename... originals>
     utils_consteval void assert_valid_detour_and_original_pairs(
