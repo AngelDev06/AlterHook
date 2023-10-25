@@ -14,7 +14,7 @@
 #define utils_underlying(enumval)                                              \
   static_cast<std::underlying_type_t<decltype(enumval)>>(enumval)
 
-namespace utils
+namespace alterhook::utils
 {
   template <typename T>
   inline constexpr bool is_cv_v = false;

@@ -44,7 +44,6 @@ set(
 	"include/alterhook/utilities/function_traits.h"
 	"include/alterhook/utilities/other.h"
 	"include/alterhook/utilities/static_vector.h"
-	"include/alterhook/utilities/template_string.h"
 	"include/alterhook/utilities/type_sequence.h"
 	"include/alterhook/utilities/utils.h"
 	"include/alterhook/utilities/utils_macros.h"

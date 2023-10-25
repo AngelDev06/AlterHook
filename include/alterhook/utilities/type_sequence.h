@@ -3,7 +3,7 @@
 #pragma once
 #include <utility>
 
-namespace utils
+namespace alterhook::utils
 {
   template <typename... types>
   struct type_sequence

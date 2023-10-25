@@ -5,7 +5,7 @@
 #include "utils_macros.h"
 
 #if utils_cc_assertions
-namespace utils
+namespace alterhook::utils
 {
   // All the supported windows x86 calling conventions
   enum class calling_convention

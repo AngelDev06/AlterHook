@@ -121,12 +121,12 @@ namespace alterhook
   void hook::enable()
   {
     const std::byte* const dtr = __alterhook_get_dtr();
-    utils_assert(__alterhook_get_dtr(), "hook::enable: invalid detour");
+    utils_assert(dtr, "hook::enable: invalid detour");
     if (!enabled)
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, true };
-      __alterhook_inject(__alterhook_get_dtr(), true);
+      __alterhook_inject(dtr, true);
       enabled = true;
     }
   }

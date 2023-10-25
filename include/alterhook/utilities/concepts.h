@@ -12,7 +12,7 @@
   #pragma warning(disable : 4996)
 #endif
 
-namespace utils
+namespace alterhook::utils
 {
   namespace helpers
   {

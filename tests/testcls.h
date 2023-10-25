@@ -34,7 +34,7 @@
 #if utils_x86 && utils_windows
   #define lambda_ret                                                           \
     return {}
-  #define put_cc utils::fastcall<void>
+  #define put_cc alterhook::utils::fastcall<void>
 #else
   #define lambda_ret return
   #define put_cc     void

@@ -8,7 +8,7 @@
 #include "type_sequence.h"
 #include "calling_conventions.h"
 
-namespace utils
+namespace alterhook::utils
 {
   namespace helpers
   {
