@@ -17,7 +17,7 @@
   #define __utils_mustbefwditr typename
 #endif
 
-namespace utils
+namespace alterhook::utils
 {
   template <typename T, size_t N>
   class static_vector;
@@ -932,8 +932,8 @@ namespace utils
     }
 
     static_vector& operator=(static_vector&& other) noexcept(
-        std::is_nothrow_move_assignable_v<T>&&
-            std::is_nothrow_move_constructible_v<T>)
+        std::is_nothrow_move_assignable_v<T> &&
+        std::is_nothrow_move_constructible_v<T>)
     {
       if (this != &other)
       {
@@ -988,16 +988,18 @@ namespace utils
   static_vector(first, rest...)
       -> static_vector<helpers::enforce_same_t<first, rest...>,
                        sizeof...(rest) + 1>;
-} // namespace utils
+} // namespace alterhook::utils
 
 namespace std
 {
 #if utils_cpp20
   template <typename T, size_t size>
-  struct pointer_traits<utils::helpers::static_vector_const_iterator<T, size>>
+  struct pointer_traits<
+      alterhook::utils::helpers::static_vector_const_iterator<T, size>>
   {
-    typedef utils::helpers::static_vector_const_iterator<T, size> pointer;
-    typedef const T                                               element_type;
+    typedef alterhook::utils::helpers::static_vector_const_iterator<T, size>
+                      pointer;
+    typedef const T   element_type;
     typedef ptrdiff_t difference_type;
 
     static constexpr element_type* to_address(const pointer itr) noexcept
@@ -1007,11 +1009,12 @@ namespace std
   };
 
   template <typename T, size_t size>
-  struct pointer_traits<utils::helpers::static_vector_iterator<T, size>>
+  struct pointer_traits<
+      alterhook::utils::helpers::static_vector_iterator<T, size>>
   {
-    typedef utils::helpers::static_vector_iterator<T, size> pointer;
-    typedef T                                               element_type;
-    typedef ptrdiff_t                                       difference_type;
+    typedef alterhook::utils::helpers::static_vector_iterator<T, size> pointer;
+    typedef T         element_type;
+    typedef ptrdiff_t difference_type;
 
     static constexpr element_type* to_address(const pointer itr) noexcept
     {
