@@ -18,21 +18,39 @@ public:
   }
 };
 
+class modifier(second_modifier1, originalcls, func, func2)
+{
+public:
+  void func()
+  {
+    std::cout << "second_modifier1::func\n";
+    call_stack.push(func_called::second_modifier1_func);
+    original::func();
+  }
+
+  void func2()
+  {
+    std::cout << "second_modifier1::func2\n";
+    call_stack.push(func_called::second_modifier1_func2);
+    original::func2();
+  }
+};
+
 class modifier(modifier2, target, (multiply_by, void(int)),
                (multiply_by, void(float)), private_power_all, return_sum)
 {
 public:
   void multiply_by(int count)
   {
-    std::cout << "modifier2::multiply_by\n";
-    call_stack.push(func_called::modifier2_multiply_by);
+    std::cout << "modifier2::multiply_by(int)\n";
+    call_stack.push(func_called::modifier2_multiply_by_int);
     original::multiply_by(count * 2);
   }
 
   void multiply_by(float count)
   {
-    std::cout << "modifier2::multiply_by\n";
-    call_stack.push(func_called::modifier2_multiply_by);
+    std::cout << "modifier2::multiply_by(float)\n";
+    call_stack.push(func_called::modifier2_multiply_by_float);
     original::multiply_by(count * 2);
   }
 
@@ -51,82 +69,115 @@ public:
   }
 };
 
-int main()
+TEST(ModifierTest, OriginalClsModifier)
 {
-  /*
-   * test originalcls
-   */
-  {
-    std::cout << "modifier1 -> originalcls\n\n";
-    originalcls instance{ 1, 2, 3 };
-    instance.func();
-    instance.func2();
-    call_stack.pop();
-    call_stack.pop();
-    std::cout << "-------------------------------------------\n";
+  std::cout << "modifier1 -> originalcls\n\n";
+  originalcls instance{ 1, 2, 3 };
+  instance.func();
+  verify_call_stack(func_called::originalcls_func);
 
-    modifier1::activate_modifier();
-    instance.func();
-    verify_call_stack(func_called::originalcls_func,
-                      func_called::modifier1_func);
-    assert(std::tie(instance.x, instance.y, instance.z) == origresult);
+  std::cout << "-------------------------------------------\n";
 
-    std::cout << "-------------------------------------------\n";
+  modifier1::enable_modifier();
+  instance.func();
+  verify_call_stack(func_called::originalcls_func, func_called::modifier1_func);
+  SAME_ORIG_RESULT(instance);
 
-    instance.func2();
-    verify_call_stack(func_called::originalcls_func2,
-                      func_called::modifier1_func2);
-    assert(std::tie(instance.x, instance.y, instance.z) == origresult);
-    std::cout
-        << "\n-------------------------------------------\n----------------"
-           "---------------------------\n\n";
-  }
+  std::cout << "-------------------------------------------\n";
 
-  /*
-   * test target
-   */
-  {
-    std::cout << "modifier2 -> target\n\n";
-    target instance{ 1, 2, 3 };
-    instance.multiply_by(2);
-    instance.multiply_by(3.5f);
-    instance.power_all();
-    instance.return_sum();
-    call_stack.pop();
-    call_stack.pop();
-    call_stack.pop();
-    call_stack.pop();
-    std::cout << "-------------------------------------------\n";
+  instance.func2();
+  verify_call_stack(func_called::originalcls_func2,
+                    func_called::modifier1_func2);
+  SAME_ORIG_RESULT(instance);
 
-    modifier2::activate_modifier();
-    instance.multiply_by(2);
-    verify_call_stack(func_called::target_multiply_by,
-                      func_called::modifier2_multiply_by);
-    assert(std::tuple(instance.x * 4, instance.y * 4, instance.z * 4) ==
-           origresult);
+  std::cout << "-------------------------------------------\n";
 
-    std::cout << "-------------------------------------------\n";
+  modifier1::disable_modifier();
 
-    instance.multiply_by(3.5f);
-    verify_call_stack(func_called::target_multiply_by,
-                      func_called::modifier2_multiply_by);
-    assert(std::tuple(instance.x * (2 * 3.5f), instance.y * (2 * 3.5f),
-                      instance.z * (2 * 3.5f)) == forigresult);
+  instance.func();
+  verify_call_stack(func_called::originalcls_func);
 
-    std::cout << "-------------------------------------------\n";
+  std::cout << "-------------------------------------------\n";
 
-    instance.power_all();
-    verify_call_stack(func_called::target_private_power_all,
-                      func_called::modifier2_private_power_all);
-    assert(std::tuple(instance.x * instance.x, instance.y * instance.y,
-                      instance.z * instance.z) == origresult);
+  instance.func2();
+  verify_call_stack(func_called::originalcls_func2);
 
-    std::cout << "-------------------------------------------\n";
+  std::cout << "-------------------------------------------\n";
 
-    int result = instance.return_sum();
-    (void)result;
-    assert(result == ((instance.x + instance.y + instance.z) * 2));
-    verify_call_stack(func_called::target_return_sum,
-                      func_called::modifier2_return_sum);
-  }
+  second_modifier1::enable_modifier();
+
+  instance.func();
+  verify_call_stack(func_called::originalcls_func,
+                    func_called::second_modifier1_func);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  instance.func2();
+  verify_call_stack(func_called::originalcls_func2,
+                    func_called::second_modifier1_func2);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  modifier1::enable_modifier();
+
+  instance.func();
+  verify_call_stack(func_called::originalcls_func, func_called::modifier1_func,
+                    func_called::second_modifier1_func);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  instance.func2();
+  verify_call_stack(func_called::originalcls_func2,
+                    func_called::modifier1_func2,
+                    func_called::second_modifier1_func2);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  second_modifier1::deactivate_modifier();
+  modifier1::deactivate_modifier();
+}
+
+TEST(ModifierTest, TargetModifier)
+{
+  std::cout << "modifier2 -> target\n\n";
+  target instance{ 1, 2, 3 }; 
+  modifier2::enable_modifier();
+
+  instance.multiply_by(10);
+  verify_call_stack(func_called::target_multiply_by_int,
+                    func_called::modifier2_multiply_by_int);
+  EXPECT_EQ(
+      std::forward_as_tuple(instance.x * 20, instance.y * 20, instance.z * 20),
+      origresult);
+
+  std::cout << "-------------------------------------------\n";
+
+  instance.multiply_by(2.5f);
+  verify_call_stack(func_called::target_multiply_by_float,
+                    func_called::modifier2_multiply_by_float);
+  EXPECT_EQ(std::forward_as_tuple(instance.x * 5.0f, instance.y * 5.0f,
+                                  instance.z * 5.0f),
+            forigresult);
+
+  std::cout << "-------------------------------------------\n";
+
+  instance.power_all();
+  verify_call_stack(func_called::target_private_power_all,
+                    func_called::modifier2_private_power_all);
+  EXPECT_EQ(std::forward_as_tuple(instance.x * instance.x,
+                                  instance.y * instance.y,
+                                  instance.z * instance.z),
+            origresult);
+
+  std::cout << "-------------------------------------------\n";
+
+  EXPECT_EQ(instance.return_sum(), (instance.x + instance.y + instance.z) * 2);
+  verify_call_stack(func_called::target_return_sum,
+                    func_called::modifier2_return_sum);
+
+  modifier2::deactivate_modifier();
 }
