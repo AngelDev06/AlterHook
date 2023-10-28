@@ -17,6 +17,7 @@ It has the following properties:
     - [Hook](#hook)
     - [Hook Chain](#hook-chain)
     - [Hook Map](#hook-map)
+    - [Modifier](#modifier)
 
 ## Compilation
 ### With CMake
@@ -379,4 +380,93 @@ map.visit_all(
                  << item.second.get_detour() << ", "
                  << item.second.is_enabled() << '\n';
      });
+```
+
+### Modifier
+A very sugary and user-friendly way of hooking multiple class methods via defining your own class. It is achieved via using a macro and listing the function names you want to "modify" with your own.
+
+The macro signature is the following:
+```cpp
+#define modifier(modifier_name, modifier_target, ...)
+```
+- The first argument represents the name of your class or modifier which you are using to detour the other class methods. 
+- The second argument is the target class to use that has those methods defined.
+- Lastly the last arguments is `__VA_ARGS__` which means it can accept any number of arguments at the end. Those arguments can be:
+    - The name of the target method
+    - Both the name and the type of the target method packed into a 'pair' like `(foo, void())`
+
+This macro generates a few classes and wrappers to achieve the following:
+- [x] Detour private or protected methods from the target class
+- [x] Allow your implementation to use members of the target class as it publicly inherits from it
+- [x] Provides an overload with identical signature for each of the target methods that lets you call the original.
+- [x] Lets you disambiguate target overloads via explicitly specifying the function type in the macro list.
+- [x] Inherits a static method named `activate_modifier` which when called tries to hook all target methods with the respective detours
+- [x] Does a lot of compile time checks to ensure safety. These are:
+    - Checking if `sizeof(original) == sizeof(derived)` to make sure that the modifier class hasn't added any members (which is not supported)
+    - Checking if the methods specified in the `modifier` macro are actually defined in the modifier class.
+    - Checking if the return types of the specified methods match the original ones
+    - Checking if the calling conventions of the specified methods are compatible with the original ones (windows x86 only)
+    - Checking if the arguments of the specified methods are compatible with the original ones
+
+A usage example would be:
+```cpp
+#include <alterhook/modifier.h>
+#include <iostream>
+
+struct target
+{
+  int x, y, z;
+
+  void multiply_by(int count)
+  {
+    x *= count; y *= count; z *= count;
+    std::cout << "target::multiply_by\n";
+  }
+
+  // overloaded method
+  void multiply_by(float count)
+  {
+    x *= count; y *= count; z *= count;
+    std::cout << "target::multiply_by\n";
+  }
+
+  void power_all() { private_power_all(); }
+private:
+  // private method
+  void private_power_all()
+  {
+    x *= x; y *= y; z *= z;
+    std::cout << "target::private_power_all\n";
+  }
+};
+
+class modifier(mymodifier, target, (multiply_by, void(int)),
+               (multiply_by, void(float)), private_power_all)
+{
+public:
+  void multiply_by(int count)
+  {
+    std::cout << "mymodifier::multiply_by\n";
+    original::multiply_by(count * 2);
+  }
+
+  void multiply_by(float count)
+  {
+    std::cout << "mymodifier::multiply_by\n";
+    original::multiply_by(count * 2);
+  }
+
+  void private_power_all()
+  {
+    std::cout << "mymodifier::private_power_all\n";
+    original::private_power_all();
+  }
+};
+
+int main()
+{
+  // activates the modifier
+  mymodifier::activate_modifier();
+  // from here all targeted methods will have been hooked
+}
 ```

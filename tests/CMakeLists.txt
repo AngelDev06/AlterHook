@@ -24,7 +24,9 @@ add_executable(
 	AlterHookTests
 	"hooks.cpp"
 	"hook_chains.cpp"
+	"modifiers.cpp"
 	"testcls.h"
+	"modifiers.h"
 )
 
 target_link_libraries(

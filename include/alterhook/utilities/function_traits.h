@@ -477,11 +477,10 @@ namespace alterhook::utils
     template <typename PT1, typename PT2,
               typename T1 = std::remove_pointer_t<PT1>,
               typename T2 = std::remove_pointer_t<PT2>>
-    utils_concept have_this_and_eq_size =
+    utils_concept have_this =
         are_pointers<PT1, PT2> &&
-        (std::is_base_of_v<T1, T2> || std::is_base_of_v<T2, T1>)&&sizeof(T1) ==
-            sizeof(T2) &&
-        same_cv_qualification_v<T1, T2>;
+        (std::is_base_of_v<T1, T2> ||
+         std::is_base_of_v<T2, T1>)&&same_cv_qualification_v<T1, T2>;
 
     template <typename seq, typename fn_1, typename fn_2>
     inline constexpr bool all_arguments_same_check =
@@ -502,8 +501,8 @@ namespace alterhook::utils
     template <size_t index, size_t... indexes, typename fn_1, typename fn_2>
     inline constexpr bool all_arguments_same_check_2_impl<
         std::index_sequence<index, indexes...>, fn_1, fn_2, true> =
-        have_this_and_eq_size<remove_cvref_t<fn_argument_t<fn_1, index>>,
-                              remove_cvref_t<fn_argument_t<fn_2, index>>> &&
+        have_this<remove_cvref_t<fn_argument_t<fn_1, index>>,
+                  remove_cvref_t<fn_argument_t<fn_2, index>>> &&
         (std::is_same_v<fn_argument_t<fn_1, indexes>,
                         fn_argument_t<fn_2, indexes>> &&
          ...);
@@ -525,23 +524,39 @@ namespace alterhook::utils
         requires {
           typename fn_argument_t<T1, 0>;
           typename fn_argument_t<T2, 0>;
-        } && have_this_and_eq_size<std::remove_cvref_t<fn_argument_t<T1, 0>>,
-                                   std::remove_cvref_t<fn_argument_t<T2, 0>>>;
+        } && have_this<std::remove_cvref_t<fn_argument_t<T1, 0>>,
+                       std::remove_cvref_t<fn_argument_t<T2, 0>>>;
+
+    template <typename T1, typename T2>
+    concept have_all_args_same =
+        fn_arity_v<T1> == fn_arity_v<T2> &&
+        all_arguments_same_check_2<std::make_index_sequence<fn_arity_v<T1>>, T1,
+                                   T2>;
 #else
     template <typename T1, typename T2, typename = void>
     inline constexpr bool have_compatible_member_fn_first_args = false;
     template <typename T1, typename T2>
     inline constexpr bool have_compatible_member_fn_first_args<
         T1, T2, std::void_t<fn_argument_t<T1, 0>, fn_argument_t<T2, 0>>> =
-        have_this_and_eq_size<remove_cvref_t<fn_argument_t<T1, 0>>,
-                              remove_cvref_t<fn_argument_t<T2, 0>>>;
-#endif
+        have_this<remove_cvref_t<fn_argument_t<T1, 0>>,
+                  remove_cvref_t<fn_argument_t<T2, 0>>>;
+
+    namespace helpers
+    {
+      template <typename T1, typename T2,
+                bool = fn_arity_v<T1> == fn_arity_v<T2>>
+      inline constexpr bool have_all_args_same_impl = false;
+
+      template <typename T1, typename T2>
+      inline constexpr bool have_all_args_same_impl<T1, T2, true> =
+          all_arguments_same_check_2<std::make_index_sequence<fn_arity_v<T1>>,
+                                     T1, T2>;
+    } // namespace helpers
 
     template <typename T1, typename T2>
-    utils_concept have_all_args_same =
-        fn_arity_v<T1> == fn_arity_v<T2> &&
-        all_arguments_same_check_2<std::make_index_sequence<fn_arity_v<T1>>, T1,
-                                   T2>;
+    inline constexpr bool have_all_args_same =
+        helpers::have_all_args_same_impl<T1, T2>;
+#endif
 
 #if utils_cpp20
     template <typename T1, typename T2>
@@ -553,15 +568,15 @@ namespace alterhook::utils
         all_arguments_same_check<make_index_sequence_t<fn_arity_v<T1>, 2>, T1,
                                  T2>;
 #else
-    template <typename T1, typename T2, typename = void>
+    template <typename T1, typename T2,
+              bool = fn_arity_v<T2> == (fn_arity_v<T1> - 1), typename = void>
     inline constexpr bool have_all_fastcall_args_compatible_with_thiscall =
         false;
     template <typename T1, typename T2>
     inline constexpr bool have_all_fastcall_args_compatible_with_thiscall<
-        T1, T2, std::void_t<fn_argument_t<T1, 1>>> =
+        T1, T2, true, std::void_t<fn_argument_t<T1, 1>>> =
         have_compatible_member_fn_first_args<T1, T2> &&
         sizeof(fn_argument_t<T1, 1>) == sizeof(void*) &&
-        fn_arity_v<T2> == (fn_arity_v<T1> - 1) &&
         all_arguments_same_check<make_index_sequence_t<fn_arity_v<T1>, 2>, T1,
                                  T2>;
 #endif
@@ -642,4 +657,4 @@ namespace alterhook::utils
   using captureless_lambda_actual_func_ptr_type_t =
       typename helpers::add_thiscall_if_needed<
           std::add_pointer_t<captureless_lambda_actual_func_type_t<T>>>::type;
-} // namespace utils
+} // namespace alterhook::utils

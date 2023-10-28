@@ -26,6 +26,7 @@
     {                                                                          \
       utils_map_ud(__add_case, name, __VA_ARGS__)                              \
     }                                                                          \
+    return nullptr;                                                            \
   }
 
 #define SAME_ORIG_RESULT(instance)                                             \
@@ -45,9 +46,11 @@
 make_enum(func_called, originalcls_func, originalcls_func2, detourcls_func,
           detourcls_func2, detourcls_func3, detourcls_func4, detourcls_func5,
           detourcls_func6, detourcls_func7, detourcls_func8, modifier1_func,
-          modifier1_func2, target_multiply_by, modifier2_multiply_by,
+          modifier1_func2, target_multiply_by_int, target_multiply_by_float,
+          modifier2_multiply_by_int, modifier2_multiply_by_float,
           target_private_power_all, modifier2_private_power_all,
-          target_return_sum, modifier2_return_sum, lambda, lambda2)
+          target_return_sum, modifier2_return_sum, lambda, lambda2,
+          second_modifier1_func, second_modifier1_func2)
 
 inline std::stack<func_called> call_stack;
 inline std::tuple<int, int, int> origresult;

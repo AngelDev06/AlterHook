@@ -130,6 +130,9 @@
   #define utils_cc_assertions false
 #endif
 
+#define __utils_stringify(x) #x
+#define utils_stringify(x)   __utils_stringify(x)
+
 #if (utils_msvc || utils_clang) && utils_windows
   #define __utils_emit_cdecl(fn, cv, ref, exception)                           \
     fn(__cdecl, cv, ref, exception)

@@ -170,6 +170,27 @@ namespace alterhook::utils
   template <typename T>
   using first_template_param_of_t = typename first_template_param_of<T>::type;
 
+  template <typename func_type, typename cls>
+  using add_cls_t = func_type cls::*;
+
+#if utils_cpp20
+  template <auto left, auto right>
+  concept compare_or_false = requires { left == right; } && left == right;
+#else
+  namespace helpers
+  {
+    template <auto left, auto right, typename = void>
+    inline constexpr bool compare_or_false_impl = false;
+    template <auto left, auto right>
+    inline constexpr bool compare_or_false_impl<
+        left, right, std::void_t<decltype(left == right)>> = left == right;
+  } // namespace helpers
+
+  template <auto left, auto right>
+  inline constexpr bool compare_or_false =
+      helpers::compare_or_false_impl<left, right>;
+#endif
+
 // why on earth did we have to wait till c++20 to get bitwise rotate added
 #if utils_cpp20
   #define utils_ror(x, s) std::rotr(x, s)
@@ -216,4 +237,4 @@ namespace alterhook::utils
   #define utils_ror(x, s) ::utils::ror(x, s)
   #define utils_rol(x, s) ::utils::rol(x, s)
 #endif
-} // namespace utils
+} // namespace alterhook::utils
