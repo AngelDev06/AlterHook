@@ -22,7 +22,7 @@ namespace alterhook
     static uintptr_t <a href="#address_of_virtual">address_of_virtual</a>(T memfuncptr);
 
     template &lt;typename T&gt;
-    static uintptr_t address_of_regular(T memfuncptr);
+    static uintptr_t <a href="#address_of_regular">address_of_regular</a>(T memfuncptr);
   };
 }
  </code>
