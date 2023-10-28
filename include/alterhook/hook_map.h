@@ -105,17 +105,21 @@ namespace alterhook
     typedef typename base::const_iterator    const_chain_iterator;
     typedef typename hook_chain::hook&       hook_reference;
     typedef const typename hook_chain::hook& const_hook_reference;
+    typedef std::pair<const typename adapter::key_type&,
+                      typename hook_chain::hook&>
+        reference;
+    typedef std::pair<const typename adapter::key_type&,
+                      const typename hook_chain::hook&>
+        const_reference;
 
     using typename adapter::allocator_type;
     using typename adapter::const_pointer;
-    using typename adapter::const_reference;
     using typename adapter::difference_type;
     using typename adapter::hasher;
     using typename adapter::key_equal;
     using typename adapter::key_type;
     using typename adapter::mapped_type;
     using typename adapter::pointer;
-    using typename adapter::reference;
     using typename adapter::size_type;
     using typename adapter::value_type;
     using typename base::const_list_iterator;
