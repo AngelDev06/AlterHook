@@ -1,6 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include <atomic>
 #include "hook_map.h"
 
 namespace alterhook
@@ -9,6 +10,30 @@ namespace alterhook
   {
   public:
     typedef concurrent_hook_map<std::string> base;
+    using typename base::allocator_type;
+    using typename base::chain_iterator;
+    using typename base::const_chain_iterator;
+    using typename base::const_hook_reference;
+    using typename base::const_list_iterator;
+    using typename base::const_pointer;
+    using typename base::const_reference;
+    using typename base::const_reverse_list_iterator;
+    using typename base::difference_type;
+    using typename base::hasher;
+    using typename base::hook;
+    using typename base::hook_reference;
+    using typename base::include;
+    using typename base::key_equal;
+    using typename base::key_type;
+    using typename base::list_iterator;
+    using typename base::mapped_type;
+    using typename base::pointer;
+    using typename base::reference;
+    using typename base::reverse_list_iterator;
+    using typename base::size_type;
+    using typename base::value_type;
+    using transfer = typename base::transfer;
+
     using base::base;
     using base::bucket_count;
     using base::count;
@@ -32,8 +57,10 @@ namespace alterhook
     using base::visit;
     using base::visit_all;
     using base::operator bool;
+    using base::clear;
     using base::disable_all;
     using base::enable_all;
+    using base::erase;
     using base::get_allocator;
     using base::hash_function;
     using base::key_eq;
@@ -41,15 +68,21 @@ namespace alterhook
 
     managed_concurrent_hook_map() = default;
 
-    template <typename K>
-    void erase(const K& key);
-    void clear();
-
   private:
-    template <typename K>
-    bool erase_unchecked(const K& key);
+    mutable std::atomic_size_t ref_count;
+
+    struct deleter
+    {
+      constexpr deleter() noexcept = default;
+
+      constexpr deleter(const deleter&) noexcept {}
+
+      void operator()(
+          const managed_concurrent_hook_map* instance) const noexcept;
+    };
 
     friend class hook_manager;
+    friend struct deleter;
 
     managed_concurrent_hook_map(const managed_concurrent_hook_map&) = delete;
     managed_concurrent_hook_map&
@@ -61,15 +94,25 @@ namespace alterhook
   {
   public:
     typedef std::unordered_map<std::byte*, managed_concurrent_hook_map> base;
+    typedef std::unique_ptr<managed_concurrent_hook_map,
+                            typename managed_concurrent_hook_map::deleter>
+        handle;
+    typedef std::unique_ptr<const managed_concurrent_hook_map,
+                            typename managed_concurrent_hook_map::deleter>
+        const_handle;
 
     ALTERHOOK_API static hook_manager& get();
-    managed_concurrent_hook_map&       operator[](std::byte* target);
+    handle                             operator[](std::byte* target);
+    const_handle                       operator[](std::byte* target) const;
+    template <__alterhook_is_target(trg)>
+    handle operator[](trg&& target);
+    template <__alterhook_is_target(trg)>
+    const_handle operator[](trg&& target) const;
     template <typename K, typename dtr, typename orig, typename... types>
     void insert(std::byte* target, K&& key, dtr&& detour, orig& original,
                 types&&... rest);
     template <typename K>
     void erase(std::byte* target, const K& key);
-    void erase(std::byte* target);
     template <typename K>
     void enable(std::byte* target, const K& key);
     template <typename K>
@@ -79,36 +122,52 @@ namespace alterhook
     friend class managed_concurrent_hook_map;
     mutable std::shared_mutex manager_lock;
 
+    using base::erase;
+
     hook_manager() {}
 
     hook_manager(const hook_manager&)            = delete;
     hook_manager& operator=(const hook_manager&) = delete;
   };
 
-  template <typename K>
-  void managed_concurrent_hook_map::erase(const K& key)
+  inline void managed_concurrent_hook_map::deleter::operator()(
+      const managed_concurrent_hook_map* map) const noexcept
   {
-    if (erase_unchecked(key))
-      hook_manager::get().erase(get_target());
+    typedef typename managed_concurrent_hook_map::adapted adapted;
+    auto&            instance = hook_manager::get();
+    std::unique_lock lock{ instance.manager_lock };
+    if (!(--map->ref_count) && map->adapted::empty())
+      instance.erase(map->get_target());
   }
 
-  template <typename K>
-  bool managed_concurrent_hook_map::erase_unchecked(const K& key)
+  inline typename hook_manager::handle hook_manager::operator[](std::byte* key)
   {
-    base::erase(key);
-    return base::empty();
+    std::shared_lock             lock{ manager_lock };
+    managed_concurrent_hook_map& entry = at(key);
+    ++entry.ref_count;
+    return handle(&entry);
   }
 
-  inline void managed_concurrent_hook_map::clear()
+  inline typename hook_manager::const_handle
+      hook_manager::operator[](std::byte* key) const
   {
-    base::clear();
-    hook_manager::get().erase(get_target());
+    std::shared_lock                   lock{ manager_lock };
+    const managed_concurrent_hook_map& entry = at(key);
+    ++entry.ref_count;
+    return const_handle(&entry);
   }
 
-  inline managed_concurrent_hook_map& hook_manager::operator[](std::byte* key)
+  template <__alterhook_is_target_impl(trg)>
+  typename hook_manager::handle hook_manager::operator[](trg&& target)
   {
-    std::shared_lock lock{ manager_lock };
-    return at(key);
+    return operator[](get_target_address(std::forward<trg>(target)));
+  }
+
+  template <__alterhook_is_target_impl(trg)>
+  typename hook_manager::const_handle
+      hook_manager::operator[](trg&& target) const
+  {
+    return operator[](get_target_address(std::forward<trg>(target)));
   }
 
   template <typename K, typename dtr, typename orig, typename... types>
@@ -124,12 +183,15 @@ namespace alterhook
   template <typename K>
   void hook_manager::erase(std::byte* target, const K& key)
   {
+    typedef typename managed_concurrent_hook_map::adapted adapted;
+
     std::unique_lock lock{ manager_lock };
     auto             itr = base::find(target);
-    utils_assert(itr != base::end(),
-                 "Attempted to erase a non-existing entry on hook_manager");
-    if (itr->second.erase_unchecked(key))
-      base::erase(itr);
+    if (itr == base::end())
+      return;
+    itr->second.erase(key);
+    if (!itr->second.ref_count.load() && itr->second.adapted::empty())
+      base::erase(target);
   }
 
   template <typename K>
@@ -137,8 +199,8 @@ namespace alterhook
   {
     std::shared_lock lock{ manager_lock };
     auto             itr = base::find(target);
-    utils_assert(itr != base::end(),
-                 "Attempted to enable a non-existing entry on hook_manager");
+    if (itr == base::end())
+      return;
     itr->second.visit(key, [](auto pair) { pair.second.enable(); });
   }
 
@@ -147,15 +209,9 @@ namespace alterhook
   {
     std::shared_lock lock{ manager_lock };
     auto             itr = base::find(target);
-    utils_assert(itr != base::end(),
-                 "Attempted to disable a non-existing entry on hook_manager");
+    if (itr == base::end())
+      return;
     itr->second.visit(key, [](auto pair) { pair.second.disable(); });
-  }
-
-  inline void hook_manager::erase(std::byte* target)
-  {
-    std::unique_lock lock{ manager_lock };
-    base::erase(target);
   }
 
 #define __alterhook_call(x, y)  x y
