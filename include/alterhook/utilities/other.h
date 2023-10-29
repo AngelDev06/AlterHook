@@ -234,7 +234,7 @@ namespace alterhook::utils
   #endif
   }
 
-  #define utils_ror(x, s) ::utils::ror(x, s)
-  #define utils_rol(x, s) ::utils::rol(x, s)
+  #define utils_ror(x, s) ::alterhook::utils::ror(x, s)
+  #define utils_rol(x, s) ::alterhook::utils::rol(x, s)
 #endif
 } // namespace alterhook::utils
