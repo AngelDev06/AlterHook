@@ -1,4 +1,4 @@
 ﻿{
   "version": 4,
-  "include": [ "CMakeWindowsPresets.json", "CMakeLinuxPresets.json" ]
+  "include": [ "CMakeWindowsPresets.json", "CMakeLinuxPresets.json", "CMakeAndroidPresets.json" ]
 }

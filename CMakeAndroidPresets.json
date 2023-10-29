@@ -1,0 +1,62 @@
+{
+  "version": 4,
+  "configurePresets": [
+    {
+      "name": "android-base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "toolchainFile": "$env{NDK_ROOT}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "ANDROID_ABI": "armeabi-v7a",
+        "ANDROID_ARM_NEON": "TRUE",
+        "ANDROID_STL": "c++_shared",
+        "ALTERHOOK_TARGET_ARCH": "ARM",
+        "CMAKE_CXX_STANDARD": "17"
+      },
+      "architecture": {
+        "value": "ARM",
+        "strategy": "external"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "intelliSenseMode": "android-clang-arm"
+        }
+      }
+    },
+    {
+      "name": "android-arm-debug",
+      "displayName": "Android ARM Debug",
+      "inherits": "android-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "android-arm-release",
+      "displayName": "Android ARM Release",
+      "inherits": "android-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "android-arm-debug-so",
+      "displayName": "Android ARM Debug SO",
+      "inherits": "android-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ALTERHOOK_SHARED": "ON"
+      }
+    },
+    {
+      "name": "android-arm-release-so",
+      "displayName": "Android ARM Release SO",
+      "inherits": "android-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ALTERHOOK_SHARED": "ON"
+      }
+    }
+  ]
+}

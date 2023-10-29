@@ -45,4 +45,9 @@ if (MSVC AND ALTERHOOK_SHARED)
 endif()
 
 include(GoogleTest)
-gtest_discover_tests(AlterHookTests)
+
+if (CMAKE_CROSSCOMPILING)
+	gtest_add_tests(TARGET AlterHookTests)
+else()
+	gtest_discover_tests(AlterHookTests)
+endif()
