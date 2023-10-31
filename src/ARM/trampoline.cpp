@@ -636,6 +636,21 @@ namespace alterhook
         available_size                  -= available_space - dataloc;
         return dataloc;
       };
+      // checks if it's a thumb instruction that uses the PC as a base register
+      // (most likely ldr)
+      const auto thumb_ldr_literal_like = [&]
+      {
+        const cs_arm&    detail   = instr.detail->arm;
+        const cs_arm_op *op_begin = detail.operands,
+                        *op_end   = detail.operands + detail.op_count;
+        const auto result =
+            std::find_if(detail.operands, detail.operands + detail.op_count,
+                         [](const cs_arm_op& operand) {
+                           return operand.type == ARM_OP_MEM &&
+                                  operand.mem.base == ARM_REG_PC;
+                         });
+        return result != op_end;
+      };
 
       // handles the situation where an instruction that has a reglist operand
       // is spotted and PC handling setup is currently active. we got to disable
@@ -932,8 +947,9 @@ namespace alterhook
                       r7, (pc_loc - utils_align(tbm.instr + 4, 4)) / 4),
                   M_LDR);
               const uintptr_t new_pc_val =
-                  instr.id == ARM_INS_ADR ? utils_align(instr.address + 4, 4)
-                                          : instr.address + 4;
+                  instr.id == ARM_INS_ADR || thumb_ldr_literal_like()
+                      ? utils_align(instr.address + 4, 4)
+                      : instr.address + 4;
               uint32_t& old_pc_val = *reinterpret_cast<uint32_t*>(pc_loc);
 
               if (!pc_val)
@@ -1007,10 +1023,11 @@ namespace alterhook
           {
             const auto update_custom_pc = [&]
             {
-              uintptr_t offset  = instr.id == ARM_INS_ADR
-                                      ? utils_align(instr.address + 4, 4)
-                                      : instr.address + 4;
-              offset           -= pc_val;
+              uintptr_t offset =
+                  instr.id == ARM_INS_ADR || thumb_ldr_literal_like()
+                      ? utils_align(instr.address + 4, 4)
+                      : instr.address + 4;
+              offset -= pc_val;
 
               if (offset)
               {
@@ -1259,9 +1276,11 @@ namespace alterhook
       : ptarget(std::exchange(other.ptarget, nullptr)),
         ptrampoline(std::move(other.ptrampoline)),
         instruction_sets(other.instruction_sets),
-        patch_above(other.patch_above), tramp_size(other.tramp_size),
-        pc_handling(other.pc_handling), old_protect(other.old_protect),
-        positions(other.positions)
+        patch_above(std::exchange(other.patch_above, false)),
+        tramp_size(std::exchange(other.tramp_size, 0)),
+        pc_handling(
+            std::exchange(other.pc_handling, std::pair(false, uint8_t{}))),
+        old_protect(other.old_protect), positions(std::move(other.positions))
   {
   }
 
@@ -1290,11 +1309,13 @@ namespace alterhook
       ptarget          = std::exchange(other.ptarget, nullptr);
       ptrampoline      = std::move(other.ptrampoline);
       instruction_sets = other.instruction_sets;
-      patch_above      = other.patch_above;
-      tramp_size       = other.tramp_size;
-      pc_handling      = other.pc_handling;
-      positions        = other.positions;
-      old_protect      = other.old_protect;
+      patch_above      = std::exchange(other.patch_above, false);
+      tramp_size       = std::exchange(other.tramp_size, 0);
+      pc_handling =
+          std::exchange(other.pc_handling, std::pair(false, uint8_t{}));
+      positions   = other.positions;
+      old_protect = other.old_protect;
+      other.positions.clear();
     }
     return *this;
   }
