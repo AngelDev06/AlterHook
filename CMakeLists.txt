@@ -56,6 +56,7 @@ set(
 	"include/alterhook/exceptions.h"
 	"include/alterhook/macros.h"
 	"include/alterhook/tools.h"
+	"include/alterhook/trampoline.h"
 	"include/alterhook/hook.h"
 	"include/alterhook/hook_chain.h"
 	"include/alterhook/hook_map.h"
