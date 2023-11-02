@@ -1,6 +1,7 @@
 *.vcxproj.user
 testEnvironments.json
 .vs/
+.vscode/
 bin/
 build/
 out/
