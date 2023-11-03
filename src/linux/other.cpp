@@ -64,7 +64,7 @@ namespace alterhook
       return stream.str();
     }
 
-    std::string thread_process_fail::str() const
+    std::string thread_process_fail::info() const
     {
       std::stringstream stream;
       stream << "trampoline address: 0x" << std::hex << std::setfill('0')

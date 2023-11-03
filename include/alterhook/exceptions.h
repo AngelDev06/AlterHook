@@ -12,35 +12,22 @@
 
 namespace alterhook::exceptions
 {
-  // specifies the status the hook engine had
-  // before raising an exception
-  enum class hook_status
-  {
-    anlysing,    //< when the original function is being analyzed
-    activating,  //< when the hook is being activated
-    deactivating //< when the hook is being deactivated
-  };
-
   // clang-format off
-  utils_generate_exception_no_base_args(
-		hook_exception, std::exception,
-		(
-			(hook_status, status),
-			(const std::byte*, target),
-			(const std::byte*, detour)
-		)
+  utils_generate_empty_exception(
+		alterhook_exception, std::exception,
+    virtual std::string info() const = 0;
   )
 
   utils_generate_exception_no_base_args(
-		trampoline_exception, std::exception,
+		trampoline_exception, alterhook_exception,
 		(
 			(const std::byte*, target)
 		),
-		virtual std::string str() const;
+		virtual std::string info() const;
   )
 
   utils_generate_exception_no_base_args(
-		disassembler_exception, std::exception,
+		disassembler_exception, alterhook_exception,
 		(
 			(const std::byte*, target)
 		),
@@ -48,8 +35,9 @@ namespace alterhook::exceptions
 		int m_flag = 0;
 	public:
 		disassembler_exception(const std::byte* target, int flag) 
-			: std::exception(), m_flag(flag), m_target(target) {}
+			: alterhook_exception(), m_flag(flag), m_target(target) {}
 		const char* get_error_string() const noexcept;
+    std::string info() const override { return get_error_string(); }
 		const char* what() const noexcept override { return "An exception occurred with the disassembler"; }
   )
   // clang-format on
@@ -62,21 +50,22 @@ namespace alterhook::exceptions
   #define __alterhook_add_buffer
 #endif
 
-  // clang-format off
+      // clang-format off
   utils_generate_exception_no_base_args(
-		os_exception, std::exception,
+		os_exception, alterhook_exception,
 		(
 			(uint64_t, error_code)
 		),
 		const char* get_error_string() const noexcept;
 		virtual std::string error_function() const = 0;
+    std::string info() const override;
 		__alterhook_add_buffer
   )
 
-  utils_generate_empty_exception(misc_exception, std::exception, virtual std::string str() const = 0;)
-  // clang-format on
+  utils_generate_empty_exception(misc_exception, alterhook_exception)
+      // clang-format on
 
-  inline namespace trampoline
+      inline namespace trampoline
   {
 #if utils_arm
   #define __alterhook_add_uih_constr                                           \
@@ -104,7 +93,7 @@ namespace alterhook::exceptions
         (
             (const std::byte*, target)
         ), 
-        std::string str() const override;
+        std::string info() const override;
         const char* what() const noexcept override {
           return "Cannot handle a given instruction in the target function";
         } 
@@ -124,7 +113,7 @@ namespace alterhook::exceptions
         (
             (const std::byte*, target)
         ), 
-        std::string str() const override;
+        std::string info() const override;
         std::string it_str() const; 
         size_t instruction_count() const;
         it_block_exception(const std::byte it_block[], uintptr_t address,
@@ -191,7 +180,7 @@ namespace alterhook::exceptions
         (
             (const std::byte*, target)
         ),
-        std::string str() const override;
+        std::string info() const override;
         const char* what() const noexcept override 
         {
           return "A PC relative instruction cannot be modified to work";
@@ -237,7 +226,7 @@ namespace alterhook::exceptions
         (
             (const std::byte*, target)
         ),
-        std::string str() const override;
+        std::string info() const override;
         const char* what() const noexcept override 
         {
           return "Exceeded the trampoline's available size";
@@ -253,7 +242,7 @@ namespace alterhook::exceptions
         (
             (const std::byte*, target)
         ),
-        std::string str() const override;
+        std::string info() const override;
         const char* what() const noexcept override 
         {
           return "The original function isn't long enough to "
@@ -432,7 +421,7 @@ namespace alterhook::exceptions
         {
           return "A thread failed to be processed in order for hooks to work";
         } 
-        std::string str() const override;
+        std::string info() const override;
     )
 #endif
 
@@ -445,9 +434,10 @@ namespace alterhook::exceptions
         {
           return "A non executable address was passed";
         } 
-        std::string str() const override;
+        std::string info() const override;
     )
   } // namespace misc
+
   // clang-format on
 } // namespace alterhook::exceptions
 

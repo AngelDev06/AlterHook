@@ -17,7 +17,7 @@ namespace alterhook
       return cs_strerror(static_cast<cs_err>(m_flag));
     }
 
-    std::string trampoline_exception::str() const
+    std::string trampoline_exception::info() const
     {
       std::stringstream stream;
       stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
@@ -25,7 +25,7 @@ namespace alterhook
       return stream.str();
     }
 
-    std::string unsupported_instruction_handling::str() const
+    std::string unsupported_instruction_handling::info() const
     {
       std::stringstream stream;
 #if utils_arm
@@ -43,7 +43,7 @@ namespace alterhook
     }
 
 #if utils_arm
-    std::string it_block_exception::str() const
+    std::string it_block_exception::info() const
     {
       std::stringstream       stream;
       alterhook::disassembler arm{ m_buffer, true, false };
@@ -78,7 +78,7 @@ namespace alterhook
       return reinterpret_cast<const THUMB_IT*>(m_buffer)->instruction_count();
     }
 
-    std::string pc_relative_handling_fail::str() const
+    std::string pc_relative_handling_fail::info() const
     {
       std::stringstream       stream;
       alterhook::disassembler arm{ m_buffer, m_thumb, false };
@@ -92,7 +92,7 @@ namespace alterhook
     }
 #endif
 
-    std::string trampoline_max_size_exceeded::str() const
+    std::string trampoline_max_size_exceeded::info() const
     {
       std::stringstream stream;
       stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
@@ -102,7 +102,7 @@ namespace alterhook
       return stream.str();
     }
 
-    std::string insufficient_function_size::str() const
+    std::string insufficient_function_size::info() const
     {
       std::stringstream stream;
       stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
@@ -112,7 +112,14 @@ namespace alterhook
       return stream.str();
     }
 
-    std::string invalid_address::str() const
+    std::string os_exception::info() const
+    {
+      std::stringstream stream;
+      stream << error_function() << " -> " << get_error_string();
+      return stream.str();
+    }
+
+    std::string invalid_address::info() const
     {
       std::stringstream stream;
       stream << "address: 0x" << std::hex << std::setfill('0') << std::setw(8)
