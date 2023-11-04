@@ -1,6 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include <system_error>
 #include "utilities/utils.h"
 #if utils_clang
   #pragma clang diagnostic push
@@ -40,26 +41,15 @@ namespace alterhook::exceptions
     std::string info() const override { return get_error_string(); }
 		const char* what() const noexcept override { return "An exception occurred with the disassembler"; }
   )
-  // clang-format on
 
-#if utils_windows
-  #define __alterhook_add_buffer                                               \
-  private:                                                                     \
-    mutable char buffer[94]{};
-#else
-  #define __alterhook_add_buffer
-#endif
-
-      // clang-format off
   utils_generate_exception_no_base_args(
 		os_exception, alterhook_exception,
 		(
-			(uint64_t, error_code)
+			(std::error_code, error_code)
 		),
-		const char* get_error_string() const noexcept;
+    os_exception(int code) : m_error_code(code, std::system_category()) {}
 		virtual std::string error_function() const = 0;
     std::string info() const override;
-		__alterhook_add_buffer
   )
 
   utils_generate_empty_exception(misc_exception, alterhook_exception)
