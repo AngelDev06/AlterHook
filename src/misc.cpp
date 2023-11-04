@@ -115,7 +115,7 @@ namespace alterhook
     std::string os_exception::info() const
     {
       std::stringstream stream;
-      stream << error_function() << " -> " << get_error_string();
+      stream << error_function() << " -> " << m_error_code.message();
       return stream.str();
     }
 

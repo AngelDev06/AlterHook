@@ -38,11 +38,6 @@ namespace alterhook
 
   namespace exceptions
   {
-    const char* os_exception::get_error_string() const noexcept
-    {
-      return strerror(m_error_code);
-    }
-
     std::string mmap_exception::error_function() const
     {
       std::stringstream stream;
