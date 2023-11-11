@@ -11,10 +11,14 @@
 
 namespace alterhook
 {
-  hook::hook(const hook& other) : trampoline(other)
+  hook::hook(const hook& other)
+      : trampoline(other), original_buffer(other.original_buffer)
   {
     __alterhook_copy_dtr(other);
     memcpy(backup.data(), other.backup.data(), backup.size());
+    if (other.original_wrap)
+      original_wrap =
+          std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
   }
 
   hook::hook(hook&& other) noexcept
@@ -40,6 +44,13 @@ namespace alterhook
       trampoline::operator=(other);
       __alterhook_copy_dtr(other);
       memcpy(backup.data(), other.backup.data(), backup.size());
+      if (other.original_wrap)
+      {
+        original_buffer = other.original_buffer;
+        if (!original_wrap)
+          original_wrap = std::launder(
+              reinterpret_cast<helpers::original*>(&original_buffer));
+      }
     }
     return *this;
   }
@@ -83,7 +94,7 @@ namespace alterhook
     {
       const bool should_enable = enabled;
       disable();
-      static_cast<trampoline&>(*this) = other;
+      trampoline::operator=(other);
       __alterhook_make_backup();
       if (should_enable)
         enable();
@@ -97,8 +108,11 @@ namespace alterhook
     {
       const bool should_enable = enabled;
       disable();
-      static_cast<trampoline&>(*this) = std::move(other);
+      trampoline::operator=(std::move(other));
       __alterhook_make_backup();
+      __alterhook_def_thumb_var(ptarget);
+      if (original_wrap)
+        *original_wrap = __alterhook_add_thumb_bit(ptrampoline.get());
       if (should_enable)
         enable();
     }
@@ -169,10 +183,32 @@ namespace alterhook
 #endif
   }
 
-  void hook::set_original(std::nullptr_t)
+  void hook::set_original(const helpers::orig_buff_t& original)
+  {
+    thread_freezer freeze{};
+    if (enabled)
+      freeze.init(nullptr);
+    __alterhook_def_thumb_var(ptarget);
+    if (!original_wrap)
+    {
+      original_buffer = original;
+      original_wrap =
+          std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
+      *original_wrap = __alterhook_add_thumb_bit(ptrampoline.get());
+      return;
+    }
+    helpers::orig_buff_t tmp = std::exchange(original_buffer, original);
+    *original_wrap           = __alterhook_add_thumb_bit(ptrampoline.get());
+    *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
+  }
+
+  void hook::reset_original()
   {
     if (original_wrap)
     {
+      thread_freezer freeze{};
+      if (enabled)
+        freeze.init(nullptr);
       *original_wrap = nullptr;
       original_wrap  = nullptr;
     }

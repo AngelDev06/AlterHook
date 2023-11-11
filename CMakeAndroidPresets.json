@@ -4,6 +4,7 @@
     {
       "name": "android-base",
       "hidden": true,
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "toolchainFile": "$env{NDK_ROOT}/build/cmake/android.toolchain.cmake",

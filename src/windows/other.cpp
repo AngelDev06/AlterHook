@@ -74,7 +74,7 @@ namespace alterhook
 
       DWORD last_error = GetLastError();
       if (last_error != ERROR_NO_MORE_FILES)
-        std::throw_with_nested(exceptions::thread_list_traversal_fail(
+        nested_throw(exceptions::thread_list_traversal_fail(
             last_error, snapshot, reinterpret_cast<uintptr_t>(&te)));
     }
   }
@@ -91,7 +91,7 @@ namespace alterhook
         CloseHandle(handle);
     }
   };
-  
+
   void process_frozen_threads(const trampoline& tramp, bool enable_hook,
                               HANDLE thread_handle)
   {
@@ -190,14 +190,11 @@ namespace alterhook
 
   thread_freezer::~thread_freezer() noexcept
   {
-    if (!tids.empty())
+    for (DWORD tid : tids)
     {
-      for (DWORD tid : tids)
-      {
-        handle_wrapper handle{ OpenThread(THREAD_SUSPEND_RESUME, false, tid) };
-        if (handle)
-          ResumeThread(handle);
-      }
+      handle_wrapper handle{ OpenThread(THREAD_SUSPEND_RESUME, false, tid) };
+      if (handle)
+        ResumeThread(handle);
     }
   }
 
@@ -214,7 +211,7 @@ namespace alterhook
             : std::pair(target, sizeof(JMP));
 
     if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &old_protection))
-      throw(exceptions::virtual_protect_exception(
+      nested_throw(exceptions::virtual_protect_exception(
           GetLastError(), address, size, PAGE_EXECUTE_READWRITE,
           reinterpret_cast<uintptr_t>(&old_protection)));
 
@@ -239,12 +236,12 @@ namespace alterhook
   {
     utils_assert(target, "patch_jmp: no target address specified");
     utils_assert(detour, "patch_jmp: no detour specified");
-    DWORD old_protection = 0;
+    DWORD            old_protection = 0;
     std::byte* const address = patch_above ? target - sizeof(JMP) : target;
 
     if (!VirtualProtect(address, sizeof(JMP), PAGE_EXECUTE_READWRITE,
                         &old_protection))
-      throw(exceptions::virtual_protect_exception(
+      nested_throw(exceptions::virtual_protect_exception(
           GetLastError(), address, sizeof(JMP), PAGE_EXECUTE_READWRITE,
           reinterpret_cast<uintptr_t>(&old_protection)));
 

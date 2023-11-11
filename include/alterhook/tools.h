@@ -231,6 +231,27 @@ namespace alterhook
           const_cast<void*>(address));
   }
 
+  template <typename T>
+  [[noreturn]] void nested_throw(T&& exception)
+  {
+    struct nested : std::nested_exception,
+                    utils::remove_cvref_t<T>
+    {
+      typedef utils::remove_cvref_t<T> base;
+
+      nested(const std::nested_exception& other, T&& current)
+          : std::nested_exception(other), base(std::forward<T>(current))
+      {
+      }
+    };
+
+    std::nested_exception other{};
+    if (other.nested_ptr())
+      throw(nested(other, std::forward<T>(exception)));
+    else
+      throw(std::forward<T>(exception));
+  }
+
   namespace helpers
   {
     struct original

@@ -8,7 +8,7 @@
   #pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
 #elif utils_msvc
   #pragma warning(push)
-  #pragma warning(disable : 4275)
+  #pragma warning(disable : 4275 4251)
 #endif
 
 namespace alterhook::exceptions
@@ -295,7 +295,7 @@ namespace alterhook::exceptions
             (uint64_t, protection)
         ),
         (
-            (uint64_t, flag)
+            (int, flag)
         ), 
         const char* what() const noexcept override 
         {
@@ -311,7 +311,7 @@ namespace alterhook::exceptions
             (uintptr_t, thread_entry_address)
         ),
         (
-            (uint64_t, flag)
+            (int, flag)
         ),
         const char* what() const noexcept override
         {
@@ -329,7 +329,7 @@ namespace alterhook::exceptions
             (uintptr_t, old_protection)
         ),
         (
-            (uint64_t, flag)
+            (int, flag)
         ),
         const char* what() const noexcept override
         {
@@ -350,7 +350,7 @@ namespace alterhook::exceptions
             (uint64_t, offset)
         ),
         (
-            (uint64_t, flag)
+            (int, flag)
         ),
         const char* what() const noexcept override 
         {
@@ -367,7 +367,7 @@ namespace alterhook::exceptions
             (const void*, old_action)
         ),
         (
-            (uint64_t, flag)
+            (int, flag)
         ),
         const char* what() const noexcept override 
         {
@@ -385,7 +385,7 @@ namespace alterhook::exceptions
             (int, protection)
         ),
         (
-            (uint64_t, flag)
+            (int, flag)
         ),
         const char* what() const noexcept override
         {
