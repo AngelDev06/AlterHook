@@ -72,17 +72,26 @@
 #endif
 
 #if defined(_M_X64) || defined(__x86_64__)
-  #define utils_x64 true
-  #define utils_x86 false
-  #define utils_arm false
+  #define utils_x64   true
+  #define utils_x86   false
+  #define utils_arm   false
+  #define utils_armv7 false
 #else
   #define utils_x64 false
-  #ifdef __arm__
+  #if defined(__arm__) || defined(__TARGET_ARCH_ARM)
     #define utils_arm true
     #define utils_x86 false
+    #if defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) ||                 \
+        defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) ||                \
+        (defined(__TARGET_ARCH_ARM) && __TARGET_ARCH_ARM - 0 >= 7)
+      #define utils_armv7 true
+    #else
+      #define utils_armv7 false
+    #endif
   #else
-    #define utils_arm false
-    #define utils_x86 true
+    #define utils_arm   false
+    #define utils_armv7 false
+    #define utils_x86   true
   #endif
 #endif
 

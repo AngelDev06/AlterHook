@@ -76,7 +76,7 @@ namespace alterhook
     void set_detour(dtr&& detour);
     template <__alterhook_is_original(orig)>
     void set_original(orig& original);
-    void set_original(std::nullptr_t);
+    void reset_original();
 
     bool operator==(const hook& other) const noexcept;
     bool operator!=(const hook& other) const noexcept;
@@ -92,6 +92,7 @@ namespace alterhook
     helpers::original*                   original_wrap = nullptr;
 
     void set_detour(std::byte* detour);
+    void set_original(const helpers::orig_buff_t& original);
   };
 
   template <__alterhook_is_detour_and_original_impl(dtr, orig)>
@@ -150,17 +151,10 @@ namespace alterhook
   template <__alterhook_is_original_impl(orig)>
   void hook::set_original(orig& original)
   {
-    if (original_wrap->contains_ref(original))
+    if (original_wrap && original_wrap->contains_ref(original))
       return;
-    __alterhook_def_thumb_var(ptarget);
-    bool                 has_orig_wrap = original_wrap;
-    helpers::orig_buff_t tmp           = original_buffer;
-    new (&original_buffer) helpers::original_wrapper(original);
-    original_wrap =
-        std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
-    original =
-        function_cast<orig>(__alterhook_add_thumb_bit(ptrampoline.get()));
-    if (has_orig_wrap)
-      *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
+    helpers::orig_buff_t origbuff{};
+    new (&origbuff) helpers::original_wrapper(original);
+    set_original(origbuff);
   }
 } // namespace alterhook

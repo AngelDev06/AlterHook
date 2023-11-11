@@ -312,3 +312,7 @@
   const_##itr chain_c##name() const noexcept { return hook_chain::name(); }
 
 #define __alterhook_decl_itr_func(params) __alterhook_decl_itr_func2 params
+
+#if !utils_x64 && !utils_x86 && !utils_armv7
+  #error unsupported target architecture
+#endif

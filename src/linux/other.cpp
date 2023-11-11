@@ -276,7 +276,7 @@ namespace alterhook
     // we cannot proceed if signal handler isn't set so this
     // is exception worthy
     if (sigaction(SIGURG, &act, &old_action))
-      std::throw_with_nested(
+      nested_throw(
           exceptions::sigaction_exception(errno, SIGURG, &act, &old_action));
   }
 
@@ -337,7 +337,7 @@ namespace alterhook
 
       result.first.store(false, std::memory_order_relaxed);
       auto [tramp_addr, target_addr, pos] = result.second;
-      std::throw_with_nested(
+      nested_throw(
           exceptions::thread_process_fail(tramp_addr, target_addr, pos));
     }
 #endif
@@ -366,6 +366,7 @@ namespace alterhook
 
   thread_freezer::~thread_freezer() noexcept
   {
+    if (!tids.empty())
     {
       std::unique_lock lock{ freezer_lock };
       for (pid_t tid : tids)
@@ -447,8 +448,8 @@ namespace alterhook
     constexpr int protection = PROT_READ | PROT_WRITE | PROT_EXEC;
 
     if (mprotect(prot_addr, prot_len, protection) == -1)
-      std::throw_with_nested(exceptions::mprotect_exception(
-          errno, prot_addr, prot_len, protection));
+      nested_throw(exceptions::mprotect_exception(errno, prot_addr, prot_len,
+                                                  protection));
     if (enable)
     {
       std::byte buffer[sizeof(FULL_JMP_ABS) + 2]{};
@@ -517,8 +518,9 @@ namespace alterhook
     constexpr int protection = PROT_READ | PROT_WRITE | PROT_EXEC;
 
     if (mprotect(prot_addr, prot_len, protection) == -1)
-      std::throw_with_nested(exceptions::mprotect_exception(
-          errno, prot_addr, prot_len, protection));
+      nested_throw(exceptions::mprotect_exception(errno, prot_addr, prot_len,
+                                                  protection));
+
     *reinterpret_cast<uint32_t*>(address) = reinterpret_cast<uintptr_t>(detour);
     mprotect(prot_addr, prot_len, old_protect);
     __alterhook_flush_cache(address, sizeof(uint32_t));
@@ -544,8 +546,8 @@ namespace alterhook
     constexpr int protection = PROT_READ | PROT_WRITE | PROT_EXEC;
 
     if (mprotect(prot_addr, prot_len, protection) == -1)
-      std::throw_with_nested(exceptions::mprotect_exception(
-          errno, prot_addr, prot_len, protection));
+      nested_throw(exceptions::mprotect_exception(errno, prot_addr, prot_len,
+                                                  protection));
 
     if (enable)
     {
@@ -579,8 +581,9 @@ namespace alterhook
     constexpr int protection = PROT_READ | PROT_WRITE | PROT_EXEC;
 
     if (mprotect(prot_addr, prot_len, protection) == -1)
-      std::throw_with_nested(exceptions::mprotect_exception(
-          errno, prot_addr, prot_len, protection));
+      nested_throw(exceptions::mprotect_exception(errno, prot_addr, prot_len,
+                                                  protection));
+
     *reinterpret_cast<uint32_t*>(address) = detour - (target + sizeof(JMP));
     mprotect(prot_addr, prot_len, old_protect);
     __alterhook_flush_cache(address, sizeof(uint32_t));
