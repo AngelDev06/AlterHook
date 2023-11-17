@@ -20,13 +20,24 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
+if (ALTERHOOK_TARGET_ARCH STREQUAL "ARM")
+	set(
+		ALTERHOOK_ARM_TESTS
+		"ARM/trampolines.cpp"
+		"ARM/trampolines.h"
+		"ARM/trampoline_target_tests.h"
+		"ARM/trampolines_general.h"
+	)
+endif()
+
 add_executable(
 	AlterHookTests
 	"hooks.cpp"
-	"hook_chains.cpp"
+    "hook_chains.cpp"
 	"modifiers.cpp"
 	"testcls.h"
 	"modifiers.h"
+	${ALTERHOOK_ARM_TESTS}
 )
 
 target_link_libraries(
@@ -35,14 +46,6 @@ PRIVATE
 	AlterHook
 	GTest::gtest_main
 )
-
-if (MSVC AND ALTERHOOK_SHARED)
-	add_custom_command(
-		TARGET AlterHookTests POST_BUILD 
-		COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:AlterHookTests> $<TARGET_RUNTIME_DLLS:AlterHookTests>
-		COMMAND_EXPAND_LISTS
-	)
-endif()
 
 include(GoogleTest)
 

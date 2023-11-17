@@ -185,9 +185,9 @@ Nothing special about this one, it's a base class for exceptions that don't fit 
 If you take a look at [exceptions.h](../include/alterhook/exceptions.h) you will see a lot of macro calls instead of classes representing the exceptions specified. That is because of the amount of boilerplate required to properly define the classes themselves which is time-wasting and annoying. The library instead uses a few nice utilities to generate the classes at prepossess time with just a few macro calls. The macros used are the following:
 
 - [utils_generate_exception(exception_name, base, fields, base_args, ...)](#utils_generate_exception)
-- utils_generate_exception_no_fields(exception_name, base, base_args, ...)
-- utils_generate_exception_no_base_args(exception_name, base, fields, ...)
-- utils_generate_empty_exception(exception_name, base, ...)
+- [utils_generate_exception_no_fields(exception_name, base, base_args, ...)](#utils_generate_exception_no_fields)
+- [utils_generate_exception_no_base_args(exception_name, base, fields, ...)](#utils_generate_exception_no_base_args)
+- [utils_generate_empty_exception(exception_name, base, ...)](#utils_generate_empty_exception)
 
 ### utils_generate_exception
 

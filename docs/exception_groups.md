@@ -62,3 +62,11 @@ Consists of exceptions generated when the library attempts to modify the target 
 - [alterhook::exceptions::os_exception](../include/alterhook/exceptions.h#L54-L63)
   - [alterhook::exceptions::os::virtual_protect_exception](../include/alterhook/exceptions.h#L333-L350) (**<ins>Windows specific</ins>**)
   - [alterhook::exceptions::os::mprotect_exception](../include/alterhook/exceptions.h#L390-L406) (**<ins>Linux/Android specific</ins>**)
+
+## Memory Allocation and Address Validation Exceptions
+
+- [alterhook::exceptions::os_exception](../include/alterhook/exceptions.h#L54-L63)
+  - [alterhook::exceptions::os::virtual_alloc_exception](../include/alterhook/exceptions.h#L299-L315) (**<ins>Windows specific</ins>**)
+  - [alterhook::exceptions::os::mmap_exception](../include/alterhook/exceptions.h#L352-L370) (**<ins>Linux/Android specific</ins>**)
+- [alterhook::exceptions::misc_exception](../include/alterhook/exceptions.h#L65)
+  - [alterhook::exceptions::misc::invalid_address](../include/alterhook/exceptions.h#L428-L438)

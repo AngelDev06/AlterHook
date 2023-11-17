@@ -10,6 +10,8 @@
 
 namespace alterhook
 {
+  ALTERHOOK_HIDDEN std::shared_mutex hook_lock{};
+
   namespace exceptions
   {
     const char* disassembler_exception::get_error_string() const noexcept
@@ -75,7 +77,7 @@ namespace alterhook
 
     size_t it_block_exception::instruction_count() const
     {
-      return reinterpret_cast<const THUMB_IT*>(m_buffer)->instruction_count();
+      return reinterpret_cast<const thumb::IT*>(m_buffer)->instruction_count();
     }
 
     std::string pc_relative_handling_fail::info() const

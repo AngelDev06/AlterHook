@@ -351,9 +351,14 @@ namespace alterhook::utils
       std::is_function_v<clean_type_t<T>> ||
       std::is_member_function_pointer_v<remove_cvref_t<T>> ||
       is_stl_function_v<T>;
+
   template <typename T>
   utils_concept callable_type =
       function_type<T> || helpers::no_ambiguous_callable<remove_cvref_t<T>>;
+
+  template <typename T>
+  utils_concept callable_but_stl_function =
+      callable_type<T> && !stl_function_type<T>;
 
 #if utils_cpp20
   template <typename T>

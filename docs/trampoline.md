@@ -113,6 +113,10 @@ A reference to `*this` allowing for chain assignments.
 
 - [Trampoline Copy Exceptions](exception_groups.md#trampoline-copy-exceptions)
 
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** always
+
 ### move assignment operator
 
 #### Description
@@ -146,6 +150,12 @@ Initializes the trampoline using `target` as the target function. That means set
 #### Exceptions
 
 - [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions)
+
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Only when `alterhook::exceptions::misc::invalid_address` or memory allocation related exceptions are thrown (i.e. `alterhook::exceptions::os::virtual_alloc_exception` for windows and `alterhook::exceptions::os::mmap_exception` for Android/Linux)
+
+**<ins>BASIC:</ins>** On any other exception. The container is guaranteed to be left in an uninitialized but reusable state.
 
 #### Notes
 

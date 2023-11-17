@@ -153,15 +153,8 @@ namespace alterhook
         typename extract_detour_sequence_from_tuples<tuples...>::type;
   } // namespace helpers
 
-#if utils_cpp20
-  template <helpers::callable_but_stl_fn T>
+  template <__alterhook_is_callable_but_stl_fn(T)>
   constexpr std::byte* get_target_address(T&& fn) noexcept
-#else
-  template <typename T>
-  constexpr std::enable_if_t<
-      utils::callable_type<T> && !utils::stl_function_type<T>, std::byte*>
-      get_target_address(T&& fn) noexcept
-#endif
   {
     typedef utils::remove_cvref_t<T> fn_t;
     if constexpr (utils::captureless_lambda<fn_t>)
@@ -185,14 +178,8 @@ namespace alterhook
       return reinterpret_cast<std::byte*>(fn);
   }
 
-#if utils_cpp20
-  template <utils::function_type T>
+  template <__alterhook_is_original(T)>
   auto function_cast(void* address) noexcept
-#else
-  template <typename T>
-  auto function_cast(
-      std::enable_if_t<utils::function_type<T>, void*> address) noexcept
-#endif
   {
     typedef utils::remove_cvref_t<T> fn_t;
     if constexpr (utils::member_function_type<fn_t>)
@@ -202,19 +189,15 @@ namespace alterhook
       return val;
     }
     else if constexpr (std::is_function_v<utils::clean_type_t<T>>)
-      return reinterpret_cast<std::add_pointer_t<T>>(address);
+      return reinterpret_cast<std::add_pointer_t<utils::clean_type_t<T>>>(
+          address);
     else
-      return reinterpret_cast<utils::unwrap_stl_function_t<fn_t>>(address);
+      return fn_t(
+          reinterpret_cast<utils::unwrap_stl_function_t<fn_t>>(address));
   }
 
-#if utils_cpp20
-  template <utils::function_type T>
+  template <__alterhook_is_original(T)>
   auto function_cast(const void* address) noexcept
-#else
-  template <typename T>
-  auto function_cast(
-      std::enable_if_t<utils::function_type<T>, const void*> address) noexcept
-#endif
   {
     typedef utils::remove_cvref_t<T> fn_t;
     if constexpr (utils::member_function_type<fn_t>)
@@ -224,7 +207,7 @@ namespace alterhook
       return val;
     }
     else if constexpr (std::is_function_v<utils::clean_type_t<T>>)
-      return reinterpret_cast<std::add_pointer_t<T>>(
+      return reinterpret_cast<std::add_pointer_t<utils::clean_type_t<T>>>(
           const_cast<void*>(address));
     else
       return reinterpret_cast<utils::unwrap_stl_function_t<fn_t>>(

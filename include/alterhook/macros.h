@@ -43,6 +43,10 @@
   #define __alterhook_is_target_and_detour(T1, T2)                             \
     utils::callable_type T1, utils::callable_type T2
 
+  #define __alterhook_is_callable_but_stl_fn_impl(T)                           \
+    utils::callable_but_stl_function T
+  #define __alterhook_is_callable_but_stl_fn(T)                                \
+    utils::callable_but_stl_function T
   #define __alterhook_is_target_impl(T)   utils::callable_type T
   #define __alterhook_is_target(T)        utils::callable_type T
   #define __alterhook_is_detour_impl(T)   utils::callable_type T
@@ -138,6 +142,11 @@
                          size_t>
   #define __alterhook_is_target_and_detour(T1, T2)                             \
     __alterhook_is_target_and_detour_impl(T1, T2) = 0
+
+  #define __alterhook_is_callable_but_stl_fn_impl(T)                           \
+    typename T, std::enable_if_t<utils::callable_but_stl_function<T>, size_t>
+  #define __alterhook_is_callable_but_stl_fn(T)                                \
+    __alterhook_is_callable_but_stl_fn_impl(T) = 0
 
   #define __alterhook_is_target_impl(T)                                        \
     typename T, std::enable_if_t<utils::callable_type<T>, size_t>

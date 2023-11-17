@@ -12,6 +12,7 @@
 #elif utils_clang
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wreturn-type"
+  #pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
 
 namespace alterhook

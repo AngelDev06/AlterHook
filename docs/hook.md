@@ -263,7 +263,18 @@ A reference to `*this` allowing for chain assignments.
 
 #### Exceptions
 
+- [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions)
+- [Target Injection Exceptions](exception_groups.md#target-injection-exceptions)
 - [Trampoline Copy Exceptions](exception_groups.md#trampoline-copy-exceptions)
+
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Only when the exception thrown belongs to the groups: [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions) and [Target Injection Exceptions](exception_groups.md#target-injection-exceptions) or when the exception thrown belongs to the group [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) and is already disabled (therefore no change to its state).
+
+**<ins>BASIC:</ins>** For the [Trampoline Copy Exceptions](exception_groups.md#trampoline-copy-exceptions) group the following properties are true:
+
+- When the exception thrown belongs to the group [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) the hook is left as disabled but all of its fields are not modified after the invocation.
+- For any other exception, the trampoline is left uninitialized. Therefore this results in the hook being target-less and on the x64 architecture detour-less as well (since the detour is stored in the trampoline buffer). It's also disabled obviously.
 
 #### Notes
 
@@ -307,7 +318,22 @@ A reference to `*this` allowing for chain assignments.
 
 #### Exceptions
 
+- [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions)
+- [Target Injection Exceptions](exception_groups.md#target-injection-exceptions)
 - [Trampoline Copy Exceptions](exception_groups.md#trampoline-copy-exceptions)
+
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** If enabled it attempts to disable and re-enable the hook after the copy operation, so the following properties are true:
+
+- If already enabled it's only strong when the exceptions come from the disable operation. You can verify that by checking if [is_enabled()](#is_enabled) == true after the exception.
+- If not enabled the operation has strong exception guarantee when the exception belongs in the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) group.
+
+**<ins>BASIC:</ins>** For any other possible outcome the operation has basic exception guarantee. The cases are the following:
+
+- If already enabled and the exception belongs in the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) group then the hook will be left disabled but with the same properties as before.
+- If the exception belongs in the [Trampoline Copy Exceptions](exception_groups.md#trampoline-copy-exceptions) group but not on the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) then the trampoline is left uninitialized. This results in the hook being target-less and on x64 architecture detour-less too (since the detour is stored in the trampoline buffer in that case). The state of the hook is of course disabled even if it was enabled before.
+- If the exception thrown isn't in the [Trampoline Copy Exceptions](exception_groups.md#trampoline-copy-exceptions) group and the hook is left disabled when it was already enabled, it means that the enable operation failed. In that case the copy operation was successfully completed, with the hook redirected to a new target but the state of the hooks is left disabled nevertheless as enabling failed.
 
 #### Notes
 
@@ -346,6 +372,10 @@ Enables the hook by injecting an ASM jump pointing to the detour on the first fe
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions)
 - [Target Injection Exceptions](exception_groups.md#target-injection-exceptions)
 
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Always.
+
 ### disable
 
 #### Description
@@ -356,6 +386,10 @@ Disables the hook by injecting back the first few bytes to the target function t
 
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions)
 - [Target Injection Exceptions](exception_groups.md#target-injection-exceptions)
+
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Always.
 
 ## Getters
 
@@ -415,6 +449,19 @@ Sets the target function to point to. May also be used as an initializer of an u
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions) (**<ins>Only when already enabled</ins>**)
 - [Target Injection Exceptions](exception_groups.md#target-injection-exceptions) (**<ins>Only when already enabled</ins>**)
 
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** If enabled it attempts to disable and re-enable the hook after the operation, so the following properties are true:
+
+- If already enabled it's only strong when the exceptions come from the disable operation. You can verify that by checking if [is_enabled()](#is_enabled) == true after the exception.
+- If not enabled the operation has strong exception guarantee when the exception belongs in the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) group.
+
+**<ins>BASIC:</ins>** For any other possible outcome the operation has basic exception guarantee. The cases are the following:
+
+- If already enabled and the exception belongs in the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) group then the hook will be left disabled but with the same properties as before.
+- If the exception belongs in the [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions) group but not on the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) then the trampoline is left uninitialized. This results in the hook being target-less and on x64 architecture detour-less too (since the detour is stored in the trampoline buffer in that case). The state of the hook is of course disabled even if it was enabled before.
+- If the exception thrown isn't in the [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions) group and the hook is left disabled when it was already enabled, it means that the enable operation failed. In that case the operation was successfully completed, with the hook redirected to a new target but the state of the hooks is left disabled nevertheless as enabling failed.
+
 #### Notes
 
 May disable the current hook if it's already enabled and re-enable it afterward using the same detour and original callback. It does nothing if the hook already uses the target specified.
@@ -437,6 +484,19 @@ Sets the target function to point to. May also be used as an initializer of an u
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions) (**<ins>Only when already enabled</ins>**)
 - [Target Injection Exceptions](exception_groups.md#target-injection-exceptions) (**<ins>Only when already enabled</ins>**)
 
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** If enabled it attempts to disable and re-enable the hook after the operation, so the following properties are true:
+
+- If already enabled it's only strong when the exceptions come from the disable operation. You can verify that by checking if [is_enabled()](#is_enabled) == true after the exception.
+- If not enabled the operation has strong exception guarantee when the exception belongs in the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) group.
+
+**<ins>BASIC:</ins>** For any other possible outcome the operation has basic exception guarantee. The cases are the following:
+
+- If already enabled and the exception belongs in the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) group then the hook will be left disabled but with the same properties as before.
+- If the exception belongs in the [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions) group but not on the [Memory Allocation and Address Validation Exceptions](exception_groups.md#memory-allocation-and-address-validation-exceptions) then the trampoline is left uninitialized. This results in the hook being target-less and on x64 architecture detour-less too (since the detour is stored in the trampoline buffer in that case). The state of the hook is of course disabled even if it was enabled before.
+- If the exception thrown isn't in the [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions) group and the hook is left disabled when it was already enabled, it means that the enable operation failed. In that case the operation was successfully completed, with the hook redirected to a new target but the state of the hooks is left disabled nevertheless as enabling failed.
+
 #### Notes
 
 May disable the current hook if it's already enabled and re-enable it afterward using the same detour and original callback. It does nothing if the hook already uses the target specified.
@@ -458,6 +518,10 @@ Sets the detour.
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions) (**<ins>Only when already enabled, 32-bit specific</ins>**)
 - [Target Injection Exceptions](exception_groups.md#target-injection-exceptions) (**<ins>Only when already enabled, 32-bit specific</ins>**)
 
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Always.
+
 #### Notes
 
 If the hook is already enabled it will simply patch the jump to point to the new detour.
@@ -478,6 +542,10 @@ Sets `original` to point to the trampoline buffer, obtains a reference to it and
 
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions) (**<ins>Only when already enabled</ins>**)
 
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Always.
+
 #### Notes
 
 It does not disable the hook if it's already enabled but instead switches callbacks while it is enabled. This will happen in a thread-safe manner as threads are blocked from execution when it sets the original callback. If the hook instance already holds a reference to the provided callback it does nothing.
@@ -491,6 +559,10 @@ Resets the reference to the original callback if it exists. That means setting t
 #### Exceptions
 
 - [Thread Freezer Exceptions](exception_groups.md#thread-freezer-exceptions) (**<ins>Only when already enabled</ins>**)
+
+#### Exception Guarantee
+
+**<ins>STRONG:</ins>** Always.
 
 #### Notes
 
