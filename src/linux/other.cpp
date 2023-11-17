@@ -84,6 +84,7 @@ namespace alterhook
 #if utils_clang
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wrange-loop-construct"
+  #pragma clang diagnostic ignored "-Wunused-parameter"
 #elif utils_gcc
   #pragma GCC diagnostic push
   #pragma GCC diagnostic ignored "-Wrange-loop-construct"
@@ -380,10 +381,10 @@ namespace alterhook
     }
   }
 
-  std::pair<bool, int> ALTERHOOK_HIDDEN get_prot(const std::byte* address)
+  int ALTERHOOK_HIDDEN get_protection(const std::byte* address)
   {
     std::ifstream maps{ "/proc/self/maps" };
-    utils_assert(maps.is_open(), "get_prot: couldn't open `/proc/self/maps`");
+    utils_assert(maps.is_open(), "get_protection: couldn't open `/proc/self/maps`");
 
     do
     {
@@ -407,21 +408,18 @@ namespace alterhook
           result |= PROT_WRITE;
         if (perms[2] == 'x')
           result |= PROT_EXEC;
-        return { true, result };
+        return result;
       }
 
       maps.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     } while (maps.good());
 
-    return { false, PROT_NONE };
+    return PROT_NONE;
   }
 
   bool is_executable_address(const void* address)
   {
-    auto [status, value] = get_prot(static_cast<const std::byte*>(address));
-    if (status && (value & PROT_EXEC))
-      return true;
-    return false;
+    return get_protection(static_cast<const std::byte*>(address)) & PROT_EXEC;
   }
 
 #if utils_arm
@@ -436,10 +434,11 @@ namespace alterhook
     const bool uses_thumb = reinterpret_cast<uintptr_t>(target) & 1;
     reinterpret_cast<uintptr_t&>(target) &= ~1;
     const auto [address, size] =
-        patch_above ? std::pair(target - sizeof(uint32_t), sizeof(FULL_JMP_ABS))
+        patch_above ? std::pair(target - sizeof(uint32_t),
+                                sizeof(arm::custom::FULL_JMP))
                     : std::pair(target, reinterpret_cast<uintptr_t>(target) % 4
-                                            ? sizeof(FULL_JMP_ABS) + 2
-                                            : sizeof(FULL_JMP_ABS));
+                                            ? sizeof(arm::custom::FULL_JMP) + 2
+                                            : sizeof(arm::custom::FULL_JMP));
     std::byte* const prot_addr = reinterpret_cast<std::byte*>(
         utils_align(reinterpret_cast<uintptr_t>(address), memory_block_size));
     const size_t prot_len =
@@ -452,12 +451,12 @@ namespace alterhook
                                                   protection));
     if (enable)
     {
-      std::byte buffer[sizeof(FULL_JMP_ABS) + 2]{};
+      std::byte buffer[sizeof(arm::custom::FULL_JMP) + 2]{};
       if (uses_thumb)
       {
         if (patch_above)
         {
-          THUMB2_JMP_ABS tjmp{};
+          thumb2::custom::JMP tjmp{};
           tjmp.set_offset(address -
                           reinterpret_cast<std::byte*>(utils_align(
                               reinterpret_cast<uintptr_t>(target) + 4, 4)));
@@ -468,13 +467,13 @@ namespace alterhook
         {
           if (reinterpret_cast<uintptr_t>(target) % 4)
           {
-            THUMB2_JMP_ABS tjmp{};
+            thumb2::custom::JMP tjmp{};
             tjmp.set_offset(2);
             new (buffer) auto(tjmp);
             new (&buffer[sizeof(tjmp) + 2]) auto(backup_or_detour);
           }
           else
-            new (buffer) THUMB2_FULL_JMP_ABS(
+            new (buffer) thumb2::custom::FULL_JMP(
                 reinterpret_cast<uintptr_t>(backup_or_detour));
         }
       }
@@ -482,14 +481,14 @@ namespace alterhook
       {
         if (patch_above)
         {
-          JMP_ABS jmp{};
+          arm::custom::JMP jmp{};
           jmp.set_offset(address - (target + 8));
           new (buffer) auto(backup_or_detour);
           new (&buffer[sizeof(backup_or_detour)]) auto(jmp);
         }
         else
-          new (buffer)
-              FULL_JMP_ABS(reinterpret_cast<uintptr_t>(backup_or_detour));
+          new (buffer) arm::custom::FULL_JMP(
+              reinterpret_cast<uintptr_t>(backup_or_detour));
       }
       memcpy(address, buffer, size);
     }
@@ -508,8 +507,8 @@ namespace alterhook
     reinterpret_cast<uintptr_t&>(target) &= ~1;
     std::byte*       address   = patch_above ? target - sizeof(uint32_t)
                                  : reinterpret_cast<uintptr_t>(target) % 4
-                                     ? target + sizeof(JMP_ABS) + 2
-                                     : target + sizeof(JMP_ABS);
+                                     ? target + sizeof(arm::custom::JMP) + 2
+                                     : target + sizeof(arm::custom::JMP);
     std::byte* const prot_addr = reinterpret_cast<std::byte*>(
         utils_align(reinterpret_cast<uintptr_t>(address), memory_block_size));
     const size_t prot_len = utils_align(

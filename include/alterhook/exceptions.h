@@ -6,6 +6,7 @@
 #if utils_clang
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
+  #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #elif utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4275 4251)

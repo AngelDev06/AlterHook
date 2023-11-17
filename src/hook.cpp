@@ -160,12 +160,22 @@ namespace alterhook
   {
     if (target == ptarget)
       return;
+#if utils_x64
+    const std::byte* const tmpdtr = __alterhook_get_dtr();
+#endif
     const bool should_enable = enabled;
     disable();
     init(target);
     __alterhook_make_backup();
+
     if (should_enable)
+    {
+#if utils_x64
+      utils_assert(prelay, "hook::set_target: detour was corrupted");
+      __alterhook_set_dtr(tmpdtr);
+#endif
       enable();
+    }
   }
 
   void hook::set_detour(std::byte* detour)
@@ -173,13 +183,16 @@ namespace alterhook
     utils_assert(ptarget, "Attempt to set the detour of an uninitialized hook");
     if (detour == __alterhook_get_dtr())
       return;
+
+#if utils_x64
     __alterhook_set_dtr(detour);
-#if !utils_x64
+#else
     if (enabled)
     {
       std::unique_lock lock{ hook_lock };
       __alterhook_patch_jmp(detour);
     }
+    pdetour = detour;
 #endif
   }
 

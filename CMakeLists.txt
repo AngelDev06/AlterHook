@@ -4,7 +4,7 @@ include(FetchContent)
 FetchContent_Declare(
 	capstone
 	GIT_REPOSITORY https://github.com/AngelDev06/capstone
-	GIT_TAG 5fa0abd0be8b4023f90e9da4f0c70a7f2b008587
+	GIT_TAG dcc85dbd
 )
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
@@ -194,13 +194,11 @@ else()
 		-Wdisabled-optimization
 		-Wformat=2
 		-Winit-self
-		-Wlogical-op
 		-Wmissing-include-dirs
-		-Wnoexcept -Wold-style-cast
+		-Wold-style-cast
 		-Woverloaded-virtual
 		-Wredundant-decls
 		-Wsign-promo
-		-Wstrict-null-sentinel
 		-Wstrict-overflow=5
 		-Wundef
 		-Wno-unused
@@ -215,4 +213,12 @@ endif()
 if (ALTERHOOK_BUILD_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
+
+	if (MSVC AND ALTERHOOK_SHARED)
+		add_custom_command(
+			TARGET AlterHook POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:AlterHookTests> $<TARGET_RUNTIME_DLLS:AlterHookTests>
+			COMMAND_EXPAND_LISTS
+		)
+	endif()
 endif()

@@ -153,7 +153,7 @@ TEST_F(HookTest, Setters)
   EXPECT_TRUE(hook1.is_enabled());
   EXPECT_EQ(hook1.get_target(),
             alterhook::get_target_address(&originalcls::func2));
-  
+
   instance.func();
   verify_call_stack(func_called::originalcls_func);
   SAME_ORIG_RESULT(instance);

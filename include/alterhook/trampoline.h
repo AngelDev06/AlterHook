@@ -8,6 +8,9 @@
 #if utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4251)
+#else
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #endif
 
 namespace alterhook
@@ -19,6 +22,12 @@ namespace alterhook
 
     trampoline(std::byte* target) { init(target); }
 
+    template <__alterhook_is_target(trg)>
+    trampoline(trg&& target)
+        : trampoline(get_target_address(std::forward<trg>(target)))
+    {
+    }
+
     trampoline(const trampoline& other);
     trampoline(trampoline&& other) noexcept;
     trampoline& operator=(const trampoline& other);
@@ -28,8 +37,13 @@ namespace alterhook
 
     void init(std::byte* target);
 
+    void reset();
+
     template <typename fn, typename... types>
     auto invoke(types&&... values) const;
+
+    template <__alterhook_is_original(fn)>
+    auto get_callback() const;
 
     std::byte* get_target() const noexcept { return ptarget; }
 
@@ -56,14 +70,16 @@ namespace alterhook
     {
       constexpr deleter() noexcept = default;
 
-      constexpr deleter(const deleter&) noexcept {}
+      constexpr deleter(const deleter&) noexcept = default;
 
       void operator()(std::byte* ptrampoline) const noexcept;
     };
 
-    typedef std::unique_ptr<std::byte, deleter> trampoline_ptr;
-    std::byte*                                  ptarget = nullptr;
-    trampoline_ptr                              ptrampoline{};
+    typedef utils::static_vector<std::pair<uint8_t, uint8_t>, 8> positions_t;
+    typedef std::pair<bool, uint8_t>                             pc_handling_t;
+    typedef std::unique_ptr<std::byte, deleter>                  trampoline_ptr;
+    std::byte*     ptarget = nullptr;
+    trampoline_ptr ptrampoline{};
 #if utils_x64
     std::byte* prelay = nullptr;
 #elif utils_arm
@@ -72,23 +88,30 @@ namespace alterhook
     bool   patch_above = false;
     size_t tramp_size  = 0;
 #if utils_arm
-    std::pair<bool, uint8_t> pc_handling{};
+    pc_handling_t pc_handling{};
 #endif
 #if !utils_windows
     int old_protect = 0;
 #endif
-    utils::static_vector<std::pair<uint8_t, uint8_t>, 8> positions{};
+    positions_t positions{};
   };
 
   template <typename fn, typename... types>
   auto trampoline::invoke(types&&... args) const
   {
     utils_assert(
-        ptrampoline,
+        ptarget,
         "trampoline::invoke: attempt to invoke an uninitialized trampoline");
     __alterhook_def_thumb_var(ptarget);
     std::byte* func = __alterhook_add_thumb_bit(ptrampoline.get());
     return std::invoke(function_cast<fn>(func), std::forward<types>(args)...);
+  }
+
+  template <__alterhook_is_original_impl(fn)>
+  auto trampoline::get_callback() const
+  {
+    __alterhook_def_thumb_var(ptarget);
+    return function_cast<fn>(__alterhook_add_thumb_bit(ptrampoline.get()));
   }
 
 #if utils_arm
@@ -100,8 +123,10 @@ namespace alterhook
   inline constexpr size_t __patch_above_target_offset = 5;
   inline constexpr size_t __backup_size               = 5;
 #endif
-}
+} // namespace alterhook
 
 #if utils_msvc
   #pragma warning(pop)
+#else
+  #pragma GCC diagnostic pop
 #endif

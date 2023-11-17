@@ -11,17 +11,24 @@
 
 namespace alterhook
 {
+  extern std::shared_mutex hook_lock;
+
   void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
   {
     trampoline_buffer::deallocate(ptrampoline);
   }
 
-  ALTERHOOK_HIDDEN std::shared_mutex hook_lock{};
-
-  std::pair<bool, int> get_prot(const std::byte* address);
+  int get_protection(const std::byte* address);
 
   inline namespace init_impl
   {
+    template <typename T>
+    constexpr bool is_push_ptr_v =
+        std::is_same_v<T, arm::PUSH*> || std::is_same_v<T, thumb::PUSH*>;
+    template <typename T>
+    constexpr bool is_thumb2_add_or_ldr_ptr_v =
+        std::is_same_v<T, thumb2::ADD*> || std::is_same_v<T, thumb2::LDR_IMM*>;
+
     enum instruction_set
     {
       IS_ARM,
@@ -59,11 +66,34 @@ namespace alterhook
    : (reg) >= ARM_REG_R0 ? (reg)-ARM_REG_R0                                    \
                          : (reg) + 1)
 
+    static std::optional<uint8_t> general_reg_to_n(arm_reg reg) noexcept
+    {
+      switch (reg)
+      {
+      case ARM_REG_R0: return 0;
+      case ARM_REG_R1: return 1;
+      case ARM_REG_R2: return 2;
+      case ARM_REG_R3: return 3;
+      case ARM_REG_R4: return 4;
+      case ARM_REG_R5: return 5;
+      case ARM_REG_R6: return 6;
+      case ARM_REG_R7: return 7;
+      case ARM_REG_R8: return 8;
+      case ARM_REG_SB: return 9;
+      case ARM_REG_SL: return 10;
+      case ARM_REG_FP: return 11;
+      case ARM_REG_IP: return 12;
+      case ARM_REG_SP: return 13;
+      case ARM_REG_LR: return 14;
+      case ARM_REG_PC: return 15;
+      default: return {};
+      }
+    }
+
     // determines whether the code in the range of [src, src + size) is padding
     // bytes. (size may have to be aligned up to the instruction set's
     // alignment)
-    static ALTERHOOK_HIDDEN bool is_pad(const std::byte* src, size_t size,
-                                        bool thumb) noexcept
+    static bool is_pad(const std::byte* src, size_t size, bool thumb) noexcept
     {
       if (thumb)
       {
@@ -113,7 +143,7 @@ namespace alterhook
       return false;
     }
 
-    static ALTERHOOK_HIDDEN int64_t find_imm(const cs_insn& instr) noexcept
+    static int64_t find_imm(const cs_insn& instr) noexcept
     {
       cs_arm_op* operands = instr.detail->arm.operands;
 
@@ -127,17 +157,23 @@ namespace alterhook
 
     struct ALTERHOOK_HIDDEN to_be_modified
     {
-      uintptr_t           instr;
+      typedef std::variant<std::byte*, thumb::POP*, thumb::LDR_LITERAL*,
+                           thumb::PUSH*, thumb::ADD*, thumb2::ADD*,
+                           thumb2::INCREMENTAL_ADD*, thumb2::LDR_IMM*,
+                           arm::POP*, arm::LDR_LITERAL*, arm::ADD*, arm::PUSH*>
+                                                  instr_t;
+      typedef std::variant<arm::PUSH_REGLIST*, thumb2::PUSH_REGLIST*,
+                           thumb::PUSH_REGLIST*>* orig_push_t;
+
+      instr_t             instr;
       size_t              size;
       bool                thumb;
       cs_operand_encoding encoding;
-      std::bitset<16>     flags;
-      std::variant<PUSH_REGLIST*, THUMB2_PUSH_REGLIST*, THUMB_PUSH_REGLIST*>*
-          orig_push;
+      orig_push_t         orig_push;
 
       // patches instruction with given register at encoding.indexes[0] and
       // encoding.indexes[1] if needed
-      void patch_reg(reg_t reg)
+      void patch_reg(reg_t reg, uint32_t* instr_ptr)
       {
         utils_assert(encoding.operand_pieces_count <= 2,
                      "(unreachable) register encoding with more than 2 pieces");
@@ -148,9 +184,11 @@ namespace alterhook
                 (encoding.operand_pieces_count == 2 &&
                  (encoding.sizes[0] + encoding.sizes[1]) == 4),
             "(unreachable) register field has more or less than 4 bits");
-        // note that for thumb2 if index is smaller than 6 we add 16 otherwise
-        // we subtract 16 the reason is that thumb2 instructions are not of type
-        // uint32_t by instead are of type struct { uint16_t first, second; }
+
+        // note that for thumb2 if index is smaller than 6 we add 16
+        // otherwise we subtract 16 the reason is that thumb2 instructions
+        // are not of type uint32_t by instead are of type struct {
+        // uint16_t first, second; }
         const uint8_t    index0    = thumb && size == 4
                                          ? encoding.indexes[0] < 16
                                                ? encoding.indexes[0] + 16
@@ -159,9 +197,8 @@ namespace alterhook
         const std::array bitseq    = { 0b1, 0b11, 0b111, 0b1111 };
         const uint32_t   reg_part1 = reg >> (4 - encoding.sizes[0]);
 
-        *reinterpret_cast<uint32_t*>(instr) &=
-            ~(bitseq[encoding.sizes[0] - 1] << index0);
-        *reinterpret_cast<uint32_t*>(instr) |= reg_part1 << index0;
+        *instr_ptr &= ~(bitseq[encoding.sizes[0] - 1] << index0);
+        *instr_ptr |= reg_part1 << index0;
 
         if (encoding.operand_pieces_count == 2)
         {
@@ -172,92 +209,52 @@ namespace alterhook
                                          : encoding.indexes[1];
           const uint32_t reg_part2 = reg & bitseq[encoding.sizes[1] - 1];
 
-          *reinterpret_cast<uint32_t*>(instr) &=
-              ~(bitseq[encoding.sizes[1] - 1] << index1);
-          *reinterpret_cast<uint32_t*>(instr) |= reg_part2 << index1;
+          *instr_ptr &= ~(bitseq[encoding.sizes[1] - 1] << index1);
+          *instr_ptr |= reg_part2 << index1;
         }
       }
 
       void modify(reg_t reg)
       {
-        if (flags[M_PUSH])
-        {
-          // if we have encountered a push with reglist operand included in the
-          // target then we check if we can make use of it. that can happen if
-          // the register we have chosen is going to be pushed last on stack and
-          // for that we check if it's the register with the largest
-          // corresponding number included in the list. if that isn't the case
-          // then we proceed to use our own push as expected
-          if (flags[M_ORIGINAL_PUSH])
-          {
-            if (auto push = std::get_if<PUSH_REGLIST*>(orig_push))
-            {
-              if ((*push)->greatest(reg))
-                (*push)->append(reg);
-              else
-                goto UPDATE_PUSH;
-            }
-            else if (auto t2push = std::get_if<THUMB2_PUSH_REGLIST*>(orig_push))
-            {
-              if ((*t2push)->greatest(reg))
-                (*t2push)->append(reg);
-              else
-                goto UPDATE_PUSH;
-            }
-            else
-            {
-              auto tpush = std::get<THUMB_PUSH_REGLIST*>(*orig_push);
-              if (tpush->greatest(reg))
-                tpush->append(reg);
-              else
-                goto UPDATE_PUSH;
-            }
+        std::visit(
+            utils::overloaded{
+                [&](std::byte* instr_ptr)
+                { patch_reg(reg, reinterpret_cast<uint32_t*>(instr_ptr)); },
+                [&](auto instr_ptr)
+                    -> std::enable_if_t<is_push_ptr_v<decltype(instr_ptr)>>
+                {
+                  if (orig_push)
+                  {
+                    std::visit(
+                        [&](auto push)
+                        {
+                          if (!push->greatest(reg))
+                          {
+                            instr_ptr->set_register(reg);
+                            return;
+                          }
 
-            if (thumb)
-              new (reinterpret_cast<void*>(instr)) THUMB_NOP;
-            else
-              new (reinterpret_cast<void*>(instr)) NOP;
-          }
-          else
-          {
-          UPDATE_PUSH:
-            if (thumb)
-              reinterpret_cast<THUMB_PUSH*>(instr)->set_register(reg);
-            else
-              reinterpret_cast<PUSH*>(instr)->set_register(reg);
-          }
-        }
-        else if (thumb)
-        {
-          if (flags[M_POP])
-            reinterpret_cast<THUMB_POP*>(instr)->set_register(reg);
-          else if (flags[M_LDR])
-            reinterpret_cast<THUMB_LDR_LITERAL*>(instr)->set_register(reg);
-          else if (flags[M_ADD])
-            reinterpret_cast<THUMB_ADD*>(instr)->set_register(reg);
-          // note that adr is replaced by a full thumb2 add since adr doesn't
-          // have the PC encoded anywhere
-          else if (flags[M_ADR])
-            reinterpret_cast<THUMB2_ADD*>(instr)->set_operand_register(reg);
-          else if (flags[M_SMALL_LDR])
-            reinterpret_cast<THUMB2_LDR_IMM*>(instr)->set_operand_register(reg);
-          else
-            patch_reg(reg);
-        }
-        else
-        {
-          if (flags[M_POP])
-            reinterpret_cast<POP*>(instr)->set_register(reg);
-          else if (flags[M_LDR])
-            reinterpret_cast<LDR_LITERAL*>(instr)->set_register(reg);
-          else if (flags[M_ADD])
-          {
-            reinterpret_cast<ADD*>(instr)->set_operand_register(reg);
-            reinterpret_cast<ADD*>(instr)->set_destination_register(reg);
-          }
-          else
-            patch_reg(reg);
-        }
+                          push->append(reg);
+                          if (thumb)
+                            new (reinterpret_cast<void*>(instr_ptr)) thumb::NOP;
+                          else
+                            new (reinterpret_cast<void*>(instr_ptr)) arm::NOP;
+                        },
+                        *orig_push);
+                  }
+                  else
+                    instr_ptr->set_register(reg);
+                },
+                [&](auto instr_ptr)
+                    -> std::enable_if_t<
+                        is_thumb2_add_or_ldr_ptr_v<decltype(instr_ptr)>>
+                { instr_ptr->set_operand_register(reg); },
+                [&](auto instr_ptr)
+                    -> std::enable_if_t<
+                        !is_thumb2_add_or_ldr_ptr_v<decltype(instr_ptr)> &&
+                        !is_push_ptr_v<decltype(instr_ptr)>>
+                { instr_ptr->set_register(reg); } },
+            instr);
       }
     };
 
@@ -450,11 +447,14 @@ namespace alterhook
         for (size_t begin = 0, end = instr.detail->arm.op_count; begin != end;
              ++begin)
         {
-          cs_arm_op& operand = instr.detail->arm.operands[begin];
-          if (operand.type == ARM_OP_REG)
-          {
-            unsigned reg_bitnum = __alterhook_reg_bitnum(operand.reg);
+          cs_arm_op&       operand   = instr.detail->arm.operands[begin];
+          constexpr size_t uint8_max = std::numeric_limits<uint8_t>::max();
 
+          if (uint8_t reg_bit_num;
+              operand.type == ARM_OP_REG &&
+              (reg_bit_num = general_reg_to_n(static_cast<arm_reg>(operand.reg))
+                                 .value_or(uint8_max)) != uint8_max)
+          {
             if (operand.reg == ARM_REG_PC && operand.access == CS_AC_READ &&
                 !flags[M_BRANCH])
             {
@@ -474,8 +474,8 @@ namespace alterhook
               if (operand.encoding.operand_pieces_count == 1 &&
                   operand.encoding.sizes[0] == 1)
                 flags.set(M_REGLIST);
-              else if (!encountered_reglist[reg_bitnum])
-                encountered_reglist.set(reg_bitnum);
+              else
+                encountered_reglist.set(reg_bit_num);
             }
           }
           else if (operand.type == ARM_OP_MEM)
@@ -514,19 +514,26 @@ namespace alterhook
   {
     if (ptarget == target)
       return;
-    auto [status, value] = get_prot(target);
-    if (!status || !(value & PROT_EXEC))
+    int tmp_protect = get_protection(target);
+    if (!(tmp_protect & PROT_EXEC))
       throw(exceptions::invalid_address(target));
     if (!ptrampoline)
       ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
+    if (ptarget)
+      reset();
 
-    positions.clear();
-    patch_above = false;
-    ptarget     = target;
-    old_protect = value;
+    std::byte* const tmp_target = target;
+
 #if !defined(NDEBUG) && utils_arm
     memset(ptrampoline.get(), 0, memory_slot_size);
 #endif
+
+    typedef std::variant<arm::PUSH_REGLIST*, thumb2::PUSH_REGLIST*,
+                         thumb::PUSH_REGLIST*>
+                                                     orig_push_t;
+    typedef utils::static_vector<to_be_modified, 16> tbm_list_t;
+    typedef utils::static_vector<std::pair<uintptr_t, bool>, 3>
+        branch_addresses_t;
 
     bool            uses_thumb = reinterpret_cast<uintptr_t>(target) & 1;
     bool            should_setup_pc_handling = true;
@@ -539,27 +546,30 @@ namespace alterhook
     uintptr_t       pc_loc    = 0;
     const size_t    size_needed =
         uses_thumb && (reinterpret_cast<uintptr_t>(target) % 4)
-               ? sizeof(FULL_JMP_ABS) + 2
-               : sizeof(FULL_JMP_ABS);
+               ? sizeof(arm::custom::FULL_JMP) + 2
+               : sizeof(arm::custom::FULL_JMP);
+    reinterpret_cast<uintptr_t&>(target) &= ~1;
+
+    std::bitset<8>                tmp_instruction_sets{};
     std::bitset<16>               encountered_reglist{};
     std::bitset<memory_slot_size> used_locations{};
     size_t                        last_unused_pos = 0;
     uint8_t                       available_size  = memory_slot_size;
-    std::variant<PUSH_REGLIST*, THUMB2_PUSH_REGLIST*, THUMB_PUSH_REGLIST*>
-                              orig_push{};
-    std::array<std::byte, 16> tmpbuff{};
-    uint8_t                   tmpbuffpos                              = 0;
-    uint64_t                  addr                                    = 0;
-    reinterpret_cast<uintptr_t&>(target)                             &= ~1;
-    uint8_t                                             tramp_pos     = 0;
-    uint8_t                                             it_remaining  = 0;
-    uint64_t                                            it_original_address = 0;
-    THUMB_IT*                                           it_block = nullptr;
-    to_be_modified                                      tbm{};
-    utils::static_vector<to_be_modified, 16>            tbm_list{};
-    utils::static_vector<std::pair<uintptr_t, bool>, 3> branch_addresses{};
-    disassembler     arm{ target, uses_thumb };
-    std::shared_lock lock{ hook_lock };
+    pc_handling_t                 tmp_pc_handling{};
+    positions_t                   tmp_positions{};
+    orig_push_t                   orig_push{};
+    std::array<std::byte, 16>     tmpbuff{};
+    uint8_t                       tmpbuffpos          = 0;
+    uint64_t                      addr                = 0;
+    uint8_t                       tramp_pos           = 0;
+    uint8_t                       it_remaining        = 0;
+    uint64_t                      it_original_address = 0;
+    thumb::IT*                    it_block            = nullptr;
+    to_be_modified                tbm{};
+    tbm_list_t                    tbm_list{};
+    branch_addresses_t            branch_addresses{};
+    disassembler                  arm{ target, uses_thumb };
+    std::shared_lock              lock{ hook_lock };
 
     for (const cs_insn& instr : arm.disasm(memory_slot_size))
     {
@@ -569,11 +579,12 @@ namespace alterhook
           reinterpret_cast<const std::byte*>(instr.bytes);
       const uintptr_t tramp_addr =
           reinterpret_cast<uintptr_t>(ptrampoline.get()) + tramp_pos;
-      tbm.instr  = tramp_addr;
-      tbm.thumb  = uses_thumb;
-      tbm.size   = instr.size;
-      addr       = instr.address + instr.size;
-      tmpbuffpos = 0;
+      tbm.instr                              = ptrampoline.get() + tramp_pos;
+      tbm.thumb                              = uses_thumb;
+      tbm.size                               = instr.size;
+      addr                                   = instr.address + instr.size;
+      tmpbuffpos                             = 0;
+      std::byte*&                  tbm_instr = std::get<std::byte*>(tbm.instr);
       trampoline_instruction_entry entry{ arm, instr, encountered_reglist,
                                           uses_thumb };
 
@@ -586,20 +597,20 @@ namespace alterhook
         const uint8_t old_it_inst_count = it_block->instruction_count();
         const uint8_t old_it_cond_pos   = old_it_inst_count - it_remaining + 1;
 
-        if (it_block->get_condition(old_it_cond_pos) == THUMB_IT::E)
+        if (it_block->get_condition(old_it_cond_pos) == thumb::IT::E)
         {
-          THUMB_IT it{ ARMCC_getOppositeCondition(it_block->get_condition()) };
+          thumb::IT it{ ARMCC_getOppositeCondition(it_block->get_condition()) };
 
           for (uint8_t i = old_it_cond_pos + 1, j = 2; i <= old_it_inst_count;
                ++i, ++j)
-            it.set_condition(
-                j, static_cast<THUMB_IT::it_cond>(!it_block->get_condition(i)));
+            it.set_condition(j, static_cast<thumb::IT::it_cond>(
+                                    !it_block->get_condition(i)));
 
           new (&tmpbuff[tmpbuffpos]) auto(it);
         }
         else
         {
-          THUMB_IT it{ it_block->get_condition() };
+          thumb::IT it{ it_block->get_condition() };
 
           for (uint8_t i = old_it_cond_pos + 1, j = 2; i <= old_it_inst_count;
                ++i, ++j)
@@ -608,22 +619,22 @@ namespace alterhook
           new (&tmpbuff[tmpbuffpos]) auto(it);
         }
         it_block->pop(it_remaining);
-        it_block    = reinterpret_cast<THUMB_IT*>(tramp_addr + tmpbuffpos);
-        tmpbuffpos += sizeof(THUMB_IT);
-        copy_size  += sizeof(THUMB_IT);
-        tbm.instr  += sizeof(THUMB_IT);
+        it_block    = reinterpret_cast<thumb::IT*>(tramp_addr + tmpbuffpos);
+        tmpbuffpos += sizeof(thumb::IT);
+        copy_size  += sizeof(thumb::IT);
+        tbm_instr  += sizeof(thumb::IT);
       };
       // writes an instruction to the temporary buffer and updates tbm status
-      const auto write_and_advance = [&](auto instr, tbm_flags flag)
+      const auto write_and_advance = [&](auto instr)
       {
-        tbm.flags.set(flag);
         new (&tmpbuff[tmpbuffpos]) auto(instr);
         tmpbuffpos += sizeof(instr);
         copy_size  += sizeof(instr);
         tbm.size    = sizeof(instr);
+        tbm.instr =
+            reinterpret_cast<std::add_pointer_t<decltype(instr)>>(tbm_instr);
         tbm_list.push_back(tbm);
-        tbm.instr += sizeof(instr);
-        tbm.flags.reset(flag);
+        tbm.instr = tbm_instr + sizeof(instr);
       };
       // allocates 4 bytes starting from the end of the trampoline to be used
       // for storing constant data
@@ -644,7 +655,7 @@ namespace alterhook
         const cs_arm_op *op_begin = detail.operands,
                         *op_end   = detail.operands + detail.op_count;
         const auto result =
-            std::find_if(detail.operands, detail.operands + detail.op_count,
+            std::find_if(op_begin, op_end,
                          [](const cs_arm_op& operand) {
                            return operand.type == ARM_OP_MEM &&
                                   operand.mem.base == ARM_REG_PC;
@@ -681,31 +692,29 @@ namespace alterhook
               tmpbuffpos += sizeof(*it_block);
               copy_size  += sizeof(*it_block);
 
-              tbm.flags.set(M_POP);
-              new (it_block) THUMB_POP(r7);
-              tbm.instr = reinterpret_cast<uintptr_t>(it_block);
-              tbm.size  = sizeof(THUMB_POP);
+              new (it_block) thumb::POP(r7);
+              tbm_instr = reinterpret_cast<std::byte*>(it_block);
+              tbm.size  = sizeof(thumb::POP);
+              tbm.instr = reinterpret_cast<thumb::POP*>(tbm_instr);
               tbm_list.push_back(tbm);
-              tbm.instr = tramp_addr + sizeof(*it_block);
-              tbm.flags.reset(M_POP);
-
-              it_block = reinterpret_cast<THUMB_IT*>(tramp_addr);
+              tbm_instr =
+                  reinterpret_cast<std::byte*>(tramp_addr + sizeof(*it_block));
+              it_block = reinterpret_cast<thumb::IT*>(tramp_addr);
             }
             else
             {
-              write_and_advance(THUMB_POP(r7), M_POP);
+              write_and_advance(thumb::POP(r7));
               update_it_block();
             }
           }
           else
-            write_and_advance(THUMB_POP(r7), M_POP);
+            write_and_advance(thumb::POP(r7));
         }
         else
-          write_and_advance(POP(r7), M_POP);
+          write_and_advance(arm::POP(r7));
 
         memcpy(&tmpbuff[tmpbuffpos], instr.bytes, instr.size);
 
-        tbm.flags.reset();
         copy_source              = tmpbuff.data();
         should_setup_pc_handling = true;
 
@@ -745,14 +754,14 @@ namespace alterhook
 
               if (uses_thumb)
               {
-                copy_size = sizeof(THUMB2_CALL_ABS);
+                copy_size = sizeof(thumb2::custom::CALL);
 
                 if (it_remaining)
                 {
                   switch (it_block->instruction_count())
                   {
                   case 1:
-                    it_block->set_second_condition(THUMB_IT::T);
+                    it_block->set_second_condition(thumb::IT::T);
                     goto PLACE_CALL;
                   case 2:
                     it_block->set_third_condition(
@@ -764,18 +773,21 @@ namespace alterhook
                     goto PLACE_CALL;
                   case 4:
                     const ARMCC_CondCodes condition =
-                        it_block->get_fourth_condition() == THUMB_IT::T
+                        it_block->get_fourth_condition() == thumb::IT::T
                             ? it_block->get_condition()
                             : ARMCC_getOppositeCondition(
                                   it_block->get_condition());
-                    new (tmpbuff.data()) THUMB_IT(condition, THUMB_IT::T);
-                    tmpbuffpos  += sizeof(THUMB_IT);
-                    copy_size   += sizeof(THUMB_IT);
+                    new (tmpbuff.data()) thumb::IT(condition, thumb::IT::T);
+                    tmpbuffpos  += sizeof(thumb::IT);
+                    copy_size   += sizeof(thumb::IT);
                     copy_source  = tmpbuff.data();
-                    tbm.instr   += sizeof(THUMB_IT);
-                    THUMB2_CALL_ABS tcall{};
-                    tcall.set_offset(dataloc - utils_align(tbm.instr + 4, 4));
-                    if (tbm.instr % 4)
+                    tbm_instr   += sizeof(thumb::IT);
+                    thumb2::custom::CALL tcall{};
+                    tcall.set_offset(
+                        dataloc -
+                        utils_align(reinterpret_cast<uintptr_t>(tbm_instr) + 4,
+                                    4));
+                    if (reinterpret_cast<uintptr_t>(tbm_instr) % 4)
                       tcall.align();
                     new (&tmpbuff[tmpbuffpos]) auto(tcall);
                     it_block->pop_instruction();
@@ -785,7 +797,7 @@ namespace alterhook
                 else
                 {
                 PLACE_CALL:
-                  THUMB2_CALL_ABS tcall{};
+                  thumb2::custom::CALL tcall{};
                   tcall.set_offset(dataloc - utils_align(tramp_addr + 4, 4));
                   if (tramp_addr % 4)
                     tcall.align();
@@ -795,7 +807,7 @@ namespace alterhook
               }
               else
               {
-                CALL_ABS call{};
+                arm::custom::CALL_ABS call{};
                 if (instr.detail->arm.cc != ARMCC_AL &&
                     instr.detail->arm.cc != ARMCC_UNDEF)
                   call.set_condition(instr.detail->arm.cc);
@@ -832,34 +844,37 @@ namespace alterhook
               const uintptr_t dataloc = find_loc();
               *reinterpret_cast<uint32_t*>(dataloc) =
                   entry.branch_dest | entry.next_instr_set;
-              copy_size   = sizeof(JMP_ABS);
+              copy_size   = sizeof(arm::custom::JMP);
               copy_source = tmpbuff.data();
 
               if (uses_thumb)
               {
                 if (finished && !should_setup_pc_handling)
-                  write_and_advance(THUMB_POP(r7), M_POP);
+                  write_and_advance(thumb::POP(r7));
                 if (instr.detail->arm.cc != ARMCC_AL &&
                     instr.detail->arm.cc != ARMCC_UNDEF)
                 {
-                  new (&tmpbuff[tmpbuffpos]) THUMB_IT(instr.detail->arm.cc);
-                  tmpbuffpos += sizeof(THUMB_IT);
-                  copy_size  += sizeof(THUMB_IT);
-                  tbm.instr  += sizeof(THUMB_IT);
+                  new (&tmpbuff[tmpbuffpos]) thumb::IT(instr.detail->arm.cc);
+                  tmpbuffpos += sizeof(thumb::IT);
+                  copy_size  += sizeof(thumb::IT);
+                  tbm_instr  += sizeof(thumb::IT);
                 }
-                THUMB2_JMP_ABS tjmp{};
-                tjmp.set_offset(dataloc - utils_align(tbm.instr + 4, 4));
+                thumb2::custom::JMP tjmp{};
+                tjmp.set_offset(
+                    dataloc -
+                    utils_align(reinterpret_cast<uintptr_t>(tbm_instr) + 4, 4));
                 new (&tmpbuff[tmpbuffpos]) auto(tjmp);
               }
               else
               {
-                JMP_ABS jmp{};
+                arm::custom::JMP jmp{};
                 if (instr.detail->arm.cc != ARMCC_AL &&
                     instr.detail->arm.cc != ARMCC_UNDEF)
                   jmp.set_condition(instr.detail->arm.cc);
                 if (finished && !should_setup_pc_handling)
-                  write_and_advance(POP(r7), M_POP);
-                jmp.set_offset(dataloc - (tbm.instr + 8));
+                  write_and_advance(arm::POP(r7));
+                jmp.set_offset(dataloc -
+                               reinterpret_cast<uintptr_t>(tbm_instr + 8));
                 new (&tmpbuff[tmpbuffpos]) auto(jmp);
               }
             }
@@ -873,9 +888,9 @@ namespace alterhook
             if (!should_setup_pc_handling)
             {
               if (uses_thumb)
-                write_and_advance(THUMB_POP(r7), M_POP);
+                write_and_advance(thumb::POP(r7));
               else
-                write_and_advance(POP(r7), M_POP);
+                write_and_advance(arm::POP(r7));
             }
 
             finished =
@@ -901,9 +916,10 @@ namespace alterhook
               it_remaining, target));
         }
         it_original_address = instr.address;
-        it_block            = reinterpret_cast<THUMB_IT*>(tramp_addr);
+        it_block            = reinterpret_cast<thumb::IT*>(tramp_addr);
         it_remaining =
-            reinterpret_cast<THUMB_IT*>(instr.address)->instruction_count() + 1;
+            reinterpret_cast<thumb::IT*>(instr.address)->instruction_count() +
+            1;
       }
       // if a push with reglist operand is encountered we cache for later use if
       // needed
@@ -913,12 +929,12 @@ namespace alterhook
         if (uses_thumb)
         {
           if (instr.size == 4)
-            orig_push = reinterpret_cast<THUMB2_PUSH_REGLIST*>(tramp_addr);
+            orig_push = reinterpret_cast<thumb2::PUSH_REGLIST*>(tramp_addr);
           else
-            orig_push = reinterpret_cast<THUMB_PUSH_REGLIST*>(tramp_addr);
+            orig_push = reinterpret_cast<thumb::PUSH_REGLIST*>(tramp_addr);
         }
         else
-          orig_push = reinterpret_cast<PUSH_REGLIST*>(tramp_addr);
+          orig_push = reinterpret_cast<arm::PUSH_REGLIST*>(tramp_addr);
         push_found = true;
       }
       else if (entry.flags[M_TBM] || (instr.id == ARM_INS_ADR && uses_thumb))
@@ -927,13 +943,12 @@ namespace alterhook
 
         if (should_setup_pc_handling)
         {
-          if (!pc_handling.first)
-            pc_handling = { true, tramp_pos };
+          if (!tmp_pc_handling.first)
+            tmp_pc_handling = { true, tramp_pos };
           if (push_found)
           {
             tbm.orig_push = &orig_push;
-            tbm.flags.set(M_ORIGINAL_PUSH);
-            push_found = false;
+            push_found    = false;
           }
 
           if (uses_thumb)
@@ -942,10 +957,11 @@ namespace alterhook
             {
               if (!pc_loc)
                 pc_loc = find_loc();
-              write_and_advance(
-                  THUMB_LDR_LITERAL(
-                      r7, (pc_loc - utils_align(tbm.instr + 4, 4)) / 4),
-                  M_LDR);
+              write_and_advance(thumb::LDR_LITERAL(
+                  r7,
+                  (pc_loc -
+                   utils_align(reinterpret_cast<uintptr_t>(tbm_instr + 4), 4)) /
+                      4));
               const uintptr_t new_pc_val =
                   instr.id == ARM_INS_ADR || thumb_ldr_literal_like()
                       ? utils_align(instr.address + 4, 4)
@@ -958,7 +974,7 @@ namespace alterhook
               {
                 const uint8_t offset = new_pc_val - old_pc_val;
                 pc_val               = old_pc_val + offset;
-                write_and_advance(THUMB_ADD(r7, offset), M_ADD);
+                write_and_advance(thumb2::INCREMENTAL_ADD(r7, offset));
               }
             };
 
@@ -968,30 +984,28 @@ namespace alterhook
               {
                 prepare_pc_emulation();
                 new (&tmpbuff[tmpbuffpos]) auto(*it_block);
-                tmpbuffpos                    += sizeof(*it_block);
-                copy_size                     += sizeof(*it_block);
-                tbm.instr                     += sizeof(*it_block);
-                const uintptr_t current_instr  = tbm.instr;
-                tbm.flags.set(M_PUSH);
-                new (it_block) THUMB_PUSH(r7);
-                tbm.instr = reinterpret_cast<uintptr_t>(it_block);
-                tbm.size  = sizeof(THUMB_PUSH);
+                tmpbuffpos                     += sizeof(*it_block);
+                copy_size                      += sizeof(*it_block);
+                tbm_instr                      += sizeof(*it_block);
+                std::byte* const current_instr  = tbm_instr;
+                new (it_block) thumb::PUSH(r7);
+                tbm.instr = reinterpret_cast<thumb::PUSH*>(it_block);
+                tbm.size  = sizeof(thumb::PUSH);
                 tbm_list.push_back(tbm);
                 tbm.instr = current_instr;
-                tbm.flags.reset(M_PUSH);
                 it_block =
-                    reinterpret_cast<THUMB_IT*>(tbm.instr - sizeof(*it_block));
+                    reinterpret_cast<thumb::IT*>(tbm_instr - sizeof(*it_block));
               }
               else
               {
-                write_and_advance(THUMB_PUSH(r7), M_PUSH);
+                write_and_advance(thumb::PUSH(r7));
                 prepare_pc_emulation();
                 update_it_block();
               }
             }
             else
             {
-              write_and_advance(THUMB_PUSH(r7), M_PUSH);
+              write_and_advance(thumb::PUSH(r7));
               prepare_pc_emulation();
             }
           }
@@ -999,8 +1013,9 @@ namespace alterhook
           {
             if (!pc_loc)
               pc_loc = find_loc();
-            write_and_advance(PUSH(r7), M_PUSH);
-            write_and_advance(LDR_LITERAL(r7, pc_loc - (tbm.instr + 8)), M_LDR);
+            write_and_advance(arm::PUSH(r7));
+            write_and_advance(arm::LDR_LITERAL(
+                r7, pc_loc - reinterpret_cast<uintptr_t>(tbm_instr + 8)));
             uint32_t& old_pc_val = *reinterpret_cast<uint32_t*>(pc_loc);
 
             if (!pc_val)
@@ -1009,12 +1024,11 @@ namespace alterhook
             {
               const uint16_t offset = (instr.address + 8) - old_pc_val;
               pc_val                = old_pc_val + offset;
-              write_and_advance(ADD(r7, r7, offset), M_ADD);
+              write_and_advance(arm::ADD(r7, r7, offset));
             }
           }
 
-          tbm.flags.reset(M_REGLIST);
-          tbm.flags.reset(M_ORIGINAL_PUSH);
+          tbm.orig_push            = nullptr;
           should_setup_pc_handling = false;
         }
         else
@@ -1032,7 +1046,7 @@ namespace alterhook
               if (offset)
               {
                 pc_val += offset;
-                write_and_advance(THUMB_ADD(r7, offset), M_ADD);
+                write_and_advance(thumb2::INCREMENTAL_ADD(r7, offset));
                 return true;
               }
               return false;
@@ -1042,25 +1056,30 @@ namespace alterhook
             {
               if (it_remaining == it_block->instruction_count())
               {
-                uintptr_t offset  = instr.id == ARM_INS_ADR
-                                        ? utils_align(instr.address + 4, 4)
-                                        : instr.address + 4;
-                offset           -= pc_val;
+                constexpr size_t instr_pc_pos = 4;
+                uintptr_t        instr_pc_loc =
+                    instr.id == ARM_INS_ADR
+                               ? utils_align(instr.address + instr_pc_pos, 4)
+                               : instr.address + instr_pc_pos;
+                uint16_t offset = instr_pc_loc - pc_val;
 
                 if (offset)
                 {
-                  new (tmpbuff.data()) auto(*it_block);
-                  tmpbuffpos += sizeof(*it_block);
-                  copy_size  += sizeof(*it_block);
+                  thumb2::INCREMENTAL_ADD add{ r7, offset };
+                  new (tmpbuff.data()) auto(add.operands);
+                  new (tmpbuff.data() + sizeof(add.operands)) auto(*it_block);
+                  tmpbuffpos += sizeof(add.operands) + sizeof(thumb::IT);
+                  copy_size  += sizeof(add.operands) + sizeof(thumb::IT);
                   pc_val     += offset;
-                  tbm.flags.set(M_ADD);
-                  new (it_block) THUMB_ADD(r7, offset);
-                  tbm.instr = reinterpret_cast<uintptr_t>(it_block);
-                  tbm.size  = sizeof(THUMB_ADD);
+                  new (it_block) auto(add.opcode);
+                  tbm.instr =
+                      reinterpret_cast<thumb2::INCREMENTAL_ADD*>(it_block);
+                  tbm.size = sizeof(thumb2::INCREMENTAL_ADD);
                   tbm_list.push_back(tbm);
-                  tbm.instr = tramp_addr + sizeof(*it_block);
-                  tbm.flags.reset(M_ADD);
-                  it_block = reinterpret_cast<THUMB_IT*>(tramp_addr);
+                  tbm.instr = reinterpret_cast<std::byte*>(
+                      tramp_addr + sizeof(add.operands) + sizeof(thumb::IT));
+                  it_block = reinterpret_cast<thumb::IT*>(tramp_addr +
+                                                          sizeof(add.operands));
                 }
               }
               else if (update_custom_pc())
@@ -1073,7 +1092,7 @@ namespace alterhook
           {
             const uint16_t offset  = (instr.address + 8) - pc_val;
             pc_val                += offset;
-            write_and_advance(ADD(r7, r7, offset), M_ADD);
+            write_and_advance(arm::ADD(r7, r7, offset));
           }
         }
 
@@ -1084,7 +1103,7 @@ namespace alterhook
           reg_t reg  = static_cast<reg_t>(
               __alterhook_reg_bitnum(instr.detail->regs_write[0]));
           uint64_t imm = instr.detail->arm.operands[1].imm;
-          write_and_advance(THUMB2_ADD(reg, r7, imm), M_ADR);
+          write_and_advance(thumb2::ADD(reg, r7, imm));
         }
         else if (entry.flags[M_SMALL_LDR])
         {
@@ -1092,18 +1111,16 @@ namespace alterhook
           reg_t reg  = static_cast<reg_t>(
               __alterhook_reg_bitnum(instr.detail->regs_write[0]));
           uint32_t imm = instr.detail->arm.operands[1].mem.disp;
-          write_and_advance(THUMB2_LDR_IMM(reg, r7, static_cast<uint16_t>(imm)),
-                            M_SMALL_LDR);
+          write_and_advance(
+              thumb2::LDR_IMM(reg, r7, static_cast<uint16_t>(imm)));
         }
         else
         {
-          tbm.flags.set(M_TBM);
           tbm.size     = instr.size;
           tbm.encoding = entry.encoding;
           memcpy(&tmpbuff[tmpbuffpos], instr.bytes, instr.size);
           tbm_list.push_back(tbm);
         }
-        tbm.flags.reset();
       }
 
       if (std::find_if(branch_addresses.begin(), branch_addresses.end(),
@@ -1120,7 +1137,7 @@ namespace alterhook
       if (it_remaining)
         --it_remaining;
 
-      instruction_sets.set(positions.size(), uses_thumb);
+      tmp_instruction_sets.set(tmp_positions.size(), uses_thumb);
       auto iter =
           std::find_if(branch_addresses.begin(), branch_addresses.end(),
                        [&](std::pair<uintptr_t, bool>& element) {
@@ -1143,7 +1160,7 @@ namespace alterhook
         branch_addresses.erase(iter);
       }
 
-      positions.push_back(
+      tmp_positions.push_back(
           { instr.address - reinterpret_cast<uintptr_t>(target), tramp_pos });
       memcpy(reinterpret_cast<void*>(tramp_addr), copy_source, copy_size);
       tramp_pos += copy_size;
@@ -1158,7 +1175,7 @@ namespace alterhook
               reinterpret_cast<std::byte*>(it_block), it_original_address,
               (tramp_addr + copy_size) - reinterpret_cast<uintptr_t>(it_block),
               it_remaining, target));
-        tbm.instr       = tramp_addr + copy_size;
+        tbm.instr       = reinterpret_cast<std::byte*>(tramp_addr + copy_size);
         void* copy_dest = reinterpret_cast<void*>(tramp_begin + tramp_pos);
         copy_size       = 0;
         tmpbuffpos      = 0;
@@ -1168,55 +1185,61 @@ namespace alterhook
         {
           if (uses_thumb)
           {
-            write_and_advance(THUMB_POP(r7), M_POP);
+            write_and_advance(thumb::POP(r7));
 
-            if (tbm.instr % 4)
+            if (reinterpret_cast<uintptr_t>(tbm_instr) % 4)
             {
               const uintptr_t dataloc = find_loc();
               *reinterpret_cast<uint32_t*>(dataloc) =
                   (instr.address + instr.size) | 1;
-              THUMB2_JMP_ABS tjmp{};
-              tjmp.set_offset(dataloc - utils_align(tbm.instr + 4, 4));
+              thumb2::custom::JMP tjmp{};
+              tjmp.set_offset(
+                  dataloc -
+                  utils_align(reinterpret_cast<uintptr_t>(tbm_instr + 4), 4));
               new (&tmpbuff[tmpbuffpos]) auto(tjmp);
               copy_size += sizeof(tjmp);
             }
             else
             {
               new (&tmpbuff[tmpbuffpos])
-                  THUMB2_FULL_JMP_ABS((instr.address + instr.size) | 1);
-              copy_size += sizeof(THUMB2_FULL_JMP_ABS);
+                  thumb2::custom::FULL_JMP((instr.address + instr.size) | 1);
+              copy_size += sizeof(thumb2::custom::FULL_JMP);
             }
           }
           else
           {
-            write_and_advance(POP(r7), M_POP);
-            new (&tmpbuff[tmpbuffpos]) FULL_JMP_ABS(instr.address + instr.size);
-            copy_size += sizeof(FULL_JMP_ABS);
+            write_and_advance(arm::POP(r7));
+            new (&tmpbuff[tmpbuffpos])
+                arm::custom::FULL_JMP(instr.address + instr.size);
+            copy_size += sizeof(arm::custom::FULL_JMP);
           }
         }
         else if (uses_thumb)
         {
-          if (tbm.instr % 4)
+          if (reinterpret_cast<uintptr_t>(tbm_instr) % 4)
           {
             const uintptr_t dataloc = find_loc();
             *reinterpret_cast<uint32_t*>(dataloc) =
                 (instr.address + instr.size) | 1;
-            THUMB2_JMP_ABS tjmp{};
-            tjmp.set_offset(dataloc - utils_align(tbm.instr + 4, 4));
+            thumb2::custom::JMP tjmp{};
+            tjmp.set_offset(
+                dataloc -
+                utils_align(reinterpret_cast<uintptr_t>(tbm_instr + 4), 4));
             new (&tmpbuff[tmpbuffpos]) auto(tjmp);
             copy_size += sizeof(tjmp);
           }
           else
           {
             new (&tmpbuff[tmpbuffpos])
-                THUMB2_FULL_JMP_ABS((instr.address + instr.size) | 1);
-            copy_size += sizeof(THUMB2_FULL_JMP_ABS);
+                thumb2::custom::FULL_JMP((instr.address + instr.size) | 1);
+            copy_size += sizeof(thumb2::custom::FULL_JMP);
           }
         }
         else
         {
-          new (&tmpbuff[tmpbuffpos]) FULL_JMP_ABS(instr.address + instr.size);
-          copy_size += sizeof(FULL_JMP_ABS);
+          new (&tmpbuff[tmpbuffpos])
+              arm::custom::FULL_JMP(instr.address + instr.size);
+          copy_size += sizeof(arm::custom::FULL_JMP);
         }
 
         if ((tramp_pos + copy_size) > available_size)
@@ -1224,7 +1247,8 @@ namespace alterhook
               target, tramp_pos + copy_size, available_size));
 
         memcpy(copy_dest, copy_source, copy_size);
-        positions.push_back(
+        tmp_instruction_sets.set(tmp_positions.size(), uses_thumb);
+        tmp_positions.push_back(
             { (instr.address - reinterpret_cast<uintptr_t>(target)) +
                   instr.size,
               tramp_pos });
@@ -1232,8 +1256,6 @@ namespace alterhook
         break;
       }
     }
-
-    tramp_size = tramp_pos;
 
     if (tbm_list)
     {
@@ -1251,8 +1273,8 @@ namespace alterhook
     if (origpos < size_needed &&
         !is_pad(target + origpos, size_needed - origpos, uses_thumb))
     {
-      if ((origpos < sizeof(LDR_LITERAL) &&
-           !is_pad(target + origpos, sizeof(LDR_LITERAL) - origpos,
+      if ((origpos < sizeof(arm::LDR_LITERAL) &&
+           !is_pad(target + origpos, sizeof(arm::LDR_LITERAL) - origpos,
                    uses_thumb)) ||
           !is_pad(target - sizeof(uint32_t), sizeof(uint32_t), uses_thumb))
         throw(exceptions::insufficient_function_size(target, origpos,
@@ -1260,10 +1282,18 @@ namespace alterhook
 
       patch_above = true;
     }
+
+    ptarget          = tmp_target;
+    positions        = tmp_positions;
+    instruction_sets = tmp_instruction_sets;
+    pc_handling      = tmp_pc_handling;
+    old_protect      = tmp_protect;
+    tramp_size       = tramp_pos;
   }
 
   trampoline::trampoline(const trampoline& other)
-      : ptarget(other.ptarget), ptrampoline(trampoline_buffer::allocate()),
+      : ptarget(other.ptarget),
+        ptrampoline(other.ptarget ? trampoline_buffer::allocate() : nullptr),
         instruction_sets(other.instruction_sets),
         patch_above(other.patch_above), tramp_size(other.tramp_size),
         pc_handling(other.pc_handling), old_protect(other.old_protect),
@@ -1286,37 +1316,47 @@ namespace alterhook
 
   trampoline& trampoline::operator=(const trampoline& other)
   {
-    if (this != &other)
+    if (this == &other)
+      return *this;
+    if (!other.ptarget)
     {
-      if (!ptrampoline)
-        ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
-      ptarget          = other.ptarget;
-      instruction_sets = other.instruction_sets;
-      patch_above      = other.patch_above;
-      tramp_size       = other.tramp_size;
-      pc_handling      = other.pc_handling;
-      positions        = other.positions;
-      old_protect      = other.old_protect;
-      memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
+      reset();
+      return *this;
     }
+
+    if (!ptrampoline)
+      ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
+    ptarget          = other.ptarget;
+    instruction_sets = other.instruction_sets;
+    patch_above      = other.patch_above;
+    tramp_size       = other.tramp_size;
+    pc_handling      = other.pc_handling;
+    positions        = other.positions;
+    old_protect      = other.old_protect;
+    memcpy(ptrampoline.get(), other.ptrampoline.get(), memory_slot_size);
+
     return *this;
   }
 
   trampoline& trampoline::operator=(trampoline&& other) noexcept
   {
-    if (this != &other)
+    if (this == &other)
+      return *this;
+    if (!other.ptarget)
     {
-      ptarget          = std::exchange(other.ptarget, nullptr);
-      ptrampoline      = std::move(other.ptrampoline);
-      instruction_sets = other.instruction_sets;
-      patch_above      = std::exchange(other.patch_above, false);
-      tramp_size       = std::exchange(other.tramp_size, 0);
-      pc_handling =
-          std::exchange(other.pc_handling, std::pair(false, uint8_t{}));
-      positions   = other.positions;
-      old_protect = other.old_protect;
-      other.positions.clear();
+      reset();
+      return *this;
     }
+
+    ptarget          = std::exchange(other.ptarget, nullptr);
+    ptrampoline      = std::move(other.ptrampoline);
+    instruction_sets = other.instruction_sets;
+    patch_above      = std::exchange(other.patch_above, false);
+    tramp_size       = std::exchange(other.tramp_size, 0);
+    pc_handling = std::exchange(other.pc_handling, std::pair(false, uint8_t{}));
+    positions   = other.positions;
+    old_protect = other.old_protect;
+    other.positions.clear();
     return *this;
   }
 
@@ -1349,5 +1389,18 @@ namespace alterhook
       }
     }
     return stream.str();
+  }
+
+  void trampoline::reset()
+  {
+    if (!ptarget)
+      return;
+    ptarget     = nullptr;
+    patch_above = false;
+    tramp_size  = 0;
+    pc_handling = { false, 0 };
+    old_protect = PROT_NONE;
+    positions.clear();
+    instruction_sets.reset();
   }
 } // namespace alterhook

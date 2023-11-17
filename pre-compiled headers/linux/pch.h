@@ -24,5 +24,6 @@
 #include <thread>
 #include <bitset>
 #include <variant>
+#include <optional>
 #include "macros.h"
 #include "utilities/utils.h"
