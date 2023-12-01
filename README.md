@@ -1,6 +1,6 @@
 # AlterHook
 
-A dynamic inline hooking library that is written entirely in C++ and focuses on ease of use API, cross-platform support, customization as well and edge case handling to ensure that it can work as expected no matter the target.
+A dynamic inline hooking library that is written entirely in C++ and focuses on ease of use API, cross-platform support, customization as well as edge case handling to ensure that it can work as expected no matter the target.
 
 It has the following properties:
 
