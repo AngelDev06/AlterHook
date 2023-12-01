@@ -243,7 +243,7 @@ Constructs a hook instance by taking ownership of the trampoline buffer from `tr
 | --- | --- | --- |
 | tramp | trampoline&& | the trampoline to move from |
 
-## Assignment operator
+## Assignment Operators
 
 ### copy assignment operator
 

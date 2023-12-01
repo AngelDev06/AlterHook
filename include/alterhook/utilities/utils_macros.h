@@ -1,6 +1,11 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include <cassert>
+
+#define utils_assert(expr, msg) assert(((void)msg, expr))
+#define utils_underlying(enumval)                                              \
+  static_cast<std::underlying_type_t<decltype(enumval)>>(enumval)
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
   #define utils_windows true

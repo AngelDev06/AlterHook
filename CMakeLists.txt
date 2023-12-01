@@ -11,6 +11,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "In-tree builds are not supported. Run CMake from a separate directory: cmake -B build")
 endif()
 
+set(ALTERHOOK_TOP_LEVEL OFF)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+	set(ALTERHOOK_TOP_LEVEL ON)
+endif()
+
 project(
 	AlterHook
 	VERSION 0.0
@@ -27,7 +32,7 @@ endif()
 
 option(ALTERHOOK_SHARED "Use shared version of AlterHook")
 option(ALTERHOOK_TARGET_ARCH "Specifies the target architecture to use")
-option(ALTERHOOK_BUILD_TESTS "Determines whether to build the tests on folder 'tests/'" ON)
+option(ALTERHOOK_BUILD_TESTS "Determines whether to build the tests on folder 'tests/'" ${ALTERHOOK_TOP_LEVEL})
 set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM")
 
 set(
@@ -159,11 +164,19 @@ source_group("PCH" ${ALTERHOOK_PCH}/pch.h)
 
 if (ALTERHOOK_SHARED)
 	add_library(AlterHook SHARED ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
-	target_compile_definitions(AlterHook PUBLIC ALTERHOOK_SHARED PRIVATE ALTERHOOK_EXPORT)
 	set_target_properties(capstone PROPERTIES POSITION_INDEPENDENT_CODE ON)
 else()
 	add_library(AlterHook STATIC ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
 endif()
+
+target_compile_definitions(
+	AlterHook 
+PUBLIC
+	$<$<CONFIG:Debug>:_GLIBCXX_DEBUG>
+	$<$<BOOL:${ALTERHOOK_SHARED}>:ALTERHOOK_SHARED>
+PRIVATE
+	$<$<BOOL:${ALTERHOOK_SHARED}>:ALTERHOOK_EXPORT>
+)
 
 target_include_directories(
 	AlterHook 

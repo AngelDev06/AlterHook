@@ -740,7 +740,9 @@ namespace alterhook
       thread_freezer   freeze{ nullptr };
       do_swap();
 
+#if !utils_x64
       try
+#endif
       {
         if (left->enabled)
         {
@@ -765,6 +767,7 @@ namespace alterhook
           }
         }
       }
+#if !utils_x64
       catch (...)
       {
         do_swap();
@@ -784,6 +787,7 @@ namespace alterhook
         }
         throw;
       }
+#endif
     }
 
     bind(left, left, left->enabled);
@@ -792,6 +796,12 @@ namespace alterhook
 
   void hook_chain::swap(hook_chain& other)
   {
+    if (this == &other)
+      return;
+    utils_assert(
+        other.ptarget != ptarget,
+        "hook_chain::swap: other can't share the same target as *this");
+
     {
 #if !utils_x64
       bool injected_first_range = false;
@@ -828,17 +838,8 @@ namespace alterhook
           }
           catch (...)
           {
-            try
-            {
-              __alterhook_patch_jmp(enabled.back().pdetour);
-            }
-            catch (...)
-            {
-              toggle_status_all(include::enabled);
-              enabled = std::move(other.enabled);
-              disabled.swap(other.disabled);
-              throw;
-            }
+            // if that throws no guarantee is provided
+            __alterhook_patch_jmp(enabled.back().pdetour);
             throw;
           }
         }
@@ -875,7 +876,7 @@ namespace alterhook
     utils_assert(&other != this, "hook_chain::splice: other needs to be a "
                                  "different hook_chain instance");
     utils_assert(to != transfer::both,
-                 "hook_chain::splice: to can't be the both flag");
+                 "hook_chain::splice: `to` must not be `transfer::both`");
     if (other.empty())
       return;
     bool             to_enabled = to == transfer::enabled;
@@ -996,7 +997,7 @@ namespace alterhook
                           list_iterator oldpos, transfer to)
   {
     utils_assert(to != transfer::both,
-                 "hook_chain::splice: to can't be the both flag");
+                 "hook_chain::splice: `to` must not be `transfer::both`");
     const bool to_enabled = to == transfer::enabled;
     auto       oldnext    = std::next(oldpos);
     if (&other == this && oldpos->enabled == to_enabled &&
@@ -1047,6 +1048,8 @@ namespace alterhook
   void hook_chain::splice(list_iterator newpos, hook_chain& other,
                           list_iterator first, list_iterator last, transfer to)
   {
+    utils_assert(to != transfer::both,
+                 "hook_chain::splice: `to` must not be `transfer::both`");
     if (first == last)
       return;
     if (std::next(first) == last)
@@ -1448,22 +1451,43 @@ namespace alterhook
   {
     if (ptarget == target)
       return;
-    if (!enabled.empty())
-    {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
-      __alterhook_inject(backup.data(), false);
-    }
+    uninject_all();
 
     init(target);
     __alterhook_make_backup();
 
     if (!enabled.empty())
     {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, true };
-      __alterhook_inject(enabled.back().pdetour, true);
+      try
+      {
+        std::unique_lock lock{ hook_lock };
+        thread_freezer   freeze{ *this, true };
+        __alterhook_inject(enabled.back().pdetour, true);
+      }
+      catch (...)
+      {
+        toggle_status_all(include::enabled);
+        throw;
+      }
     }
+  }
+
+  bool hook_chain::operator==(const hook_chain& other) const noexcept
+  {
+    return std::forward_as_tuple(ptarget, enabled.size(), disabled.size()) ==
+               std::forward_as_tuple(other.ptarget, other.enabled.size(),
+                                     other.disabled.size()) &&
+           std::equal(begin(), end(), other.begin(),
+                      [](const hook& left, const hook& right)
+                      {
+                        return std::tie(left.pdetour, left.enabled) ==
+                               std::tie(right.pdetour, right.enabled);
+                      });
+  }
+
+  bool hook_chain::operator!=(const hook_chain& other) const noexcept
+  {
+    return !(*this == other);
   }
 
 #if utils_clang
@@ -1653,45 +1677,41 @@ namespace alterhook
       return;
     }
 
-    auto [current, other] = to_enabled ? std::pair(&enabled, &disabled)
-                                       : std::pair(&disabled, &enabled);
+    auto [current, other] =
+        to_enabled ? std::tie(enabled, disabled) : std::tie(disabled, enabled);
 
     bool          search = false;
     list_iterator search_itr{};
 
-    if (pos == current->begin())
+    if (pos == current.begin())
     {
       if (to_enabled != starts_enabled)
       {
-        if (pos == current->end())
+        if (pos == current.end())
         {
-          hook& trglast     = other->back();
+          hook& trglast     = other.back();
           trglast.has_other = true;
           trglast.other     = oldpos;
         }
         else
         {
           search     = true;
-          search_itr = other->begin();
+          search_itr = other.begin();
         }
       }
     }
-    else
+    else if (list_iterator posprev = std::prev(pos); posprev->has_other)
     {
-      list_iterator posprev = std::prev(pos);
-      if (posprev->has_other)
+      if (pos == current.end())
       {
-        if (pos == current->end())
-        {
-          hook& trglast     = other->back();
-          trglast.has_other = true;
-          trglast.other     = oldpos;
-        }
-        else
-        {
-          search     = true;
-          search_itr = posprev->other;
-        }
+        hook& trglast     = other.back();
+        trglast.has_other = true;
+        trglast.other     = oldpos;
+      }
+      else
+      {
+        search     = true;
+        search_itr = posprev->other;
       }
     }
 
@@ -2147,6 +2167,10 @@ namespace alterhook
   void hook_chain::hook::enable()
   {
     utils_assert(
+        pchain,
+        "hook_chain::hook::enable: Can't enable an uninitialized hook_chain "
+        "element. Perhaps an attempt to use a default constructed instance?");
+    utils_assert(
         pchain->ptarget != pdetour,
         "hook_chain::hook::enable: target & detour have the same address");
     if (enabled)
@@ -2168,22 +2192,67 @@ namespace alterhook
 
   void hook_chain::hook::disable()
   {
+    utils_assert(
+        pchain,
+        "hook_chain::hook::disable: Can't disable an uninitialized hook_chain "
+        "element. Perhaps an attempt to use a default constructed instance?");
     if (!enabled)
       return;
     pchain->uninject(current);
     pchain->toggle_status(current);
   }
 
+  void hook_chain::hook::set_detour(std::byte* detour)
+  {
+    utils_assert(pchain, "hook_chain::hook::set_detour: Can't set the detour "
+                         "of an uninitialized hook_chain element. Perhaps an "
+                         "attempt to use a default constructed instance?");
+    if (pdetour == detour)
+      return;
+
+    if (enabled)
+    {
+      std::unique_lock lock{ hook_lock };
+      list_iterator    next = std::next(current);
+
+      if (next == pchain->enabled.end())
+        __alterhook_patch_base_node_jmp(detour);
+      else
+      {
+        thread_freezer freeze{ nullptr };
+        next->poriginal = detour;
+        *next->origwrap = detour;
+      }
+    }
+
+    pdetour = detour;
+  }
+
+  void hook_chain::hook::set_original(helpers::orig_buff_t& original)
+  {
+    utils_assert(pchain,
+                 "hook_chain::hook::set_original: Can't set the original "
+                 "callback of an uninitialized hook_chain element. Perhaps an "
+                 "attempt to use a default constructed instance?");
+    thread_freezer freeze{};
+    if (enabled)
+      freeze.init(nullptr);
+
+    *std::launder(reinterpret_cast<helpers::original*>(&original)) = poriginal;
+    *origwrap                                                      = nullptr;
+    origbuff                                                       = original;
+  }
+
   bool hook_chain::hook::operator==(const hook& other) const noexcept
   {
-    return std::tie(pchain, pdetour, enabled) ==
-           std::tie(other.pchain, other.pdetour, other.enabled);
+    return std::tie(pchain->ptarget, pdetour, enabled) ==
+           std::tie(other.pchain->ptarget, other.pdetour, other.enabled);
   }
 
   bool hook_chain::hook::operator!=(const hook& other) const noexcept
   {
-    return std::tie(pchain, pdetour, enabled) !=
-           std::tie(other.pchain, other.pdetour, other.enabled);
+    return std::tie(pchain->ptarget, pdetour, enabled) !=
+           std::tie(other.pchain->ptarget, other.pdetour, other.enabled);
   }
 
   std::reference_wrapper<typename hook_chain::hook> hook_chain::empty_ref_wrap()

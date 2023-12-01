@@ -124,7 +124,7 @@ namespace alterhook
     void push_front(dtr&& detour, orig& original, bool enable_hook = true);
     template <__alterhook_is_detour_and_original(dtr, orig)>
     hook& insert(list_iterator position, dtr&& detour, orig& original,
-                 include trg = include::enabled);
+                 include trg);
     template <__alterhook_is_detour_and_original(dtr, orig)>
     hook& insert(iterator position, dtr&& detour, orig& original);
     void  swap(list_iterator left, hook_chain& other, list_iterator right);
@@ -142,12 +142,11 @@ namespace alterhook
       merge(other, at_back);
     }
 
-    void splice(list_iterator newpos, hook_chain& other,
-                transfer to   = transfer::enabled,
+    void splice(list_iterator newpos, hook_chain& other, transfer to,
                 transfer from = transfer::both);
 
-    void splice(list_iterator newpos, hook_chain&& other,
-                transfer to = transfer::enabled, transfer from = transfer::both)
+    void splice(list_iterator newpos, hook_chain&& other, transfer to,
+                transfer from = transfer::both)
     {
       splice(newpos, other, to, from);
     }
@@ -159,10 +158,10 @@ namespace alterhook
                 transfer from = transfer::both);
 
     void splice(list_iterator newpos, hook_chain& other, list_iterator oldpos,
-                transfer to = transfer::enabled);
+                transfer to);
 
     void splice(list_iterator newpos, hook_chain&& other, list_iterator oldpos,
-                transfer to = transfer::enabled)
+                transfer to)
     {
       splice(newpos, other, oldpos, to);
     }
@@ -172,10 +171,10 @@ namespace alterhook
     void splice(iterator newpos, hook_chain&& other, list_iterator oldpos);
 
     void splice(list_iterator newpos, hook_chain& other, list_iterator first,
-                list_iterator last, transfer to = transfer::enabled);
+                list_iterator last, transfer to);
 
     void splice(list_iterator newpos, hook_chain&& other, list_iterator first,
-                list_iterator last, transfer to = transfer::enabled)
+                list_iterator last, transfer to)
     {
       splice(newpos, other, first, last, to);
     }
@@ -187,10 +186,10 @@ namespace alterhook
                 list_iterator last);
 
     void splice(list_iterator newpos, hook_chain& other, iterator first,
-                iterator last, transfer to = transfer::enabled);
+                iterator last, transfer to);
 
     void splice(list_iterator newpos, hook_chain&& other, iterator first,
-                iterator last, transfer to = transfer::enabled);
+                iterator last, transfer to);
 
     void splice(iterator newpos, hook_chain& other, iterator first,
                 iterator last);
@@ -198,8 +197,7 @@ namespace alterhook
     void splice(iterator newpos, hook_chain&& other, iterator first,
                 iterator last);
 
-    void splice(list_iterator newpos, list_iterator oldpos,
-                transfer to = transfer::enabled)
+    void splice(list_iterator newpos, list_iterator oldpos, transfer to)
     {
       splice(newpos, *this, oldpos, to);
     }
@@ -207,7 +205,7 @@ namespace alterhook
     void splice(iterator newpos, list_iterator oldpos);
 
     void splice(list_iterator newpos, list_iterator first, list_iterator last,
-                transfer to = transfer::enabled)
+                transfer to)
     {
       splice(newpos, *this, first, last, to);
     }
@@ -215,7 +213,7 @@ namespace alterhook
     void splice(iterator newpos, list_iterator first, list_iterator last);
 
     void splice(list_iterator newpos, iterator first, iterator last,
-                transfer to = transfer::enabled);
+                transfer to);
 
     void splice(iterator newpos, iterator first, iterator last);
 
@@ -226,16 +224,22 @@ namespace alterhook
     const_reference at(size_t n) const;
     reference       front() noexcept;
     const_reference front() const noexcept;
+    const_reference cfront() const noexcept;
     reference       efront() noexcept;
     const_reference efront() const noexcept;
+    const_reference cefront() const noexcept;
     reference       dfront() noexcept;
     const_reference dfront() const noexcept;
+    const_reference cdfront() const noexcept;
     reference       back() noexcept;
     const_reference back() const noexcept;
+    const_reference cback() const noexcept;
     reference       eback() noexcept;
     const_reference eback() const noexcept;
+    const_reference ceback() const noexcept;
     reference       dback() noexcept;
     const_reference dback() const noexcept;
+    const_reference cdback() const noexcept;
 
     // setters
     void set_target(std::byte* target);
@@ -325,6 +329,8 @@ namespace alterhook
     void  init_chain(std::index_sequence<indexes...>,
                      std::pair<std::tuple<dfirst, detours...>,
                               std::tuple<ofirst, originals...>>&& args);
+    void  assert_len(size_t n) const;
+    void  verify_len(size_t n) const;
     void  init_chain();
     void  join_last_unchecked(size_t enabled_count = 1);
     void  join_last();
@@ -450,6 +456,7 @@ namespace alterhook
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
               const helpers::orig_buff_t& buffer);
     void set_detour(std::byte* detour);
+    void set_original(helpers::orig_buff_t& original);
     hook(const hook&) = default;
   };
 
@@ -465,7 +472,7 @@ namespace alterhook
     typedef hook*                     pointer;
     typedef hook&                     reference;
 
-    iterator() noexcept {}
+    iterator() noexcept = default;
 
     reference operator*() const noexcept { return *itrs[enabled]; }
 
@@ -512,12 +519,7 @@ namespace alterhook
     typedef const hook*               pointer;
     typedef const hook&               reference;
 
-    const_iterator() noexcept {}
-
-    const_iterator(const iterator& other)
-        : itrs({ other.itrs[0], other.itrs[1] }), enabled(other.enabled)
-    {
-    }
+    const_iterator() noexcept = default;
 
     reference operator*() const noexcept { return *itrs[enabled]; }
 
@@ -815,10 +817,9 @@ namespace alterhook
   {
     if (origwrap->contains_ref(original))
       return;
-    helpers::orig_buff_t tmp = origbuff;
-    new (&origbuff) helpers::original_wrapper(original);
-    original = function_cast<orig>(poriginal);
-    *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
+    helpers::orig_buff_t tmp{};
+    new (&tmp) helpers::original_wrapper(original);
+    set_original(tmp);
   }
 
   template <__alterhook_is_detour_and_original_impl(dtr, orig)>
@@ -1104,297 +1105,160 @@ namespace alterhook
            newpos.enabled ? transfer::enabled : transfer::disabled);
   }
 
-  inline hook_chain::iterator hook_chain::begin() noexcept
+  inline typename hook_chain::iterator hook_chain::begin() noexcept
   {
     return iterator(disabled.begin(), enabled.begin(), starts_enabled);
   }
 
-  inline hook_chain::iterator hook_chain::end() noexcept
+  inline typename hook_chain::iterator hook_chain::end() noexcept
   {
     return iterator(disabled.end(), enabled.end(),
                     disabled.empty() ? starts_enabled
                                      : disabled.back().has_other);
   }
 
-  inline hook_chain::const_iterator hook_chain::begin() const noexcept
+  inline typename hook_chain::const_iterator hook_chain::begin() const noexcept
   {
     return const_iterator(disabled.begin(), enabled.begin(), starts_enabled);
   }
 
-  inline hook_chain::const_iterator hook_chain::end() const noexcept
+  inline typename hook_chain::const_iterator hook_chain::end() const noexcept
   {
     return const_iterator(disabled.end(), enabled.end(),
                           disabled.empty() ? starts_enabled
                                            : disabled.back().has_other);
   }
 
-  inline hook_chain::const_iterator hook_chain::cbegin() const noexcept
+  inline typename hook_chain::const_iterator hook_chain::cbegin() const noexcept
   {
     return begin();
   }
 
-  inline hook_chain::const_iterator hook_chain::cend() const noexcept
+  inline typename hook_chain::const_iterator hook_chain::cend() const noexcept
   {
     return end();
   }
 
-  inline hook_chain::list_iterator hook_chain::ebegin() noexcept
-  {
-    return enabled.begin();
+#define __alterhook_def_getter_impl(type, name, func, list, cv)                \
+  inline typename hook_chain::type hook_chain::name() cv noexcept              \
+  {                                                                            \
+    return list.func();                                                        \
   }
 
-  inline hook_chain::list_iterator hook_chain::eend() noexcept
+#define __alterhook_const_layer_getter_impl(type, name, func, list)            \
+  __alterhook_def_getter_impl(const_##type, c##name, func, list, const)        \
+      __alterhook_def_getter_impl(const_##type, name, func, list, const)       \
+          __alterhook_def_getter_impl(type, name, func, list, )
+
+#define __alterhook_reverse_layer_getter_impl(type, name, func, list)          \
+  __alterhook_const_layer_getter_impl(reverse_##type, r##name, r##func, list)  \
+      __alterhook_const_layer_getter_impl(type, name, func, list)
+
+#define __alterhook_range_layer_getter_impl(prefix, list)                      \
+  __alterhook_reverse_layer_getter_impl(list_iterator, prefix##begin, begin,   \
+                                        list)                                  \
+      __alterhook_reverse_layer_getter_impl(list_iterator, prefix##end, end,   \
+                                            list)
+
+#define __alterhook_state_layer_itr_getter_impl()                              \
+  __alterhook_range_layer_getter_impl(e, enabled)                              \
+      __alterhook_range_layer_getter_impl(d, disabled)
+
+#define __alterhook_gen_itr_getter_definitions()                               \
+  __alterhook_state_layer_itr_getter_impl()
+
+  __alterhook_gen_itr_getter_definitions();
+
+  inline void hook_chain::assert_len(size_t n) const
   {
-    return enabled.end();
+    (void)n;
+    utils_assert(
+        n < size(),
+        "hook_chain::operator[]: element at index specified is out of range");
   }
 
-  inline hook_chain::const_list_iterator hook_chain::ebegin() const noexcept
+  inline void hook_chain::verify_len(size_t n) const
   {
-    return enabled.begin();
+    if (n < size())
+      return;
+    std::stringstream stream{};
+    stream << "Element at index " << n
+           << " of the hook_chain instance is out of range because: n >= "
+              "size() <=> "
+           << n << " >= " << size();
+    throw(std::out_of_range(stream.str()));
   }
 
-  inline hook_chain::const_list_iterator hook_chain::eend() const noexcept
+  inline typename hook_chain::reference
+      hook_chain::operator[](size_t n) noexcept
   {
-    return enabled.end();
+    assert_len(n);
+    return *std::next(begin(), n);
   }
 
-  inline hook_chain::reverse_list_iterator hook_chain::rebegin() noexcept
-  {
-    return enabled.rbegin();
-  }
-
-  inline hook_chain::reverse_list_iterator hook_chain::reend() noexcept
-  {
-    return enabled.rend();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::rebegin() const noexcept
-  {
-    return enabled.rbegin();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::reend() const noexcept
-  {
-    return enabled.rend();
-  }
-
-  inline hook_chain::const_list_iterator hook_chain::cebegin() const noexcept
-  {
-    return enabled.begin();
-  }
-
-  inline hook_chain::const_list_iterator hook_chain::ceend() const noexcept
-  {
-    return enabled.end();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::crebegin() const noexcept
-  {
-    return enabled.rbegin();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::creend() const noexcept
-  {
-    return enabled.rend();
-  }
-
-  inline hook_chain::list_iterator hook_chain::dbegin() noexcept
-  {
-    return disabled.begin();
-  }
-
-  inline hook_chain::list_iterator hook_chain::dend() noexcept
-  {
-    return disabled.end();
-  }
-
-  inline hook_chain::const_list_iterator hook_chain::dbegin() const noexcept
-  {
-    return disabled.begin();
-  }
-
-  inline hook_chain::const_list_iterator hook_chain::dend() const noexcept
-  {
-    return disabled.end();
-  }
-
-  inline hook_chain::reverse_list_iterator hook_chain::rdbegin() noexcept
-  {
-    return disabled.rbegin();
-  }
-
-  inline hook_chain::reverse_list_iterator hook_chain::rdend() noexcept
-  {
-    return disabled.rend();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::rdbegin() const noexcept
-  {
-    return disabled.rbegin();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::rdend() const noexcept
-  {
-    return disabled.rend();
-  }
-
-  inline hook_chain::const_list_iterator hook_chain::cdbegin() const noexcept
-  {
-    return disabled.begin();
-  }
-
-  inline hook_chain::const_list_iterator hook_chain::cdend() const noexcept
-  {
-    return disabled.end();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::crdbegin() const noexcept
-  {
-    return disabled.rbegin();
-  }
-
-  inline hook_chain::const_reverse_list_iterator
-      hook_chain::crdend() const noexcept
-  {
-    return disabled.rend();
-  }
-
-  inline bool hook_chain::operator==(const hook_chain& other) const noexcept
-  {
-    return std::tie(enabled, disabled) ==
-           std::tie(other.enabled, other.disabled);
-  }
-
-  inline bool hook_chain::operator!=(const hook_chain& other) const noexcept
-  {
-    return std::tie(enabled, disabled) !=
-           std::tie(other.enabled, other.disabled);
-  }
-
-  inline hook_chain::reference hook_chain::operator[](size_t n) noexcept
-  {
-    size_t i = 0;
-    for (reference h : *this)
-    {
-      if (i == n)
-        return h;
-      ++i;
-    }
-    utils_assert(false,
-                 "hook_chain::operator[]: position passed is out of range");
-  }
-
-  inline hook_chain::const_reference
+  inline typename hook_chain::const_reference
       hook_chain::operator[](size_t n) const noexcept
   {
-    size_t i = 0;
-    for (const_reference h : *this)
-    {
-      if (i == n)
-        return h;
-      ++i;
-    }
-    utils_assert(false,
-                 "hook_chain::operator[]: position passed is out of range");
+    assert_len(n);
+    return *std::next(begin(), n);
   }
 
-  inline hook_chain::reference hook_chain::at(size_t n)
+  inline typename hook_chain::reference hook_chain::at(size_t n)
   {
-    size_t i = 0;
-    for (reference h : *this)
-    {
-      if (i == n)
-        return h;
-      ++i;
-    }
-    std::stringstream stream{};
-    stream << "Couldn't find " << n << " element on hook_chain of size "
-           << (enabled.size() + disabled.size());
-    throw(std::out_of_range(stream.str()));
+    verify_len(n);
+    return *std::next(begin(), n);
   }
 
-  inline hook_chain::const_reference hook_chain::at(size_t n) const
+  inline typename hook_chain::const_reference hook_chain::at(size_t n) const
   {
-    size_t i = 0;
-    for (const_reference h : *this)
-    {
-      if (i == n)
-        return h;
-      ++i;
-    }
-    std::stringstream stream{};
-    stream << "Couldn't find " << n << " element on hook_chain of size "
-           << (enabled.size() + disabled.size());
-    throw(std::out_of_range(stream.str()));
+    verify_len(n);
+    return *std::next(begin(), n);
   }
 
-  inline hook_chain::reference hook_chain::front() noexcept { return *begin(); }
-
-  inline hook_chain::const_reference hook_chain::front() const noexcept
+  inline typename hook_chain::reference hook_chain::front() noexcept
   {
     return *begin();
   }
 
-  inline hook_chain::reference hook_chain::back() noexcept
+  inline typename hook_chain::const_reference hook_chain::front() const noexcept
+  {
+    return *begin();
+  }
+
+  inline typename hook_chain::const_reference
+      hook_chain::cfront() const noexcept
+  {
+    return front();
+  }
+
+  inline typename hook_chain::reference hook_chain::back() noexcept
   {
     if (disabled.empty() || disabled.back().has_other)
       return enabled.back();
     return disabled.back();
   }
 
-  inline hook_chain::const_reference hook_chain::back() const noexcept
+  inline typename hook_chain::const_reference hook_chain::back() const noexcept
   {
     if (disabled.empty() || disabled.back().has_other)
       return enabled.back();
     return disabled.back();
   }
 
-  inline hook_chain::reference hook_chain::efront() noexcept
+  inline typename hook_chain::const_reference hook_chain::cback() const noexcept
   {
-    return enabled.front();
+    return back();
   }
 
-  inline hook_chain::const_reference hook_chain::efront() const noexcept
-  {
-    return enabled.front();
-  }
+#define __alterhook_side_layer_getter_impl(prefix, list)                       \
+  __alterhook_const_layer_getter_impl(reference, prefix##front, front, list)   \
+      __alterhook_const_layer_getter_impl(reference, prefix##back, back, list)
 
-  inline hook_chain::reference hook_chain::eback() noexcept
-  {
-    return enabled.back();
-  }
+#define __alterhook_gen_elem_access_definitions()                              \
+  __alterhook_side_layer_getter_impl(e, enabled)                               \
+      __alterhook_side_layer_getter_impl(d, disabled)
 
-  inline hook_chain::const_reference hook_chain::eback() const noexcept
-  {
-    return enabled.back();
-  }
-
-  inline hook_chain::reference hook_chain::dfront() noexcept
-  {
-    return disabled.front();
-  }
-
-  inline hook_chain::const_reference hook_chain::dfront() const noexcept
-  {
-    return disabled.front();
-  }
-
-  inline hook_chain::reference hook_chain::dback() noexcept
-  {
-    return disabled.back();
-  }
-
-  inline hook_chain::const_reference hook_chain::dback() const noexcept
-  {
-    return disabled.back();
-  }
+  __alterhook_gen_elem_access_definitions();
 
   inline hook_chain::list_iterator hook_chain::append_hook(const hook& h,
                                                            transfer    trg)
