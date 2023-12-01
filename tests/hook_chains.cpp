@@ -155,8 +155,10 @@ TEST_F(HookChainTest, Swaps)
 
 TEST_F(HookChainTest, Splicers)
 {
+  typedef alterhook::hook_chain::transfer transfer;
+
   chain1.splice(chain1.dend(), chain1.ebegin(), std::prev(chain1.eend()),
-                alterhook::hook_chain::transfer::disabled);
+                transfer::disabled);
   EXPECT_EQ(chain1.enabled_size(), 1);
   EXPECT_EQ(chain1.disabled_size(), 2);
 
@@ -167,7 +169,7 @@ TEST_F(HookChainTest, Splicers)
 
   std::cout << "-------------------------------------------\n";
 
-  chain1.splice(chain1.ebegin(), chain1.dbegin());
+  chain1.splice(chain1.ebegin(), chain1.dbegin(), transfer::enabled);
   EXPECT_EQ(chain1.enabled_size(), 2);
   EXPECT_EQ(chain1.disabled_size(), 1);
 
@@ -204,7 +206,7 @@ TEST_F(HookChainTest, Splicers)
 
   chain1.splice(chain1.ebegin(), chain2,
                 std::prev(chain2.eend())->get_iterator(),
-                std::next(chain2.dbegin())->get_iterator());
+                std::next(chain2.dbegin())->get_iterator(), transfer::enabled);
   EXPECT_EQ(chain1.enabled_size(), 2);
   EXPECT_EQ(chain1.disabled_size(), 1);
   EXPECT_EQ(chain2.enabled_size(), 2);
@@ -224,7 +226,8 @@ TEST_F(HookChainTest, Splicers)
 
   std::cout << "-------------------------------------------\n";
 
-  chain2.splice(std::next(chain2.ebegin()), chain1);
+  chain2.splice(std::next(chain2.ebegin()), chain1,
+                alterhook::hook_chain::transfer::enabled);
   EXPECT_EQ(chain1.enabled_size(), 0);
   EXPECT_EQ(chain1.disabled_size(), 0);
   EXPECT_EQ(chain2.enabled_size(), 4);
@@ -245,6 +248,8 @@ TEST_F(HookChainTest, Splicers)
 
 TEST_F(HookChainTest, Modifiers)
 {
+  typedef typename alterhook::hook_chain::include include;
+
   chain1.append(&detourcls::func7, original7, &detourcls::func8, original8);
   EXPECT_EQ(chain1.enabled_size(), 5);
   EXPECT_EQ(chain1.disabled_size(), 0);
@@ -266,7 +271,7 @@ TEST_F(HookChainTest, Modifiers)
         original9(self);
         lambda_ret;
       },
-      original9);
+      original9, include::enabled);
   EXPECT_EQ(chain1.enabled_size(), 6);
   EXPECT_EQ(chain1.disabled_size(), 0);
 

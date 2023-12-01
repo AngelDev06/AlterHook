@@ -2,17 +2,12 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "utils_macros.h"
-#include <cassert>
 #include <utility>
 #if utils_cpp20
   #include <bit>
 #else
   #include <limits>
 #endif
-
-#define utils_assert(expr, msg) assert(((void)msg, expr))
-#define utils_underlying(enumval)                                              \
-  static_cast<std::underlying_type_t<decltype(enumval)>>(enumval)
 
 namespace alterhook::utils
 {

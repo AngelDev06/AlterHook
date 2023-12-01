@@ -91,7 +91,7 @@ The constructor is responsible for initializing the trampoline. It uses the `tar
 
 - [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions)
 
-## Assignment operators
+## Assignment Operators
 
 ### copy assignment operator
 
@@ -153,7 +153,7 @@ Initializes the trampoline using `target` as the target function. That means set
 
 #### Exception Guarantee
 
-**<ins>STRONG:</ins>** Only when `alterhook::exceptions::misc::invalid_address` or memory allocation related exceptions are thrown (i.e. `alterhook::exceptions::os::virtual_alloc_exception` for windows and `alterhook::exceptions::os::mmap_exception` for Android/Linux)
+**<ins>STRONG:</ins>** Only when `alterhook::exceptions::misc::invalid_address` or memory allocation related exceptions are thrown (i.e. `alterhook::exceptions::os::virtual_alloc_exception` for Windows and `alterhook::exceptions::os::mmap_exception`` for Android/Linux)
 
 **<ins>BASIC:</ins>** On any other exception. The container is guaranteed to be left in an uninitialized but reusable state.
 

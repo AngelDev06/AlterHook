@@ -64,7 +64,7 @@ git clone --recursive https://github.com/AngelDev06/AlterHook
 ```
 
 Open Visual Studio and create a new empty solution. You can use any built-in template for that, including the Android ones when targeting Android.
-In the solution explorer, right-click on your solution, then **add > existing project** and find the `.vcxproj` file you are interested in.
+In the solution explorer, right-click on your solution, then **add > existing project** and find the `.vcxproj` file in the `vs/` directory you are interested in.
 After adding it, you can create a simple test project and add the library as a reference with **references > add reference** which will link your project and the library together.
 Also if you are building a dll you may need to go to **properties > Advanced** of your project and turn on **Copy Project References to OutDir** to automatically copy the dll to your output directory.
 
@@ -205,7 +205,7 @@ alterhook::hook hook{ &originalcls::func2,
                       {
                         std::cout << "hooked!\n";
                         original(self);
-   return {};
+                        return {};
                       },
                       original };
 ```
@@ -330,18 +330,20 @@ chain[1].disable();
 - splicing/swapping
 
 ```cpp
+typedef typename alterhook::hook_chain::transfer transfer;
+
 // transfer all of the enabled hooks but the last one at the end of the disabled list (also disables them because of it)
 chain.splice(chain.dend(), chain.ebegin(), std::prev(chain.eend()),
-             alterhook::hook_chain::transfer::disabled);
+             transfer::disabled);
 
 // puts the first disabled hook before the first enabled one (also enables it because of it)
-chain.splice(chain.ebegin(), chain.dbegin());
+chain.splice(chain.ebegin(), chain.dbegin(), transfer::enabled);
 
 // transfers all hooks from a different `hook_chain` to the beggining of the current chain 
 // (it maintains the status of the hooks, as the hooks that are enabled go to the enabled chain and the others in the disabled chain respectively)
 chain.splice(chain.ebegin(), chain2, 
              std::next(chain2.begin()), 
-             chain2.end());
+             chain2.end(), transfer::enabled);
 
 // swaps the hooks of `chain` with the hooks of `chain2`
 // however it doesn't swap the targets!
@@ -612,3 +614,7 @@ map->visit("mymodifier::foo",
 ```
 
 As you can tell the key that `visit` accepts is the full name of the method, like `<class name>::<method name>`. You can use all sorts of methods inherited from `concurrent_hook_map<std::string>` but you should note however that each instance of `managed_concurrent_hook_map` refers to a single target. So you should not expect `mymodifier::func` for example to be on the same instance. Also, you might be wondering, why does `operator[]` return an instance of `std::unique_ptr`? The answer is safety. The library tries to clean up any instances of `managed_concurrent_hook_map` that are left with no hooks to save space. But what if those instances are currently in use by some thread? That would be catastrophic. So instead `std::unique_ptr` is used to keep it alive for as long as it's used by using a ref count. Once it goes out of scope the ref count is decremented and the custom deleter provided will be responsible for doing any cleanup IF needed.
+
+## Credits
+
+All credits go to the [capstone](https://github.com/capstone-engine/capstone) disassembly framework for making my idea possible.
