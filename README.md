@@ -363,11 +363,11 @@ for (auto& hook : chain)
 
 // iterate over all the enabled hooks
 for (auto itr = chain.ebegin(); itr != chain.eend(); ++itr)
-  std::cout << hook.get_detour() << '\n';
+  std::cout << itr->get_detour() << '\n';
 
 // iterate over all the disabled hooks
 for (auto itr = chain.dbegin(); itr != chain.dend(); ++itr)
-  std::cout << hook.get_detour() << '\n';
+  std::cout << itr->get_detour() << '\n';
 ```
 
 And more!
