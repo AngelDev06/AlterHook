@@ -15,6 +15,9 @@ namespace alterhook
 
     <a href="#trampolinestdbyte">trampoline</a>(std::byte* target);
 
+    template &lt;typename trg&gt;
+    <a href="#trampolinetrg-target">trampoline</a>(trg&& target);
+
     <a href="#copy-constructor">trampoline</a>(const trampoline& other);
     <a href="#move-constructor">trampoline</a>(trampoline&& other) noexcept;
     trampoline& <a href="#copy-assignment-operator">operator=</a>(const trampoline& other);
@@ -86,6 +89,22 @@ The constructor is responsible for initializing the trampoline. It uses the `tar
 | Parameter | Type | Description |
 | --- | --- | --- |
 | target | std::byte* | The target to initialize it with |
+
+#### Exceptions
+
+- [Trampoline Initialization Exceptions](exception_groups.md#trampoline-initialization-exceptions)
+
+### trampoline(trg&& target)
+
+#### Description
+
+The constructor is responsible for initializing the trampoline. It uses the `target` argument to set up the underlying executable buffer and relocate the instructions across.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| target | trg&& (forwarding reference, any) | The target to initialize it with |
 
 #### Exceptions
 
