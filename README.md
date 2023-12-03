@@ -124,7 +124,7 @@ extern "C"
 
 int main()
 {
-  alterhook::trampoline tramp{ reinterpret_cast<std::byte*>(target1) };
+  alterhook::trampoline tramp{ target1 };
   std::string str = tramp.str();
 
   // they should have the same output
@@ -134,7 +134,7 @@ int main()
   // this should print the disassembled content of the trampoline
   LOG(str.c_str());
 
-  tramp.init(reinterpret_cast<std::byte*>(target2));
+  tramp.init(target2);
   str = tramp.str();
 
   target2();
