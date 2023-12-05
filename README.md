@@ -389,7 +389,7 @@ A hash map and hook chain adapter that allows for average constant time lookup o
 
 There are a few aliases that might be useful:
 
-- `alterhook::hook_map_using` takes the key and container to adopt
+- `alterhook::hook_map_using` takes the key and container to adapt
 - `alterhook::concurrent_hook_map` takes the key and turns on thread-safe mode
 - `alterhook::concurrent_hook_map_using` takes the key, container to adapt and turns on thread-safe mode
 
@@ -460,7 +460,7 @@ The macro signature is the following:
 - The second argument is the target class to use that has those methods defined.
 - Lastly, the last argument is `__VA_ARGS__` which means it can accept any number of arguments at the end. Those arguments can be:
   - The name of the target method
-  - Both the name and the type of the target method are packed into a 'pair' like `(foo, void())`
+  - Both the name and the type of the target method grouped into a 'pair' like `(foo, void())`
 
 This macro generates a few classes and wrappers to achieve the following:
 
