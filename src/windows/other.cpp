@@ -1,6 +1,5 @@
 #include <pch.h>
 #include "exceptions.h"
-#define __alterhook_expose_impl
 #include "trampoline.h"
 #include "windows_thread_handler.h"
 #include "x86_instructions.h"
@@ -197,59 +196,4 @@ namespace alterhook
         ResumeThread(handle);
     }
   }
-
-  void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
-                        bool patch_above, bool enable)
-  {
-    utils_assert(target, "inject_to_target: no target address specified");
-    utils_assert(backup_or_detour,
-                 "inject_to_target: no backup or detour specified");
-    DWORD old_protection = 0;
-    const auto [address, size] =
-        patch_above
-            ? std::pair(target - sizeof(JMP), sizeof(JMP) + sizeof(JMP_SHORT))
-            : std::pair(target, sizeof(JMP));
-
-    if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &old_protection))
-      nested_throw(exceptions::virtual_protect_exception(
-          GetLastError(), address, size, PAGE_EXECUTE_READWRITE,
-          reinterpret_cast<uintptr_t>(&old_protection)));
-
-    if (enable)
-    {
-      new (address) JMP(
-          static_cast<uint32_t>(backup_or_detour - (address + sizeof(JMP))));
-
-      if (patch_above)
-        new (address + sizeof(JMP)) JMP_SHORT(
-            static_cast<uint8_t>(0 - (sizeof(JMP) + sizeof(JMP_SHORT))));
-    }
-    else
-      memcpy(address, backup_or_detour, size);
-
-    VirtualProtect(address, size, old_protection, &old_protection);
-    FlushInstructionCache(GetCurrentProcess(), address, size);
-  }
-
-#if utils_x86
-  void patch_jmp(std::byte* target, const std::byte* detour, bool patch_above)
-  {
-    utils_assert(target, "patch_jmp: no target address specified");
-    utils_assert(detour, "patch_jmp: no detour specified");
-    DWORD            old_protection = 0;
-    std::byte* const address = patch_above ? target - sizeof(JMP) : target;
-
-    if (!VirtualProtect(address, sizeof(JMP), PAGE_EXECUTE_READWRITE,
-                        &old_protection))
-      nested_throw(exceptions::virtual_protect_exception(
-          GetLastError(), address, sizeof(JMP), PAGE_EXECUTE_READWRITE,
-          reinterpret_cast<uintptr_t>(&old_protection)));
-
-    reinterpret_cast<JMP*>(address)->offset =
-        static_cast<uint32_t>(detour - (address + sizeof(JMP)));
-
-    VirtualProtect(address, sizeof(JMP), old_protection, &old_protection);
-    FlushInstructionCache(GetCurrentProcess(), address, sizeof(JMP));
-  }
-#endif
 } // namespace alterhook

@@ -140,7 +140,7 @@ namespace alterhook
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, true };
-      __alterhook_inject(dtr, true);
+      inject(dtr, true);
       enabled = true;
     }
   }
@@ -151,7 +151,7 @@ namespace alterhook
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, false };
-      __alterhook_inject(backup.data(), false);
+      inject(backup.data(), false);
       enabled = false;
     }
   }
@@ -190,7 +190,7 @@ namespace alterhook
     if (enabled)
     {
       std::unique_lock lock{ hook_lock };
-      __alterhook_patch_jmp(detour);
+      patch(detour);
     }
     pdetour = detour;
 #endif

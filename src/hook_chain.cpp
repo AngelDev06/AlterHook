@@ -70,7 +70,7 @@ namespace alterhook
   {
     std::unique_lock lock{ hook_lock };
     thread_freezer   freeze{ *this, true };
-    __alterhook_inject(enabled.back().pdetour, true);
+    inject(enabled.back().pdetour, true);
   }
 
   hook_chain& hook_chain::operator=(const hook_chain& other)
@@ -120,7 +120,7 @@ namespace alterhook
         {
           std::unique_lock lock{ hook_lock };
           thread_freezer   freeze{ *this, false };
-          __alterhook_inject(backup.data(), false);
+          inject(backup.data(), false);
         }
         catch (...)
         {
@@ -154,7 +154,7 @@ namespace alterhook
         {
           std::unique_lock lock{ hook_lock };
           thread_freezer   freeze{ *this, true };
-          __alterhook_inject(enabled.back().pdetour, true);
+          inject(enabled.back().pdetour, true);
         }
       }
       catch (...)
@@ -174,7 +174,7 @@ namespace alterhook
       {
         std::unique_lock lock{ hook_lock };
         thread_freezer   freeze{ *this, false };
-        __alterhook_inject(backup.data(), false);
+        inject(backup.data(), false);
       }
 
       trampoline::operator=(std::move(other));
@@ -186,7 +186,7 @@ namespace alterhook
         {
           std::unique_lock lock{ hook_lock };
           thread_freezer   freeze{ *this, false };
-          __alterhook_inject(enabled.back().pdetour, true);
+          inject(enabled.back().pdetour, true);
         }
         catch (...)
         {
@@ -228,7 +228,7 @@ namespace alterhook
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, false };
-      __alterhook_inject(backup.data(), false);
+      inject(backup.data(), false);
     };
 
     switch (trg)
@@ -275,7 +275,7 @@ namespace alterhook
       thread_freezer freeze{ *this, true };
       {
         std::unique_lock lock{ hook_lock };
-        __alterhook_inject(rbegin->pdetour, true);
+        inject(rbegin->pdetour, true);
       }
       rbegin->enabled = true;
 
@@ -307,7 +307,7 @@ namespace alterhook
 
         {
           std::unique_lock lock{ hook_lock };
-          __alterhook_patch_jmp(dlast.pdetour);
+          patch(dlast.pdetour);
         }
 
         enabled.splice(enabled.end(), disabled, previtr);
@@ -335,7 +335,7 @@ namespace alterhook
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, false };
-      __alterhook_inject(backup.data(), false);
+      inject(backup.data(), false);
     };
 
     switch (trg)
@@ -355,7 +355,7 @@ namespace alterhook
       else
       {
         std::unique_lock lock{ hook_lock };
-        __alterhook_patch_jmp(itr->poriginal);
+        patch(itr->poriginal);
       }
       break;
     case include::both:
@@ -371,7 +371,7 @@ namespace alterhook
         else
         {
           std::unique_lock lock{ hook_lock };
-          __alterhook_patch_jmp(itr->poriginal);
+          patch(itr->poriginal);
         }
 
         if (!disabled.empty())
@@ -430,7 +430,7 @@ namespace alterhook
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, false };
-      __alterhook_inject(backup.data(), false);
+      inject(backup.data(), false);
     };
     const auto uninject_one = [&]
     {
@@ -735,7 +735,9 @@ namespace alterhook
 
     if (left->enabled || right->enabled)
     {
-      bool             injected_first = false;
+#if !utils_x64
+      bool injected_first = false;
+#endif
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ nullptr };
       do_swap();
@@ -747,19 +749,21 @@ namespace alterhook
         if (left->enabled)
         {
           if (leftnext == enabled.end())
-            __alterhook_patch_jmp(left->pdetour);
+            patch(left->pdetour);
           else if (leftnext != left)
           {
             leftnext->poriginal = left->pdetour;
             *leftnext->origwrap = left->pdetour;
           }
+#if !utils_x64
           injected_first = true;
+#endif
         }
 
         if (right->enabled)
         {
           if (rightnext == other.enabled.end())
-            __alterhook_patch_other_jmp(other, right->pdetour);
+            patch(other, right->pdetour);
           else if (rightnext != right)
           {
             rightnext->poriginal = right->pdetour;
@@ -777,7 +781,7 @@ namespace alterhook
           if (leftnext == other.enabled.end())
           {
             // if that throws, no guarantee is provided
-            __alterhook_patch_jmp(left->pdetour);
+            patch(left->pdetour);
           }
           else
           {
@@ -811,7 +815,7 @@ namespace alterhook
       thread_freezer   freeze{ nullptr };
       if (!other.enabled.empty())
       {
-        __alterhook_patch_jmp(other.enabled.back().pdetour);
+        patch(other.enabled.back().pdetour);
         __alterhook_def_thumb_var(ptarget);
         hook& hfront     = other.enabled.front();
         hfront.poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
@@ -823,13 +827,13 @@ namespace alterhook
 
       if (!enabled.empty())
       {
-        // patch_jmp is noexcept on x64 so no need to try-catch
+        // patch is noexcept on x64 so no need to try-catch
 #if !utils_x64
         if (injected_first_range)
         {
           try
           {
-            __alterhook_patch_other_jmp(other, enabled.back().pdetour);
+            patch(other, enabled.back().pdetour);
             __alterhook_def_thumb_var(other.ptarget);
             hook& hfront = enabled.front();
             hfront.poriginal =
@@ -839,14 +843,14 @@ namespace alterhook
           catch (...)
           {
             // if that throws no guarantee is provided
-            __alterhook_patch_jmp(enabled.back().pdetour);
+            patch(enabled.back().pdetour);
             throw;
           }
         }
         else
 #endif
         {
-          __alterhook_patch_other_jmp(other, enabled.back().pdetour);
+          patch(other, enabled.back().pdetour);
           __alterhook_def_thumb_var(other.ptarget);
           hook& hfront     = enabled.front();
           hfront.poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
@@ -1320,10 +1324,10 @@ namespace alterhook
           if (other.enabled.empty())
           {
             thread_freezer freeze{ other, false };
-            __alterhook_inject_other(other, other.backup.data(), false);
+            inject(other, other.backup.data(), false);
           }
           else
-            __alterhook_patch_other_jmp(other, first_enabled->poriginal);
+            patch(other, first_enabled->poriginal);
         }
         else
         {
@@ -1361,10 +1365,10 @@ namespace alterhook
           if (first_enabled == enabled.begin())
           {
             thread_freezer freeze{ *this, true };
-            __alterhook_inject(otherback.pdetour, true);
+            inject(otherback.pdetour, true);
           }
           else
-            __alterhook_patch_jmp(otherback.pdetour);
+            patch(otherback.pdetour);
         }
         else
         {
@@ -1462,7 +1466,7 @@ namespace alterhook
       {
         std::unique_lock lock{ hook_lock };
         thread_freezer   freeze{ *this, true };
-        __alterhook_inject(enabled.back().pdetour, true);
+        inject(enabled.back().pdetour, true);
       }
       catch (...)
       {
@@ -1638,7 +1642,7 @@ namespace alterhook
       return;
     std::unique_lock lock{ hook_lock };
     thread_freezer   freeze{ *this, false };
-    __alterhook_inject(backup.data(), false);
+    inject(backup.data(), false);
   }
 
   void hook_chain::uninject_range(list_iterator first, list_iterator last)
@@ -1649,10 +1653,10 @@ namespace alterhook
       if (first == enabled.begin())
       {
         thread_freezer freeze{ *this, false };
-        __alterhook_inject(backup.data(), false);
+        inject(backup.data(), false);
       }
       else
-        __alterhook_patch_jmp(first->poriginal);
+        patch(first->poriginal);
     }
     else
     {
@@ -1737,14 +1741,14 @@ namespace alterhook
         first->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
         *first->origwrap = first->poriginal;
         thread_freezer freeze{ *this, true };
-        __alterhook_inject(lastprev->pdetour, true);
+        inject(lastprev->pdetour, true);
       }
       else
       {
         hook& elast      = enabled.back();
         first->poriginal = elast.pdetour;
         *first->origwrap = elast.pdetour;
-        __alterhook_patch_jmp(lastprev->pdetour);
+        patch(lastprev->pdetour);
       }
     }
     else
@@ -1780,10 +1784,10 @@ namespace alterhook
       if (first == enabled.begin())
       {
         thread_freezer freeze{ *this, true };
-        __alterhook_inject(lastprev->pdetour, true);
+        inject(lastprev->pdetour, true);
       }
       else
-        __alterhook_patch_jmp(lastprev->pdetour);
+        patch(lastprev->pdetour);
     }
     else
     {
@@ -2088,10 +2092,10 @@ namespace alterhook
     if (enabled_count == enabled.size())
     {
       thread_freezer freeze{ *this, true };
-      __alterhook_inject(itr->pdetour, true);
+      inject(itr->pdetour, true);
     }
     else
-      __alterhook_patch_jmp(itr->pdetour);
+      patch(itr->pdetour);
   }
 
   void hook_chain::join_last()
@@ -2117,7 +2121,7 @@ namespace alterhook
       {
         std::unique_lock lock{ hook_lock };
         thread_freezer   freeze{ *this, true };
-        __alterhook_inject(itr->pdetour, true);
+        inject(itr->pdetour, true);
       }
       else
       {
@@ -2145,10 +2149,10 @@ namespace alterhook
         if (enabled.size() == 1)
         {
           thread_freezer freeze{ *this, true };
-          __alterhook_inject(itr->pdetour, true);
+          inject(itr->pdetour, true);
         }
         else
-          __alterhook_patch_jmp(itr->pdetour);
+          patch(itr->pdetour);
       }
       else
       {
@@ -2216,7 +2220,7 @@ namespace alterhook
       list_iterator    next = std::next(current);
 
       if (next == pchain->enabled.end())
-        __alterhook_patch_base_node_jmp(detour);
+        patch(*pchain, detour);
       else
       {
         thread_freezer freeze{ nullptr };

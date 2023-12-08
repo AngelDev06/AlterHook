@@ -2,8 +2,9 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 
-// macro definitions
-#include "alterhook/macros.h"
+// detail
+#include "alterhook/detail/macros.h"
+#include "alterhook/detail/constants.h"
 
 // standard headers
 #include <cstddef>

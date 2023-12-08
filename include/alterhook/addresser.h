@@ -4,7 +4,7 @@
 #if utils_cpp20
   #include <concepts>
 #endif
-#include "macros.h"
+#include "detail/macros.h"
 #include "utilities/utils.h"
 #if utils_windows
   #define __alterhook_is_virtual(memfunc)                                      \

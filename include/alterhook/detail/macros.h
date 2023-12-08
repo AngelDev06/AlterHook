@@ -20,7 +20,7 @@
 #endif
 
 #define utils_visibility ALTERHOOK_API
-#include "utilities/utils_macros.h"
+#include "../utilities/utils_macros.h"
 
 #if utils_cpp20
   #define __alterhook_requires(...) requires __VA_ARGS__
@@ -292,8 +292,10 @@
                              ? sizeof(uint64_t) + 2                            \
                              : sizeof(uint64_t);                               \
       if (patch_above)                                                         \
-        memcpy(backup.data(), target_addr - __patch_above_target_offset,       \
-               __patch_above_backup_size);                                     \
+        memcpy(backup.data(),                                                  \
+               target_addr -                                                   \
+                   ::alterhook::detail::constants::patch_above_target_offset,  \
+               ::alterhook::detail::constants::patch_above_backup_size);       \
       else                                                                     \
         memcpy(backup.data(), target_addr, copy_size);                         \
     } while (false)
@@ -306,10 +308,13 @@
     do                                                                         \
     {                                                                          \
       if (patch_above)                                                         \
-        memcpy(backup.data(), ptarget - __patch_above_target_offset,           \
-               __patch_above_backup_size);                                     \
+        memcpy(backup.data(),                                                  \
+               ptarget -                                                       \
+                   ::alterhook::detail::constants::patch_above_target_offset,  \
+               ::alterhook::detail::constants::patch_above_backup_size);       \
       else                                                                     \
-        memcpy(backup.data(), ptarget, __backup_size);                         \
+        memcpy(backup.data(), ptarget,                                         \
+               ::alterhook::detail::constants::backup_size);                   \
     } while (false)
   #define __alterhook_def_thumb_var(address) ((void)0)
   #define __alterhook_add_thumb_bit(address) address

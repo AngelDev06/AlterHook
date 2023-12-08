@@ -59,13 +59,18 @@ set(
 	"include/alterhook.h"
 	"include/alterhook/addresser.h"
 	"include/alterhook/exceptions.h"
-	"include/alterhook/macros.h"
 	"include/alterhook/tools.h"
 	"include/alterhook/trampoline.h"
 	"include/alterhook/hook.h"
 	"include/alterhook/hook_chain.h"
 	"include/alterhook/hook_map.h"
 	"include/alterhook/modifier.h"
+)
+
+set(
+	ALTERHOOK_DETAIL_HEADERS
+	"include/alterhook/detail/macros.h"
+	"include/alterhook/detail/constants.h"
 )
 
 set(
@@ -124,12 +129,12 @@ if (
 	if (ALTERHOOK_TARGET_ARCH STREQUAL "X86")
 		set(CAPSTONE_X86_SUPPORT ON CACHE BOOL "x86 support" FORCE)
 		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/x86_instructions.h")
-		list(APPEND ALTERHOOK_CPP_FILES "src/X86/trampoline.cpp")
+		list(APPEND ALTERHOOK_CPP_FILES "src/X86/trampoline.cpp" "src/X86/injection.cpp")
 		message(STATUS "Enabling alterhook x86 support")
 	else()
 		set(CAPSTONE_ARM_SUPPORT ON CACHE BOOL "ARM support" FORCE)
 		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/arm_instructions.h")
-		list(APPEND ALTERHOOK_CPP_FILES "src/ARM/trampoline.cpp")
+		list(APPEND ALTERHOOK_CPP_FILES "src/ARM/trampoline.cpp" "src/ARM/injection.cpp")
 		message(STATUS "Enabling alterhook armv7 support")
 	endif()
 else()
@@ -153,6 +158,7 @@ set(
 	${ALTERHOOK_PRIVATE_HEADERS}
 	${ALTERHOOK_UTILITIES_HEADERS}
 	${ALTERHOOK_PUBLIC_HEADERS}
+	${ALTERHOOK_DETAIL_HEADERS}
 	${ALTERHOOK_PCH}/pch.h
 )
 
