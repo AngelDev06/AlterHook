@@ -1,6 +1,7 @@
 /* Part of the AlterHook Project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#define __alterhook_expose_impl
 #include <capstone/capstone.h>
 #include <string.h>
 #include <array>
@@ -25,5 +26,6 @@
 #include <bitset>
 #include <variant>
 #include <optional>
-#include "macros.h"
+#include "detail/macros.h"
+#include "detail/constants.h"
 #include "utilities/utils.h"

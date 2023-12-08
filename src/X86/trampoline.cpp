@@ -81,9 +81,10 @@ namespace alterhook
 #if utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4244 4018 4267)
-#elif utils_gcc
+#else
   #pragma GCC diagnostic push
   #pragma GCC diagnostic ignored "-Wsign-compare"
+  #pragma GCC diagnostic ignored "-Wstrict-overflow"
 #endif
 
   void trampoline::init(std::byte* target)
@@ -316,12 +317,6 @@ namespace alterhook
 #endif
   }
 
-#if utils_msvc
-  #pragma warning(pop)
-#elif utils_gcc
-  #pragma GCC diagnostic pop
-#endif
-
   std::string trampoline::str() const
   {
     utils_assert(ptarget,
@@ -509,4 +504,10 @@ namespace alterhook
     prelay = nullptr;
 #endif
   }
+
+#if utils_msvc
+  #pragma warning(pop)
+#elif utils_gcc
+  #pragma GCC diagnostic pop
+#endif
 } // namespace alterhook

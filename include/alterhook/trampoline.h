@@ -113,16 +113,6 @@ namespace alterhook
     __alterhook_def_thumb_var(ptarget);
     return function_cast<fn>(__alterhook_add_thumb_bit(ptrampoline.get()));
   }
-
-#if utils_arm
-  inline constexpr size_t __patch_above_backup_size   = sizeof(uint64_t);
-  inline constexpr size_t __patch_above_target_offset = sizeof(uint32_t);
-  inline constexpr size_t __backup_size               = sizeof(uint64_t);
-#else
-  inline constexpr size_t __patch_above_backup_size   = 7;
-  inline constexpr size_t __patch_above_target_offset = 5;
-  inline constexpr size_t __backup_size               = 5;
-#endif
 } // namespace alterhook
 
 #if utils_msvc

@@ -304,10 +304,17 @@ namespace alterhook
     bool operator!=(const hook_chain& other) const noexcept;
 
   private:
-    std::array<std::byte, __backup_size> backup{};
-    std::list<hook>                      disabled{};
-    std::list<hook>                      enabled{};
-    bool                                 starts_enabled = false;
+#ifdef __alterhook_expose_impl
+    friend struct injectors;
+#endif
+
+    typedef std::array<std::byte, detail::constants::backup_size> backup_t;
+    typedef std::list<hook>                                       hook_list;
+
+    backup_t  backup{};
+    hook_list disabled{};
+    hook_list enabled{};
+    bool      starts_enabled = false;
 
     struct unbind_range_callback
     {

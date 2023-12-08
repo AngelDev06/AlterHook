@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <array>
+#include "detail/constants.h"
 #include "trampoline.h"
 
 namespace alterhook
@@ -83,13 +84,19 @@ namespace alterhook
 
   private:
     friend class hook_chain;
+#ifdef __alterhook_expose_impl
+    friend struct injectors;
+#endif
+
+    typedef std::array<std::byte, detail::constants::backup_size> backup_t;
+
 #if !utils_x64
     const std::byte* pdetour = nullptr;
 #endif
-    bool                                 enabled = false;
-    std::array<std::byte, __backup_size> backup{};
-    helpers::orig_buff_t                 original_buffer{};
-    helpers::original*                   original_wrap = nullptr;
+    bool                 enabled = false;
+    backup_t             backup{};
+    helpers::orig_buff_t original_buffer{};
+    helpers::original*   original_wrap = nullptr;
 
     void set_detour(std::byte* detour);
     void set_original(const helpers::orig_buff_t& original);
