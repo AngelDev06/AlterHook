@@ -30,7 +30,9 @@
     <ClCompile Include="..\..\src\hook.cpp" />
     <ClCompile Include="..\..\src\hook_chain.cpp" />
     <ClCompile Include="..\..\src\misc.cpp" />
+    <ClCompile Include="..\..\src\windows\allocation.cpp" />
     <ClCompile Include="..\..\src\windows\other.cpp" />
+    <ClCompile Include="..\..\src\X86\injection.cpp" />
     <ClCompile Include="..\..\src\X86\trampoline.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -40,11 +42,12 @@
     <ClInclude Include="..\..\headers\windows_thread_handler.h" />
     <ClInclude Include="..\..\headers\x86_instructions.h" />
     <ClInclude Include="..\..\include\alterhook\addresser.h" />
+    <ClInclude Include="..\..\include\alterhook\detail\constants.h" />
+    <ClInclude Include="..\..\include\alterhook\detail\macros.h" />
     <ClInclude Include="..\..\include\alterhook\exceptions.h" />
     <ClInclude Include="..\..\include\alterhook\hook.h" />
     <ClInclude Include="..\..\include\alterhook\hook_chain.h" />
     <ClInclude Include="..\..\include\alterhook\hook_map.h" />
-    <ClInclude Include="..\..\include\alterhook\macros.h" />
     <ClInclude Include="..\..\include\alterhook\modifier.h" />
     <ClInclude Include="..\..\include\alterhook\tools.h" />
     <ClInclude Include="..\..\include\alterhook\trampoline.h" />

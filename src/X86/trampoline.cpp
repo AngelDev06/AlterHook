@@ -8,7 +8,7 @@
 #include "trampoline.h"
 #include "x86_instructions.h"
 
-#if utils_x64
+#if utils_64bit
   #define __alterhook_pass_alloc_arg(x) x
 #else
   #define __alterhook_pass_alloc_arg(x)

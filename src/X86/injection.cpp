@@ -43,7 +43,7 @@ namespace alterhook
     execflush(address, size);
   }
 
-#if !utils_x64
+#if !utils_64bit
   ALTERHOOK_HIDDEN void patch_jmp(std::byte* target, const std::byte* detour,
                                   bool patch_above __int_old_protect)
   {

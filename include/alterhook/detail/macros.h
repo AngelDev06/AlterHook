@@ -22,6 +22,10 @@
 #define utils_visibility ALTERHOOK_API
 #include "../utilities/utils_macros.h"
 
+#if !utils_arm && !utils_arm64 && !utils_x86 && !utils_x64
+  #error unsupported architecture
+#endif
+
 #if utils_cpp20
   #define __alterhook_requires(...) requires __VA_ARGS__
 
@@ -254,7 +258,7 @@
     __alterhook_is_key_detour_and_original_impl(T1, T2, T3) = 0
 #endif
 
-#if !utils_x64
+#if !utils_64bit
   #define __alterhook_set_dtr(dtr)         (pdetour = dtr)
   #define __alterhook_get_dtr()            pdetour
   #define __alterhook_get_other_dtr(other) other.pdetour
@@ -326,7 +330,3 @@
   const_##itr chain_c##name() const noexcept { return hook_chain::name(); }
 
 #define __alterhook_decl_itr_func(params) __alterhook_decl_itr_func2 params
-
-#if !utils_x64 && !utils_x86 && !utils_armv7
-  #error unsupported target architecture
-#endif

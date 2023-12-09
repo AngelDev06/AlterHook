@@ -96,7 +96,7 @@ namespace alterhook
   {
     CONTEXT tcontext;
     bool    set_ip = false;
-#if utils_x64
+#if utils_64bit
     DWORD64& ip = tcontext.Rip;
 #else
     DWORD& ip = tcontext.Eip;

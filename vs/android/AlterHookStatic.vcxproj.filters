@@ -16,6 +16,9 @@
     <Filter Include="PCH">
       <UniqueIdentifier>{16d4c96e-f1e9-48a7-81e2-06db0e571692}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Include\detail">
+      <UniqueIdentifier>{d37602e9-9d18-4a6b-88db-fb98abd31df2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\addresser.cpp">
@@ -37,6 +40,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\ARM\trampoline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\linux\allocation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\ARM\injection.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -95,9 +104,6 @@
     <ClInclude Include="..\..\include\alterhook\hook_map.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\macros.h">
-      <Filter>Include</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\alterhook\modifier.h">
       <Filter>Include</Filter>
     </ClInclude>
@@ -109,6 +115,12 @@
     </ClInclude>
     <ClInclude Include="..\..\pre-compiled headers\linux\pch.h">
       <Filter>PCH</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\detail\constants.h">
+      <Filter>Include\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\detail\macros.h">
+      <Filter>Include\detail</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

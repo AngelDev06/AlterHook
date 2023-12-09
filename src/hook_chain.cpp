@@ -735,14 +735,14 @@ namespace alterhook
 
     if (left->enabled || right->enabled)
     {
-#if !utils_x64
+#if !utils_64bit
       bool injected_first = false;
 #endif
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ nullptr };
       do_swap();
 
-#if !utils_x64
+#if !utils_64bit
       try
 #endif
       {
@@ -755,7 +755,7 @@ namespace alterhook
             leftnext->poriginal = left->pdetour;
             *leftnext->origwrap = left->pdetour;
           }
-#if !utils_x64
+#if !utils_64bit
           injected_first = true;
 #endif
         }
@@ -771,7 +771,7 @@ namespace alterhook
           }
         }
       }
-#if !utils_x64
+#if !utils_64bit
       catch (...)
       {
         do_swap();
@@ -807,7 +807,7 @@ namespace alterhook
         "hook_chain::swap: other can't share the same target as *this");
 
     {
-#if !utils_x64
+#if !utils_64bit
       bool injected_first_range = false;
 #endif
 
@@ -820,7 +820,7 @@ namespace alterhook
         hook& hfront     = other.enabled.front();
         hfront.poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
         *hfront.origwrap = hfront.poriginal;
-#if !utils_x64
+#if !utils_64bit
         injected_first_range = true;
 #endif
       }
@@ -828,7 +828,7 @@ namespace alterhook
       if (!enabled.empty())
       {
         // patch is noexcept on x64 so no need to try-catch
-#if !utils_x64
+#if !utils_64bit
         if (injected_first_range)
         {
           try

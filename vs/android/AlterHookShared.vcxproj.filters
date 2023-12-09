@@ -16,6 +16,9 @@
     <Filter Include="Include\utilities">
       <UniqueIdentifier>{a497db0b-f2f5-4a49-8741-94f1bd971c92}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Include\detail">
+      <UniqueIdentifier>{6512d2e5-8b37-4705-a52a-ad6a2c7723f7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\pre-compiled headers\linux\pch.h">
@@ -60,9 +63,6 @@
     <ClInclude Include="..\..\include\alterhook\hook_map.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\macros.h">
-      <Filter>Include</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\alterhook\modifier.h">
       <Filter>Include</Filter>
     </ClInclude>
@@ -90,6 +90,12 @@
     <ClInclude Include="..\..\headers\linux_thread_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\detail\constants.h">
+      <Filter>Include\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\detail\macros.h">
+      <Filter>Include\detail</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\addresser.cpp">
@@ -111,6 +117,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\ARM\trampoline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\linux\allocation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\ARM\injection.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
