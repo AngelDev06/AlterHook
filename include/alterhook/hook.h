@@ -90,7 +90,7 @@ namespace alterhook
 
     typedef std::array<std::byte, detail::constants::backup_size> backup_t;
 
-#if !utils_x64
+#if !utils_64bit
     const std::byte* pdetour = nullptr;
 #endif
     bool                 enabled = false;

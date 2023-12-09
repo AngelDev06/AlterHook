@@ -18,6 +18,9 @@
     <Filter Include="PCH">
       <UniqueIdentifier>{f7a30de8-adfd-4776-914b-e2f0489d17ad}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Include\detail">
+      <UniqueIdentifier>{bdb3db29-eeae-481f-b560-cc653c1fe5f2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\headers\buffer.h">
@@ -74,9 +77,6 @@
     <ClInclude Include="..\..\include\alterhook\hook_map.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\macros.h">
-      <Filter>Include</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\alterhook\modifier.h">
       <Filter>Include</Filter>
     </ClInclude>
@@ -88,6 +88,12 @@
     </ClInclude>
     <ClInclude Include="..\..\pre-compiled headers\windows\pch.h">
       <Filter>PCH</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\detail\constants.h">
+      <Filter>Include\detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\detail\macros.h">
+      <Filter>Include\detail</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -114,6 +120,12 @@
     </ClCompile>
     <ClCompile Include="..\..\pre-compiled headers\windows\pch.cpp">
       <Filter>PCH</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\X86\injection.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\allocation.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

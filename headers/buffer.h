@@ -4,16 +4,17 @@
 
 namespace alterhook
 {
-#if utils_x64 || utils_arm
-  static constexpr size_t memory_slot_size = 64;
+#if utils_64bit || utils_arm
+  constexpr size_t memory_slot_size = 64;
 #else
-  static constexpr size_t memory_slot_size = 32;
+  constexpr size_t memory_slot_size = 32;
 #endif
 
-#if utils_x64
-  #define __alterhook_alloc_arg std::byte* origin
+#if utils_64bit
+  #define __origin_address std::byte* origin
+  constexpr size_t max_memory_range = 0x40'00'00'00;
 #else
-  #define __alterhook_alloc_arg
+  #define __origin_address
 #endif
 
   struct ALTERHOOK_HIDDEN memory_block
@@ -44,7 +45,7 @@ namespace alterhook
     static memory_block* buffer;
 
   public:
-    static std::byte* allocate(__alterhook_alloc_arg);
+    static std::byte* allocate(__origin_address);
     static void       deallocate(void* src) noexcept;
   };
 } // namespace alterhook

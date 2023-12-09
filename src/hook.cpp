@@ -160,7 +160,7 @@ namespace alterhook
   {
     if (target == ptarget)
       return;
-#if utils_x64
+#if utils_64bit
     const std::byte* const tmpdtr = __alterhook_get_dtr();
 #endif
     const bool should_enable = enabled;
@@ -170,7 +170,7 @@ namespace alterhook
 
     if (should_enable)
     {
-#if utils_x64
+#if utils_64bit
       utils_assert(prelay, "hook::set_target: detour was corrupted");
       __alterhook_set_dtr(tmpdtr);
 #endif
@@ -184,7 +184,7 @@ namespace alterhook
     if (detour == __alterhook_get_dtr())
       return;
 
-#if utils_x64
+#if utils_64bit
     __alterhook_set_dtr(detour);
 #else
     if (enabled)

@@ -36,10 +36,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\addresser.cpp" />
+    <ClCompile Include="..\..\src\ARM\injection.cpp" />
     <ClCompile Include="..\..\src\ARM\trampoline.cpp" />
     <ClCompile Include="..\..\src\buffer.cpp" />
     <ClCompile Include="..\..\src\hook.cpp" />
     <ClCompile Include="..\..\src\hook_chain.cpp" />
+    <ClCompile Include="..\..\src\linux\allocation.cpp" />
     <ClCompile Include="..\..\src\linux\other.cpp" />
     <ClCompile Include="..\..\src\misc.cpp" />
   </ItemGroup>
@@ -50,11 +52,12 @@
     <ClInclude Include="..\..\headers\injection.h" />
     <ClInclude Include="..\..\headers\linux_thread_handler.h" />
     <ClInclude Include="..\..\include\alterhook\addresser.h" />
+    <ClInclude Include="..\..\include\alterhook\detail\constants.h" />
+    <ClInclude Include="..\..\include\alterhook\detail\macros.h" />
     <ClInclude Include="..\..\include\alterhook\exceptions.h" />
     <ClInclude Include="..\..\include\alterhook\hook.h" />
     <ClInclude Include="..\..\include\alterhook\hook_chain.h" />
     <ClInclude Include="..\..\include\alterhook\hook_map.h" />
-    <ClInclude Include="..\..\include\alterhook\macros.h" />
     <ClInclude Include="..\..\include\alterhook\modifier.h" />
     <ClInclude Include="..\..\include\alterhook\tools.h" />
     <ClInclude Include="..\..\include\alterhook\trampoline.h" />

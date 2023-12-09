@@ -76,28 +76,41 @@
   #define utils_packed
 #endif
 
-#if defined(_M_X64) || defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_X64)
   #define utils_x64   true
   #define utils_x86   false
+  #define utils_arm64 false
   #define utils_arm   false
-  #define utils_armv7 false
 #else
   #define utils_x64 false
-  #if defined(__arm__) || defined(__TARGET_ARCH_ARM)
-    #define utils_arm true
-    #define utils_x86 false
-    #if defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) ||                 \
-        defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) ||                \
-        (defined(__TARGET_ARCH_ARM) && __TARGET_ARCH_ARM - 0 >= 7)
-      #define utils_armv7 true
-    #else
-      #define utils_armv7 false
-    #endif
-  #else
-    #define utils_arm   false
-    #define utils_armv7 false
+  #if defined(i386) || defined(__i386__) || defined(__i386) || defined(_M_IX86)
     #define utils_x86   true
+    #define utils_arm64 false
+    #define utils_arm   false
+  #else
+    #define utils_x86 false
+    #if defined(__aarch64__) || defined(_M_ARM64)
+      #define utils_arm64 true
+      #define utils_arm   false
+    #else
+      #define utils_arm64 false
+      #if defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) ||               \
+          defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) ||              \
+          (defined(__TARGET_ARCH_ARM) && __TARGET_ARCH_ARM - 0 >= 7)
+        #define utils_arm true
+      #else
+        #define utils_arm false
+      #endif
+    #endif
   #endif
+#endif
+
+#if utils_arm64 || utils_x64
+  #define utils_64bit true
+  #define utils_32bit false
+#else
+  #define utils_64bit false
+  #define utils_32bit true
 #endif
 
 #if utils_msvc

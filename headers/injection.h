@@ -61,7 +61,7 @@ namespace alterhook
 
   void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
                         bool patch_above, bool enable __int_old_protect);
-#if !utils_x64
+#if !utils_64bit
   void patch_jmp(std::byte* target, const std::byte* detour,
                  bool patch_above __int_old_protect);
 #endif
@@ -72,7 +72,7 @@ namespace alterhook
     ALTERHOOK_HIDDEN static void
         inject(obj&& instance, const std::byte* backup_or_detour, bool enable)
     {
-#if utils_x64
+#if utils_64bit
       if (enable)
       {
         *reinterpret_cast<uint64_t*>(instance.prelay + 6) =
@@ -90,7 +90,7 @@ namespace alterhook
     template <typename obj>
     ALTERHOOK_HIDDEN static void patch(obj&& instance, const std::byte* detour)
     {
-#if utils_x64
+#if utils_64bit
       *reinterpret_cast<uint64_t*>(instance.prelay + 6) =
           reinterpret_cast<uintptr_t>(detour);
 #else

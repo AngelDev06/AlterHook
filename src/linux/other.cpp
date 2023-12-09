@@ -34,8 +34,6 @@ namespace fs = std::filesystem;
 
 namespace alterhook
 {
-  extern const long memory_block_size;
-
   namespace exceptions
   {
     std::string mmap_exception::error_function() const

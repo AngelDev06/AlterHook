@@ -80,7 +80,7 @@ namespace alterhook
     typedef std::unique_ptr<std::byte, deleter>                  trampoline_ptr;
     std::byte*     ptarget = nullptr;
     trampoline_ptr ptrampoline{};
-#if utils_x64
+#if utils_64bit
     std::byte* prelay = nullptr;
 #elif utils_arm
     std::bitset<8> instruction_sets{};
