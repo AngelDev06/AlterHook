@@ -55,16 +55,9 @@ namespace alterhook
 
   protected:
 #ifdef __alterhook_expose_impl
-  #if utils_windows
-    friend void process_frozen_threads(const trampoline& tramp,
-                                       bool enable_hook, HANDLE thread_handle);
-  #elif utils_arm
-    friend void process_frozen_threads(const trampoline& tramp,
-                                       bool enable_hook, unsigned long& pc);
-  #else
-    friend void process_frozen_threads(const trampoline& tramp,
-                                       bool enable_hook, greg_t& ip);
-  #endif
+    friend uintptr_t process_frozen_threads(const trampoline& tramp,
+                                            bool              enable_hook,
+                                            uintptr_t         ip) noexcept;
 #endif
     struct ALTERHOOK_API deleter
     {
@@ -91,7 +84,7 @@ namespace alterhook
     pc_handling_t pc_handling{};
 #endif
 #if !utils_windows
-    int old_protect = 0;
+    protection_info old_protect{};
 #endif
     positions_t positions{};
   };

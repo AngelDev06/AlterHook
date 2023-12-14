@@ -6,7 +6,6 @@
 #include "arm_instructions.h"
 #include "buffer.h"
 #include "linux_thread_handler.h"
-#define __alterhook_expose_impl
 #include "trampoline.h"
 
 namespace alterhook
@@ -17,8 +16,6 @@ namespace alterhook
   {
     trampoline_buffer::deallocate(ptrampoline);
   }
-
-  int get_protection(const std::byte* address);
 
   inline namespace init_impl
   {
@@ -514,8 +511,8 @@ namespace alterhook
   {
     if (ptarget == target)
       return;
-    int tmp_protect = get_protection(target);
-    if (!(tmp_protect & PROT_EXEC))
+    protection_info tmp_protinfo = get_protection(target);
+    if (!tmp_protinfo.execute)
       throw(exceptions::invalid_address(target));
     if (!ptrampoline)
       ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
@@ -1287,7 +1284,7 @@ namespace alterhook
     positions        = tmp_positions;
     instruction_sets = tmp_instruction_sets;
     pc_handling      = tmp_pc_handling;
-    old_protect      = tmp_protect;
+    old_protect      = tmp_protinfo;
     tramp_size       = tramp_pos;
   }
 
@@ -1399,7 +1396,7 @@ namespace alterhook
     patch_above = false;
     tramp_size  = 0;
     pc_handling = { false, 0 };
-    old_protect = PROT_NONE;
+    old_protect = {};
     positions.clear();
     instruction_sets.reset();
   }
