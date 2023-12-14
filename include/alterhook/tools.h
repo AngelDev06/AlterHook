@@ -7,7 +7,20 @@
 
 namespace alterhook
 {
-  ALTERHOOK_API bool is_executable_address(const void* address);
+  struct protection_info
+  {
+    bool read    : 1;
+    bool write   : 1;
+    bool execute : 1;
+  };
+
+  ALTERHOOK_API protection_info get_protection(const void* address);
+
+  inline bool is_executable_address(const void* address)
+  {
+    auto info = get_protection(address);
+    return info.execute;
+  }
 
   namespace helpers
   {

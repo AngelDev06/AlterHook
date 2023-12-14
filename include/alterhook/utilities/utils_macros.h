@@ -436,6 +436,8 @@
 #define utils_is_call_operator(item, success, failure)                         \
   __utils_is_call_operator(__utils_expand_2 item, success, failure)
 
+#define utils_expand(...) __VA_ARGS__
+
 // source: https://stackoverflow.com/a/36015150/22625698
 #if (!defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL) && utils_msvc
   #define utils_sizeof(...)                                                    \

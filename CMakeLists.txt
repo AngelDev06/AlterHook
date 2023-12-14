@@ -33,7 +33,7 @@ endif()
 option(ALTERHOOK_SHARED "Use shared version of AlterHook")
 option(ALTERHOOK_TARGET_ARCH "Specifies the target architecture to use")
 option(ALTERHOOK_BUILD_TESTS "Determines whether to build the tests on folder 'tests/'" ${ALTERHOOK_TOP_LEVEL})
-set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM")
+set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM" "ARM64")
 
 set(
 	ALTERHOOK_PRIVATE_HEADERS
@@ -52,6 +52,7 @@ set(
 	"include/alterhook/utilities/type_sequence.h"
 	"include/alterhook/utilities/utils.h"
 	"include/alterhook/utilities/utils_macros.h"
+	"include/alterhook/utilities/properties.h"
 )
 
 set(
@@ -129,26 +130,56 @@ if (
 	if (ALTERHOOK_TARGET_ARCH STREQUAL "X86")
 		set(CAPSTONE_X86_SUPPORT ON CACHE BOOL "x86 support" FORCE)
 		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/x86_instructions.h")
-		list(APPEND ALTERHOOK_CPP_FILES "src/X86/trampoline.cpp" "src/X86/injection.cpp")
+		list(
+			APPEND ALTERHOOK_CPP_FILES 
+			"src/X86/trampoline.cpp"
+			"src/X86/injection.cpp"
+			"src/X86/thread_processing.cpp"
+		)
 		message(STATUS "Enabling alterhook x86 support")
+	elseif (ALTERHOOK_TARGET_ARCH STREQUAL "ARM64")
+		set(CAPSTONE_AARCH64_SUPPORT ON CACHE BOOL "AARCH64 support" FORCE)
+		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/arm64_instructions.h")
+		list(APPEND ALTERHOOK_CPP_FILES "src/ARM64/trampoline.cpp" "src/ARM64/injection.cpp")
+		message(STATUS "Enabling alterhook aarch64 support")
 	else()
 		set(CAPSTONE_ARM_SUPPORT ON CACHE BOOL "ARM support" FORCE)
 		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/arm_instructions.h")
-		list(APPEND ALTERHOOK_CPP_FILES "src/ARM/trampoline.cpp" "src/ARM/injection.cpp")
+		list(
+			APPEND ALTERHOOK_CPP_FILES 
+			"src/ARM/trampoline.cpp"
+			"src/ARM/injection.cpp"
+			"src/ARM/thread_processing.cpp"
+		)
 		message(STATUS "Enabling alterhook armv7 support")
 	endif()
 else()
-	message(FATAL_ERROR "'ALTERHOOK_TARGET_ARCH=${ALTERHOOK_TARGET_ARCH}' is invalid, valid values are: X86, ARM")
+	message(
+		FATAL_ERROR 
+		"'ALTERHOOK_TARGET_ARCH=${ALTERHOOK_TARGET_ARCH}' is invalid, valid values are: X86, ARM, ARM64"
+	)
 endif()
 
 if (WIN32)
 	set(ALTERHOOK_PCH "pre-compiled headers/windows")
 	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/windows_thread_handler.h")
-	list(APPEND ALTERHOOK_CPP_FILES "src/windows/other.cpp" "src/windows/allocation.cpp")
+	list(
+		APPEND ALTERHOOK_CPP_FILES 
+		"src/windows/other.cpp"
+		"src/windows/allocation.cpp"
+		"src/windows/freezer.cpp"
+		"src/windows/exceptions.cpp"
+	)
 else()
 	set(ALTERHOOK_PCH "pre-compiled headers/linux")
 	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/linux_thread_handler.h")
-	list(APPEND ALTERHOOK_CPP_FILES "src/linux/other.cpp" "src/linux/allocation.cpp")
+	list(
+		APPEND ALTERHOOK_CPP_FILES 
+		"src/linux/other.cpp"
+		"src/linux/allocation.cpp"
+		"src/linux/freezer.cpp"
+		"src/linux/exceptions.cpp"
+	)
 endif()
 
 FetchContent_MakeAvailable(capstone)

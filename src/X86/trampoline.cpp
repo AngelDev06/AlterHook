@@ -14,35 +14,12 @@
   #define __alterhook_pass_alloc_arg(x)
 #endif
 
-#if utils_windows
-  #define __alterhook_set_old_protect_or_validate_address(address)             \
-    do                                                                         \
-    {                                                                          \
-      if (!is_executable_address(address))                                     \
-        throw(exceptions::invalid_address(address));                           \
-    } while (false)
-  #define __alterhook_copy_old_protect(other) ((void)0)
-#else
-  #define __alterhook_set_old_protect_or_validate_address(address)             \
-    int tmp_old_protect = PROT_NONE;                                           \
-    do                                                                         \
-    {                                                                          \
-      if (!((tmp_old_protect = get_protection(address)) & PROT_EXEC))          \
-        throw(exceptions::invalid_address(address));                           \
-    } while (false)
-  #define __alterhook_copy_old_protect(other) (old_protect = other.old_protect)
-#endif
-
 namespace alterhook
 {
   void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
   {
     trampoline_buffer::deallocate(ptrampoline);
   }
-
-#if !utils_windows
-  int ALTERHOOK_HIDDEN get_protection(const std::byte* address);
-#endif
 
   extern std::shared_mutex hook_lock;
 
@@ -91,7 +68,9 @@ namespace alterhook
   {
     if (ptarget == target)
       return;
-    __alterhook_set_old_protect_or_validate_address(target);
+    protection_info tmp_protinfo = get_protection(target);
+    if (!tmp_protinfo.execute)
+      throw(exceptions::invalid_address(target));
     if (!ptrampoline)
       ptrampoline = trampoline_ptr(
           trampoline_buffer::allocate(__alterhook_pass_alloc_arg(target)));
@@ -305,7 +284,7 @@ namespace alterhook
     tramp_size = tramp_pos;
     positions  = tmp_positions;
 #if !utils_windows
-    old_protect = tmp_old_protect;
+    old_protect = tmp_protinfo;
 #endif
 
 #if utils_x64
@@ -412,7 +391,9 @@ namespace alterhook
         positions(other.positions)
   {
     trampcpy(ptrampoline.get(), other.ptrampoline.get(), tramp_size);
-    __alterhook_copy_old_protect(other);
+#if !utils_windows
+    old_protect = other.old_protect;
+#endif
 #if utils_x64
     prelay = ptrampoline.get() + tramp_size;
     memcpy(prelay, other.prelay, sizeof(JMP_ABS));
@@ -426,7 +407,9 @@ namespace alterhook
         tramp_size(std::exchange(other.tramp_size, 0)),
         positions(std::move(other.positions))
   {
-    __alterhook_copy_old_protect(other);
+#if !utils_windows
+    old_protect = other.old_protect;
+#endif
 #if utils_x64
     prelay = std::exchange(other.prelay, nullptr);
 #endif
@@ -458,7 +441,9 @@ namespace alterhook
     patch_above = other.patch_above;
     tramp_size  = other.tramp_size;
     positions   = other.positions;
-    __alterhook_copy_old_protect(other);
+#if !utils_windows
+    old_protect = other.old_protect;
+#endif
 #if utils_x64
     prelay = ptrampoline.get() + tramp_size;
     memcpy(prelay, other.prelay, sizeof(JMP_ABS));
@@ -482,7 +467,9 @@ namespace alterhook
     tramp_size  = std::exchange(other.tramp_size, 0);
     positions   = other.positions;
     other.positions.clear();
-    __alterhook_copy_old_protect(other);
+#if !utils_windows
+    old_protect = other.old_protect;
+#endif
 #if utils_x64
     prelay = std::exchange(other.prelay, nullptr);
 #endif
@@ -498,7 +485,7 @@ namespace alterhook
     tramp_size  = 0;
     positions.clear();
 #if !utils_windows
-    old_protect = PROT_NONE;
+    old_protect = {};
 #endif
 #if utils_x64
     prelay = nullptr;

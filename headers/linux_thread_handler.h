@@ -9,13 +9,6 @@ namespace alterhook
   class ALTERHOOK_HIDDEN thread_freezer
   {
   private:
-#if utils_arm
-    friend void process_frozen_threads(const trampoline& tramp,
-                                       bool enable_hook, unsigned long& pc);
-#else
-    friend void process_frozen_threads(const trampoline& tramp,
-                                       bool enable_hook, greg_t& ip);
-#endif
     // when ref count reaches 0, the old signal handler will be reset
     static size_t                             ref_count;
     // the lock is needed here because the ref count may be incremented or
@@ -51,6 +44,13 @@ namespace alterhook
     static void thread_control_handler(int sig, siginfo_t* siginfo,
                                        void* sigcontext);
 
+// ARM specific
+#if utils_arm
+    void        handle_errors();
+    friend void report_error(std::byte* tramp, std::byte* target,
+                             uint8_t pos) noexcept;
+#endif
+
   public:
     void init(const trampoline& tramp, bool enable_hook);
     void init(std::nullptr_t);
@@ -66,4 +66,7 @@ namespace alterhook
 
     ~thread_freezer() noexcept;
   };
+
+  uintptr_t process_frozen_threads(const trampoline& tramp, bool enable_hook,
+                                   uintptr_t ip) noexcept;
 } // namespace alterhook

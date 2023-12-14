@@ -11,3 +11,4 @@
 #include "function_traits.h"
 #include "static_vector.h"
 #include "concepts.h"
+#include "properties.h"
