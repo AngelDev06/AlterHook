@@ -9,11 +9,18 @@
       "installDir": "${sourceDir}/out/install/${presetName}",
       "toolchainFile": "$env{NDK_ROOT}/build/cmake/android.toolchain.cmake",
       "cacheVariables": {
+        "ANDROID_STL": "c++_shared",
+        "CMAKE_CXX_STANDARD": "17"
+      }
+    },
+    {
+      "name": "android-arm-base",
+      "hidden": true,
+      "inherits": "android-base",
+      "cacheVariables": {
         "ANDROID_ABI": "armeabi-v7a",
         "ANDROID_ARM_NEON": "TRUE",
-        "ANDROID_STL": "c++_shared",
-        "ALTERHOOK_TARGET_ARCH": "ARM",
-        "CMAKE_CXX_STANDARD": "17"
+        "ALTERHOOK_TARGET_ARCH": "ARM"
       },
       "architecture": {
         "value": "ARM",
@@ -26,9 +33,27 @@
       }
     },
     {
+      "name": "android-arm64-base",
+      "hidden": true,
+      "inherits": "android-base",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a",
+        "ALTERHOOK_TARGET_ARCH": "ARM64"
+      },
+      "architecture": {
+        "value": "ARM64",
+        "strategy": "external"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "intelliSenseMode": "android-clang-arm64"
+        }
+      }
+    },
+    {
       "name": "android-arm-debug",
       "displayName": "Android ARM Debug",
-      "inherits": "android-base",
+      "inherits": "android-arm-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
@@ -36,7 +61,7 @@
     {
       "name": "android-arm-release",
       "displayName": "Android ARM Release",
-      "inherits": "android-base",
+      "inherits": "android-arm-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -44,7 +69,7 @@
     {
       "name": "android-arm-debug-so",
       "displayName": "Android ARM Debug SO",
-      "inherits": "android-base",
+      "inherits": "android-arm-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "ALTERHOOK_SHARED": "ON"
@@ -53,7 +78,41 @@
     {
       "name": "android-arm-release-so",
       "displayName": "Android ARM Release SO",
-      "inherits": "android-base",
+      "inherits": "android-arm-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ALTERHOOK_SHARED": "ON"
+      }
+    },
+    {
+      "name": "android-arm64-debug",
+      "displayName": "Android ARM64 Debug",
+      "inherits": "android-arm64-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "android-arm64-release",
+      "displayName": "Android ARM64 Release",
+      "inherits": "android-arm64-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "android-arm64-debug-so",
+      "displayName": "Android ARM64 Debug SO",
+      "inherits": "android-arm64-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ALTERHOOK_SHARED": "ON"
+      }
+    },
+    {
+      "name": "android-arm64-release-so",
+      "displayName": "Android ARM64 Release SO",
+      "inherits": "android-arm64-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "ALTERHOOK_SHARED": "ON"

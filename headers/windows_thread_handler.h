@@ -9,9 +9,6 @@ namespace alterhook
   class thread_freezer
   {
   private:
-    friend void process_frozen_threads(const trampoline& tramp,
-                                       bool enable_hook, HANDLE thread_handle);
-
     std::vector<DWORD> tids;
 
     void scan_threads();
@@ -31,4 +28,7 @@ namespace alterhook
 
     ~thread_freezer() noexcept;
   };
-}
+
+  uintptr_t process_frozen_threads(const trampoline& tramp, bool enable_hook,
+                                   uintptr_t ip) noexcept;
+} // namespace alterhook

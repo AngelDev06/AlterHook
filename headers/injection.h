@@ -30,7 +30,7 @@ namespace alterhook
   extern const long memory_block_size;
 
   #define __int_old_protect         , int old_protect
-  #define __old_protect_from(other) , other.old_protect
+  #define __old_protect_from(other) , to_linux_prot(other.old_protect)
   #define __define_old_protect()    ((void)0)
 
   ALTERHOOK_HIDDEN inline std::pair<std::byte*, size_t>
@@ -48,6 +48,20 @@ namespace alterhook
   {
     constexpr int execprot = PROT_READ | PROT_WRITE | PROT_EXEC;
     return mprotect(address, size, execprot) != -1;
+  }
+
+  ALTERHOOK_HIDDEN inline int to_linux_prot(protection_info protinfo) noexcept
+  {
+    int result = PROT_NONE;
+
+    if (protinfo.read)
+      result |= PROT_READ;
+    if (protinfo.write)
+      result |= PROT_WRITE;
+    if (protinfo.execute)
+      result |= PROT_EXEC;
+
+    return result;
   }
 
   #define execunset(address, size) mprotect(address, size, old_protect)
