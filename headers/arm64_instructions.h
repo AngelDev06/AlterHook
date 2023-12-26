@@ -24,12 +24,24 @@ namespace alterhook::aarch64
     W15 = 15, W16 = 16, W17 = 17, W18 = 18, W19 = 19,
     W20 = 20, W21 = 21, W22 = 22, W23 = 23, W24 = 24,
     W25 = 25, W26 = 26, W27 = 27, W28 = 28, W29 = 29,
-    W30 = 30
+    W30 = 30,
+    X0 = W0, X1 = W1, X2 = W2, X3 = W3, X4 = W4,
+    X5 = W5, X6 = W6, X7 = W7, X8 = W8, X9 = W9,
+    X10 = W10, X11 = W11, X12 = W12, X13 = W13, X14 = W14,
+    X15 = W15, X16 = W16, X17 = W17, X18 = W18, X19 = W19,
+    X20 = W20, X21 = W21, X22 = W22, X23 = W23, X24 = W24,
+    X25 = W25, X26 = W26, X27 = W27, X28 = W28, X29 = W29,
+    X30 = W30
   };
 
   enum class offset_type
   {
     imm26_0, imm19_5, imm14_5
+  };
+
+  enum class register_type
+  {
+    reg5_0, reg5_5
   };
 
   enum class size_type
@@ -126,14 +138,17 @@ namespace alterhook::aarch64
       }
     };
 
-    template <typename base = INSTRUCTION>
+    template <typename register_format_t, typename base = INSTRUCTION>
     struct register_operand : base
     {
-      static constexpr uint32_t register_mask = 0x1F;
+      static constexpr register_type register_format = register_format_t::value;
+      static constexpr uint32_t      register_mask   = 0x1F;
+      static constexpr uint32_t      register_shift =
+          register_format == register_type::reg5_5 ? 5 : 0;
 
       template <typename... types>
       register_operand(uint32_t opcode, uint8_t reg, types&&... args)
-          : base(opcode | static_cast<uint32_t>(reg),
+          : base(opcode | (static_cast<uint32_t>(reg) << register_shift),
                  std::forward<types>(args)...)
       {
         utils_assert(reg < register_mask,
@@ -144,8 +159,8 @@ namespace alterhook::aarch64
       {
         utils_assert(reg < register_mask,
                      "register value too large to fit in 5 bits");
-        base::instr &= ~register_mask;
-        base::instr |= reg;
+        base::instr &= ~(register_mask << register_shift);
+        base::instr |= (static_cast<uint32_t>(reg) << register_shift);
       }
     };
 
@@ -278,7 +293,8 @@ namespace alterhook::aarch64
   struct CBZ
       : utils::properties<utils::property<templates::size_operand,
                                           utils::val<size_type::size_31>>,
-                          utils::property<templates::register_operand>,
+                          utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm19_5>>>
   {
@@ -294,7 +310,8 @@ namespace alterhook::aarch64
   struct CBNZ
       : utils::properties<utils::property<templates::size_operand,
                                           utils::val<size_type::size_31>>,
-                          utils::property<templates::register_operand>,
+                          utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm19_5>>>
   {
@@ -309,7 +326,8 @@ namespace alterhook::aarch64
 
   struct TBZ
       : utils::properties<utils::property<templates::bit_pos_operand>,
-                          utils::property<templates::register_operand>,
+                          utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm14_5>>>
   {
@@ -323,7 +341,8 @@ namespace alterhook::aarch64
 
   struct TBNZ
       : utils::properties<utils::property<templates::bit_pos_operand>,
-                          utils::property<templates::register_operand>,
+                          utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm14_5>>>
   {
@@ -338,7 +357,8 @@ namespace alterhook::aarch64
   struct LDR
       : utils::properties<utils::property<templates::size_operand,
                                           utils::val<size_type::size_30>>,
-                          utils::property<templates::register_operand>,
+                          utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm19_5>>>
   {
@@ -352,7 +372,8 @@ namespace alterhook::aarch64
   };
 
   struct LDRSW
-      : utils::properties<utils::property<templates::register_operand>,
+      : utils::properties<utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm19_5>>>
   {
@@ -364,7 +385,8 @@ namespace alterhook::aarch64
   struct LDRV
       : utils::properties<utils::property<templates::size_operand,
                                           utils::val<size_type::size2_30>>,
-                          utils::property<templates::register_operand>,
+                          utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::offset_operand,
                                           utils::val<offset_type::imm19_5>>>
   {
@@ -378,7 +400,8 @@ namespace alterhook::aarch64
   };
 
   struct ADR
-      : utils::properties<utils::property<templates::register_operand>,
+      : utils::properties<utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::splited_offset_operand,
                                           utils::val<offset_pad_type::none>>>
   {
@@ -388,13 +411,23 @@ namespace alterhook::aarch64
   };
 
   struct ADRP
-      : utils::properties<utils::property<templates::register_operand>,
+      : utils::properties<utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_0>>,
                           utils::property<templates::splited_offset_operand,
                                           utils::val<offset_pad_type::twelve>>>
   {
     static constexpr uint32_t opcode = 0x90'00'00'00;
 
     ADRP(int32_t offset = 0, reg_t reg = W0) : base(opcode, offset, reg) {}
+  };
+
+  struct BR
+      : utils::properties<utils::property<templates::register_operand,
+                                          utils::val<register_type::reg5_5>>>
+  {
+    static constexpr uint32_t opcode = 0xD6'1F'00'00;
+
+    BR(reg_t reg = W0) : base(opcode, reg) {}
   };
 } // namespace alterhook::aarch64
 

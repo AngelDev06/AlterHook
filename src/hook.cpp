@@ -12,135 +12,114 @@
 namespace alterhook
 {
   hook::hook(const hook& other)
-      : trampoline(other), original_buffer(other.original_buffer)
+      : trampoline(other), pdetour(other.pdetour), backup(other.backup),
+        original_buffer(other.original_buffer),
+        original_wrap(other.original_wrap
+                          ? std::launder(reinterpret_cast<helpers::original*>(
+                                &original_buffer))
+                          : nullptr)
   {
-    __alterhook_copy_dtr(other);
-    memcpy(backup.data(), other.backup.data(), backup.size());
-    if (other.original_wrap)
-      original_wrap =
-          std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
   }
 
   hook::hook(hook&& other) noexcept
       : trampoline(std::move(other)),
-        enabled(std::exchange(other.enabled, false)),
-        original_buffer(other.original_buffer)
+        pdetour(std::exchange(other.pdetour, nullptr)),
+        enabled(std::exchange(other.enabled, false)), backup(other.backup),
+        original_buffer(other.original_buffer),
+        original_wrap(std::exchange(other.original_wrap, nullptr)
+                          ? std::launder(reinterpret_cast<helpers::original*>(
+                                &original_buffer))
+                          : nullptr)
   {
-    __alterhook_exchange_dtr(other);
-    memcpy(backup.data(), other.backup.data(), backup.size());
-    if (other.original_wrap)
-    {
-      other.original_wrap = nullptr;
-      original_wrap =
-          std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
-    }
   }
 
   hook& hook::operator=(const hook& other)
   {
-    if (this != &other)
-    {
-      disable();
-      trampoline::operator=(other);
-      __alterhook_copy_dtr(other);
-      memcpy(backup.data(), other.backup.data(), backup.size());
-      if (other.original_wrap)
-      {
-        original_buffer = other.original_buffer;
-        if (!original_wrap)
-          original_wrap = std::launder(
-              reinterpret_cast<helpers::original*>(&original_buffer));
-      }
-    }
+    if (this == &other)
+      return *this;
+
+    disable();
+    trampoline::operator=(other);
+    pdetour = other.pdetour;
+    backup  = other.backup;
+
+    if (!other.original_wrap)
+      return *this;
+
+    original_buffer = other.original_buffer;
+    original_wrap =
+        std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
     return *this;
   }
 
   hook& hook::operator=(hook&& other) noexcept
   {
-    if (this != &other)
-    {
-      if (enabled)
-      {
-        try
-        {
-          disable();
-        }
-        catch (...)
-        {
-          // will most likely never happen
-          assert(!"hook::operator=: failed to disable a hook in a noexcept "
-                  "function");
-          std::terminate();
-        }
-      }
-      trampoline::operator=(std::move(other));
-      enabled         = std::exchange(other.enabled, false);
-      original_buffer = other.original_buffer;
-      __alterhook_exchange_dtr(other);
-      memcpy(backup.data(), other.backup.data(), backup.size());
-      if (other.original_wrap)
-      {
-        other.original_wrap = nullptr;
-        original_wrap       = std::launder(
-            reinterpret_cast<helpers::original*>(&original_buffer));
-      }
-    }
+    if (this == &other)
+      return *this;
+    if (enabled)
+      disable();
+
+    trampoline::operator=(std::move(other));
+    pdetour = std::exchange(other.pdetour, nullptr);
+    enabled = std::exchange(other.enabled, false);
+    backup  = other.backup;
+
+    if (!other.original_wrap)
+      return *this;
+
+    original_buffer = other.original_buffer;
+    original_wrap =
+        std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
+    other.original_wrap = nullptr;
     return *this;
   }
 
   hook& hook::operator=(const trampoline& other)
   {
-    if (static_cast<trampoline*>(this) != &other)
-    {
-      const bool should_enable = enabled;
-      disable();
-      trampoline::operator=(other);
-      __alterhook_make_backup();
-      if (should_enable)
-        enable();
-    }
+    if (static_cast<trampoline*>(this) == &other)
+      return *this;
+
+    const bool should_enable = enabled;
+    disable();
+    trampoline::operator=(other);
+    __alterhook_make_backup();
+    if (should_enable)
+      enable();
     return *this;
   }
 
   hook& hook::operator=(trampoline&& other)
   {
-    if (static_cast<trampoline*>(this) != &other)
-    {
-      const bool should_enable = enabled;
-      disable();
-      trampoline::operator=(std::move(other));
-      __alterhook_make_backup();
-      __alterhook_def_thumb_var(ptarget);
-      if (original_wrap)
-        *original_wrap = __alterhook_add_thumb_bit(ptrampoline.get());
-      if (should_enable)
-        enable();
-    }
+    if (static_cast<trampoline*>(this) == &other)
+      return *this;
+
+    const bool should_enable = enabled;
+    disable();
+    trampoline::operator=(std::move(other));
+    __alterhook_make_backup();
+    __alterhook_def_thumb_var(ptarget);
+    if (original_wrap)
+      *original_wrap = __alterhook_add_thumb_bit(ptrampoline.get());
+    if (should_enable)
+      enable();
     return *this;
   }
 
   hook::~hook() noexcept
-  try
   {
     disable();
     if (original_wrap)
       *original_wrap = nullptr;
   }
-  catch (...)
-  {
-    assert(!"hook::~hook: failed to disable a hook in a noexcept function");
-    std::terminate();
-  }
 
   void hook::enable()
   {
-    const std::byte* const dtr = __alterhook_get_dtr();
-    utils_assert(dtr, "hook::enable: invalid detour");
+    utils_assert(pdetour, "hook::enable: invalid detour");
     if (!enabled)
     {
       std::unique_lock lock{ hook_lock };
       thread_freezer   freeze{ *this, true };
-      inject(dtr, true);
+      inject(pdetour, true);
       enabled = true;
     }
   }
@@ -160,40 +139,27 @@ namespace alterhook
   {
     if (target == ptarget)
       return;
-#if utils_64bit
-    const std::byte* const tmpdtr = __alterhook_get_dtr();
-#endif
     const bool should_enable = enabled;
     disable();
     init(target);
     __alterhook_make_backup();
 
     if (should_enable)
-    {
-#if utils_64bit
-      utils_assert(prelay, "hook::set_target: detour was corrupted");
-      __alterhook_set_dtr(tmpdtr);
-#endif
       enable();
-    }
   }
 
   void hook::set_detour(std::byte* detour)
   {
     utils_assert(ptarget, "Attempt to set the detour of an uninitialized hook");
-    if (detour == __alterhook_get_dtr())
+    if (detour == pdetour)
       return;
 
-#if utils_64bit
-    __alterhook_set_dtr(detour);
-#else
     if (enabled)
     {
       std::unique_lock lock{ hook_lock };
       patch(detour);
     }
     pdetour = detour;
-#endif
   }
 
   void hook::set_original(const helpers::orig_buff_t& original)
@@ -229,16 +195,14 @@ namespace alterhook
 
   bool hook::operator==(const hook& other) const noexcept
   {
-    return std::forward_as_tuple(ptarget, __alterhook_get_dtr(), enabled) ==
-           std::forward_as_tuple(
-               other.ptarget, __alterhook_get_other_dtr(other), other.enabled);
+    return std::tie(ptarget, pdetour, enabled) ==
+           std::tie(other.ptarget, other.pdetour, other.enabled);
   }
 
   bool hook::operator!=(const hook& other) const noexcept
   {
-    return std::forward_as_tuple(ptarget, __alterhook_get_dtr(), enabled) !=
-           std::forward_as_tuple(
-               other.ptarget, __alterhook_get_other_dtr(other), other.enabled);
+    return std::tie(ptarget, pdetour, enabled) !=
+           std::tie(other.ptarget, other.pdetour, other.enabled);
   }
 } // namespace alterhook
 

@@ -4,6 +4,14 @@
 
 namespace alterhook
 {
+#if utils_arm
+  #define __bool_thumb     , bool thumb
+  #define __set_thumb(arg) (this->thumb = arg)
+#else
+  #define __bool_thumb
+  #define __set_thumb(arg) ((void)0)
+#endif
+
   namespace helpers
   {
     class ALTERHOOK_HIDDEN weak_disassembler_iterator
@@ -104,39 +112,39 @@ namespace alterhook
     csh    handle      = CS_ERR_OK;
     size_t disasm_size = 0;
 
+#if utils_x86 || utils_x64
+    static constexpr cs_arch disasm_arch = CS_ARCH_X86;
+  #if utils_x64
+    #define disasm_mode(unused) CS_MODE_64
+  #else
+    #define disasm_mode(unused) CS_MODE_32
+  #endif
+#elif utils_arm64
+    static constexpr cs_arch disasm_arch = CS_ARCH_ARM64;
+  #define disasm_mode(unused) CS_MODE_ARM
+#else
+    static constexpr cs_arch disasm_arch = CS_ARCH_ARM;
+  #define disasm_mode(thumb) (thumb ? CS_MODE_THUMB : CS_MODE_ARM)
+#endif
+
   public:
     typedef helpers::disassembler_iterator      iterator;
     typedef helpers::weak_disassembler_iterator weak_iterator;
 
-#if utils_x86 || utils_x64
-    disassembler(const std::byte* start_address, bool detail = true)
+    disassembler(const std::byte* start_address __bool_thumb,
+                 bool                           detail = true)
         : address(start_address)
     {
-  #if utils_x64
-      constexpr cs_mode disasm_mode = CS_MODE_64;
-  #else
-      constexpr cs_mode disasm_mode = CS_MODE_32;
-  #endif
-      if (cs_err error = cs_open(CS_ARCH_X86, disasm_mode, &handle))
+      __set_thumb(thumb);
+
+      if (cs_err error = cs_open(disasm_arch, disasm_mode(thumb), &handle))
         throw(exceptions::disassembler_init_fail(start_address, error));
       if (!detail)
         return;
       if (cs_err error = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON))
         throw(exceptions::disassembler_init_fail(start_address, error));
     }
-#elif utils_arm
-    disassembler(const std::byte* start_address, bool thumb, bool detail = true)
-        : address(start_address), thumb(thumb)
-    {
-      if (cs_err error = cs_open(CS_ARCH_ARM,
-                                 thumb ? CS_MODE_THUMB : CS_MODE_ARM, &handle))
-        throw(exceptions::disassembler_init_fail(start_address, error));
-      if (!detail)
-        return;
-      if (cs_err error = cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON))
-        throw(exceptions::disassembler_init_fail(start_address, error));
-    }
-#endif
+
     // not checking for errors on close to keep this noexcept
     ~disassembler() noexcept { cs_close(&handle); }
 

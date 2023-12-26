@@ -50,10 +50,7 @@ namespace alterhook
 
     using trampoline::get_target;
 
-    const std::byte* get_detour() const noexcept
-    {
-      return __alterhook_get_dtr();
-    }
+    const std::byte* get_detour() const noexcept { return pdetour; }
 
     size_t trampoline_size() const noexcept { return size(); }
 
@@ -90,9 +87,7 @@ namespace alterhook
 
     typedef std::array<std::byte, detail::constants::backup_size> backup_t;
 
-#if !utils_64bit
-    const std::byte* pdetour = nullptr;
-#endif
+    const std::byte*     pdetour = nullptr;
     bool                 enabled = false;
     backup_t             backup{};
     helpers::orig_buff_t original_buffer{};
@@ -104,18 +99,18 @@ namespace alterhook
 
   template <__alterhook_is_detour_and_original_impl(dtr, orig)>
   hook::hook(std::byte* target, dtr&& detour, orig& original, bool enable_hook)
-      : trampoline(target)
+      : trampoline(target),
+        pdetour(get_target_address(std::forward<dtr>(detour))),
+        original_wrap(std::launder(
+            reinterpret_cast<helpers::original*>(&original_buffer)))
   {
     helpers::assert_valid_detour_original_pair<dtr, orig>();
-    __alterhook_def_thumb_var(target);
     new (&original_buffer) helpers::original_wrapper(original);
-    original_wrap =
-        std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
+    __alterhook_def_thumb_var(target);
     __alterhook_make_backup();
-    __alterhook_set_dtr(get_target_address(std::forward<dtr>(detour)));
     original =
         function_cast<orig>(__alterhook_add_thumb_bit(ptrampoline.get()));
-    utils_assert(target != __alterhook_get_dtr(),
+    utils_assert(target != pdetour,
                  "hook::hook: detour & target have the same address");
     if (enable_hook)
       enable();
@@ -123,11 +118,11 @@ namespace alterhook
 
   template <__alterhook_is_detour_impl(dtr)>
   hook::hook(std::byte* target, dtr&& detour, bool enable_hook)
-      : trampoline(target)
+      : trampoline(target),
+        pdetour(get_target_address(std::forward<dtr>(detour)))
   {
     __alterhook_make_backup();
-    __alterhook_set_dtr(get_target_address(std::forward<dtr>(detour)));
-    utils_assert(target != __alterhook_get_dtr(),
+    utils_assert(target != pdetour,
                  "hook::hook: detour & target have the same address");
     if (enable_hook)
       enable();

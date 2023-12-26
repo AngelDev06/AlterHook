@@ -19,8 +19,7 @@ namespace alterhook
             ? std::pair((enabled.emplace_back(), enabled.begin()), true)
             : std::pair((disabled.emplace_back(), disabled.begin()), false);
 
-    itr->init(*this, itr, __alterhook_get_other_dtr(other),
-              other.original_buffer);
+    itr->init(*this, itr, other.pdetour, other.original_buffer);
     itr->enabled   = should_enable;
     itr->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
     starts_enabled = should_enable;

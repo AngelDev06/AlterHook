@@ -138,13 +138,16 @@ namespace alterhook
 #if utils_windows
   uintptr_t addresser::follow_thunk_function(uintptr_t address) noexcept
   {
+    uintptr_t result = address;
     if (*reinterpret_cast<std::byte*>(address) == std::byte(0xFF) &&
         *reinterpret_cast<std::byte*>(address + 1) == std::byte(0x25))
     {
-      address = *reinterpret_cast<uintptr_t*>(address + 2);
-      address = *reinterpret_cast<uintptr_t*>(address);
+      result = *reinterpret_cast<uintptr_t*>(address + 2);
+      if (!result)
+        return address;
+      result = *reinterpret_cast<uintptr_t*>(address);
     }
-    return address;
+    return result;
   }
 
   #ifndef NDEBUG

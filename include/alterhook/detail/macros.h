@@ -258,34 +258,6 @@
     __alterhook_is_key_detour_and_original_impl(T1, T2, T3) = 0
 #endif
 
-#if !utils_64bit
-  #define __alterhook_set_dtr(dtr)         (pdetour = dtr)
-  #define __alterhook_get_dtr()            pdetour
-  #define __alterhook_get_other_dtr(other) other.pdetour
-  #define __alterhook_get_real_dtr()       pdetour
-  #define __alterhook_get_other_real_dtr() other.pdetour
-  #define __alterhook_copy_dtr(other)      (pdetour = other.pdetour)
-  #define __alterhook_exchange_dtr(other)                                      \
-    (pdetour = std::exchange(other.pdetour, nullptr))
-#else
-  #define __alterhook_set_dtr(dtr)                                             \
-    (*reinterpret_cast<uint64_t*>(prelay + 6) =                                \
-         reinterpret_cast<uintptr_t>(dtr))
-  #define __alterhook_get_dtr()                                                \
-    (prelay ? reinterpret_cast<std::byte*>(                                    \
-                  *reinterpret_cast<uint64_t*>(prelay + 6))                    \
-            : nullptr)
-  #define __alterhook_get_other_dtr(other)                                     \
-    reinterpret_cast<std::byte*>(*reinterpret_cast<uint64_t*>(other.prelay + 6))
-  #define __alterhook_get_real_dtr()            prelay
-  #define __alterhook_get_other_real_dtr(other) other.prelay
-  #define __alterhook_copy_dtr(other)                                          \
-    (*reinterpret_cast<uint64_t*>(prelay + 6) =                                \
-         *reinterpret_cast<uint64_t*>(other.prelay + 6))
-// detour is already exchange via the prelay so no need to redo the operation
-  #define __alterhook_exchange_dtr(other) ((void)0)
-#endif
-
 #if utils_arm
   #define __alterhook_make_backup()                                            \
     do                                                                         \
