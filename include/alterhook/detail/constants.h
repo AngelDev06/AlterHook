@@ -12,6 +12,12 @@ namespace alterhook::detail::constants
 #else
   inline constexpr size_t patch_above_backup_size   = 7;
   inline constexpr size_t patch_above_target_offset = 5;
-  inline constexpr size_t backup_size               = 5;
+  #if utils_x64
+  inline constexpr size_t backup_size       = 14;
+  inline constexpr size_t small_backup_size = 5;
+  #else
+  inline constexpr size_t backup_size       = 5;
+  inline constexpr size_t small_backup_size = backup_size;
+  #endif
 #endif
-}
+} // namespace alterhook::detail::constants

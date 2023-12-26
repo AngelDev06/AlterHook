@@ -8,33 +8,49 @@
 
 namespace alterhook
 {
+  template <typename T>
+  static size_t get_jump_size(T&& flags) noexcept
+  {
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+    if (flags.use_small_jmp)
+      return detail::constants::small_backup_size;
+#endif
+    return detail::constants::backup_size;
+  }
+
   ALTERHOOK_HIDDEN void inject_to_target(std::byte*       target,
                                          const std::byte* backup_or_detour,
-                                         bool             patch_above,
-                                         bool enable      __int_old_protect)
+                                         injector_flags   flags)
   {
     utils_assert(target, "inject_to_target: no target address specified");
     utils_assert(backup_or_detour,
                  "inject_to_target: no backup or detour specified");
-    __define_old_protect();
+    __define_old_protect(flags);
     const auto [address, size] =
-        patch_above
+        flags.patch_above
             ? std::pair(target - detail::constants::patch_above_target_offset,
                         detail::constants::patch_above_backup_size)
-            : std::pair(target, detail::constants::backup_size);
+            : std::pair(target, get_jump_size(flags));
     const auto [prot_addr, prot_size] = __prot_data(address, size);
 
     if (!execset(prot_addr, prot_size))
       execthrow(prot_addr, prot_size);
 
-    if (enable)
+    if (flags.enable)
     {
-      new (address) JMP(
-          static_cast<uint32_t>(backup_or_detour - (address + sizeof(JMP))));
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+      if (!flags.use_small_jmp)
+        new (address) JMP_ABS(reinterpret_cast<uintptr_t>(backup_or_detour));
+      else
+#endif
+      {
+        new (address) JMP(
+            static_cast<uint32_t>(backup_or_detour - (address + sizeof(JMP))));
 
-      if (patch_above)
-        new (address + sizeof(JMP)) JMP_SHORT(
-            static_cast<uint8_t>(0 - (sizeof(JMP) + sizeof(JMP_SHORT))));
+        if (flags.patch_above)
+          new (address + sizeof(JMP)) JMP_SHORT(
+              static_cast<uint8_t>(0 - (sizeof(JMP) + sizeof(JMP_SHORT))));
+      }
     }
     else
       memcpy(address, backup_or_detour, size);
@@ -43,28 +59,46 @@ namespace alterhook
     execflush(address, size);
   }
 
-#if !utils_64bit
+#if utils_x86 || !defined(ALTERHOOK_ALWAYS_USE_RELAY)
   ALTERHOOK_HIDDEN void patch_jmp(std::byte* target, const std::byte* detour,
-                                  bool patch_above __int_old_protect)
+                                  patcher_flags flags)
   {
     utils_assert(target, "patch_jmp: no target address specified");
     utils_assert(detour, "patch_jmp: no detour specified");
-    __define_old_protect();
-    constexpr size_t patch_above_address_offset = sizeof(uint32_t),
-                     address_offset             = offsetof(JMP, offset),
-                     size                       = sizeof(uint32_t);
-    std::byte* const address = patch_above ? target - patch_above_address_offset
-                                           : target + address_offset;
+    __define_old_protect(flags);
+    constexpr size_t size = detail::constants::backup_size;
+  #if utils_x64
+    (void)flags;
+    std::byte* const address = target;
+  #else
+    std::byte* const address =
+        flags.patch_above
+            ? target - detail::constants::patch_above_target_offset
+            : target;
+  #endif
     const auto [prot_addr, prot_size] = __prot_data(address, size);
 
     if (!execset(prot_addr, prot_size))
       execthrow(prot_addr, prot_size);
 
-    *reinterpret_cast<uint32_t*>(address) =
-        static_cast<uint32_t>(detour - (target + sizeof(JMP)));
+  #if utils_x64
+    std::launder(reinterpret_cast<JMP_ABS*>(address))->address =
+        reinterpret_cast<uintptr_t>(detour);
+  #else
+    std::launder(reinterpret_cast<JMP*>(address))->offset =
+        static_cast<uint32_t>(detour - (address + sizeof(JMP)));
+  #endif
 
     execunset(prot_addr, prot_size);
     execflush(address, size);
+  }
+#endif
+
+#if !utils_x86
+  ALTERHOOK_HIDDEN void set_relay(std::byte* prelay, const std::byte* detour)
+  {
+    std::launder(reinterpret_cast<JMP_ABS*>(prelay))->address =
+        reinterpret_cast<uintptr_t>(detour);
   }
 #endif
 } // namespace alterhook

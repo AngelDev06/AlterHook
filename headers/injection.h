@@ -7,6 +7,11 @@
   #include "windows_thread_handler.h"
 #endif
 
+#if !utils_msvc
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 namespace alterhook
 {
   extern std::shared_mutex hook_lock;
@@ -14,8 +19,8 @@ namespace alterhook
 #if utils_windows
   #define __int_old_protect
   #define __old_protect_from(other)
-  #define __define_old_protect()     DWORD old_protect = 0
-  #define __prot_data(address, size) std::pair(address, size)
+  #define __define_old_protect(flags) DWORD old_protect = 0
+  #define __prot_data(address, size)  std::pair(address, size)
   #define execset(address, size)                                               \
     VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &old_protect)
   #define execunset(address, size)                                             \
@@ -31,7 +36,8 @@ namespace alterhook
 
   #define __int_old_protect         , int old_protect
   #define __old_protect_from(other) , to_linux_prot(other.old_protect)
-  #define __define_old_protect()    ((void)0)
+  #define __define_old_protect(flags)                                          \
+    int old_protect = to_linux_prot(flags.old_protect)
 
   ALTERHOOK_HIDDEN inline std::pair<std::byte*, size_t>
       __prot_data(std::byte* address, size_t size) noexcept
@@ -73,43 +79,109 @@ namespace alterhook
                             reinterpret_cast<char*>(address + size))
 #endif
 
+  struct injector_flags
+  {
+    bool patch_above : 1;
+    bool enable      : 1;
+#if !utils_x86 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+    bool use_small_jmp : 1;
+#endif
+#if !utils_windows
+    protection_info old_protect;
+#endif
+  };
+
+  struct patcher_flags
+  {
+    bool patch_above : 1;
+#if !utils_x86 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+    bool use_small_jmp : 1;
+#endif
+#if !utils_windows
+    protection_info old_protect;
+#endif
+  };
+
   void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
-                        bool patch_above, bool enable __int_old_protect);
-#if !utils_64bit
+                        injector_flags flags);
+
+#if utils_x86 || !defined(ALTERHOOK_ALWAYS_USE_RELAY)
   void patch_jmp(std::byte* target, const std::byte* detour,
-                 bool patch_above __int_old_protect);
+                 patcher_flags flags);
 #endif
 
-  struct injectors
-  {
-    template <typename obj>
-    ALTERHOOK_HIDDEN static void
-        inject(obj&& instance, const std::byte* backup_or_detour, bool enable)
-    {
-#if utils_64bit
-      if (enable)
-      {
-        *reinterpret_cast<uint64_t*>(instance.prelay + 6) =
-            reinterpret_cast<uintptr_t>(backup_or_detour);
-        inject_to_target(instance.ptarget, instance.prelay,
-                         instance.patch_above,
-                         true __old_protect_from(instance));
-        return;
-      }
+#if !utils_x86
+  void set_relay(std::byte* prelay, const std::byte* detour);
 #endif
-      inject_to_target(instance.ptarget, backup_or_detour, instance.patch_above,
-                       enable __old_protect_from(instance));
+
+  struct ALTERHOOK_HIDDEN injectors
+  {
+  private:
+    template <typename T, typename obj>
+    static T make_flags_impl(obj&& instance) noexcept
+    {
+      static_assert(std::is_same_v<T, injector_flags> ||
+                    std::is_same_v<T, patcher_flags>);
+      T flags{ .patch_above = instance.patch_above };
+
+#if !utils_x86 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+      flags.use_small_jmp = instance.prelay;
+#endif
+#if !utils_windows
+      flags.old_protect = instance.old_protect;
+#endif
+      return flags;
+    }
+
+  public:
+    template <typename obj>
+    static injector_flags make_injector_flags(obj&& instance,
+                                              bool  enable) noexcept
+    {
+      auto flags   = make_flags_impl<injector_flags>(instance);
+      flags.enable = enable;
+      return flags;
     }
 
     template <typename obj>
-    ALTERHOOK_HIDDEN static void patch(obj&& instance, const std::byte* detour)
+    static patcher_flags make_patcher_flags(obj&& instance) noexcept
     {
-#if utils_64bit
-      *reinterpret_cast<uint64_t*>(instance.prelay + 6) =
-          reinterpret_cast<uintptr_t>(detour);
-#else
-      patch_jmp(instance.ptarget, detour,
-                instance.patch_above __old_protect_from(instance));
+      return make_flags_impl<patcher_flags>(instance);
+    }
+
+    template <typename obj>
+    static void inject(obj&& instance, const std::byte* backup_or_detour,
+                       bool enable)
+    {
+#if !utils_x86
+      if (enable && instance.prelay)
+      {
+        set_relay(instance.prelay, backup_or_detour);
+        inject_to_target(instance.ptarget, instance.prelay,
+                         make_injector_flags(instance, enable));
+        return;
+      }
+#endif
+
+      inject_to_target(instance.ptarget, backup_or_detour,
+                       make_injector_flags(instance, enable));
+    }
+
+    template <typename obj>
+    static void patch(obj&& instance, const std::byte* detour)
+    {
+#if !utils_x86
+  #ifndef ALTERHOOK_ALWAYS_USE_RELAY
+      if (instance.prelay)
+  #endif
+      {
+        set_relay(instance.prelay, detour);
+        return;
+      }
+#endif
+
+#if utils_x86 || !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+      patch_jmp(instance.ptarget, detour, make_patcher_flags(instance));
 #endif
     }
   };
@@ -126,3 +198,7 @@ namespace alterhook
 #define patch(...)                                                             \
   __utils_call(utils_concat(__patch, utils_sizeof(__VA_ARGS__)), (__VA_ARGS__))
 } // namespace alterhook
+
+#if !utils_msvc
+  #pragma GCC diagnostic pop
+#endif

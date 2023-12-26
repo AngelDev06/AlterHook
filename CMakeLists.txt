@@ -83,104 +83,66 @@ set(
 	"src/hook_chain.cpp"
 )
 
-set(
-	ALTERHOOK_POSSIBLE_X86_ARCHS
-	"i386"
-	"i686"
-	"x86_64"
-	"AMD64"
-	"X86"
-)
-
-set(
-	ALTERHOOK_POSSIBLE_ARM_ARCHS
-	"armv7-a"
-	"arm"
-	"armv8b"
-	"armv8l"
-)
-
-set(
-	ALTERHOOK_POSSIBLE_ARCHS
-	${ALTERHOOK_POSSIBLE_X86_ARCHS}
-	${ALTERHOOK_POSSIBLE_ARM_ARCHS}
-)
-
 get_property(ALTERHOOK_TARGET_ARCHS CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS)
-if (
-	ALTERHOOK_TARGET_ARCH IN_LIST ALTERHOOK_TARGET_ARCHS OR
-	CMAKE_SYSTEM_PROCESSOR IN_LIST ALTERHOOK_POSSIBLE_ARCHS
-)
-	set(CAPSTONE_ARCHITECTURE_DEFAULT OFF CACHE BOOL "Whether architectures are enabled by default" FORCE)
-	if (NOT ALTERHOOK_TARGET_ARCH IN_LIST ALTERHOOK_TARGET_ARCHS)
-		string(
-			CONCAT ALTERHOOK_INVALID_ARCH_OUTPUT
-			"ALTERHOOK_TARGET_ARCH is invalid, "
-			"determining the target architecture from "
-			"'CMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}'"
-		)
-		message(STATUS ${ALTERHOOK_INVALID_ARCH_OUTPUT})
-		if (CMAKE_SYSTEM_PROCESSOR IN_LIST ALTERHOOK_POSSIBLE_X86_ARCHS)
-			set(ALTERHOOK_TARGET_ARCH "X86")
-		else()
-			set(ALTERHOOK_TARGET_ARCH "ARM")
-		endif()
-	endif()
-
-	if (ALTERHOOK_TARGET_ARCH STREQUAL "X86")
-		set(CAPSTONE_X86_SUPPORT ON CACHE BOOL "x86 support" FORCE)
-		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/x86_instructions.h")
-		list(
-			APPEND ALTERHOOK_CPP_FILES 
-			"src/X86/trampoline.cpp"
-			"src/X86/injection.cpp"
-			"src/X86/thread_processing.cpp"
-		)
-		message(STATUS "Enabling alterhook x86 support")
-	elseif (ALTERHOOK_TARGET_ARCH STREQUAL "ARM64")
-		set(CAPSTONE_AARCH64_SUPPORT ON CACHE BOOL "AARCH64 support" FORCE)
-		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/arm64_instructions.h")
-		list(APPEND ALTERHOOK_CPP_FILES "src/ARM64/trampoline.cpp" "src/ARM64/injection.cpp")
-		message(STATUS "Enabling alterhook aarch64 support")
-	else()
-		set(CAPSTONE_ARM_SUPPORT ON CACHE BOOL "ARM support" FORCE)
-		list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/arm_instructions.h")
-		list(
-			APPEND ALTERHOOK_CPP_FILES 
-			"src/ARM/trampoline.cpp"
-			"src/ARM/injection.cpp"
-			"src/ARM/thread_processing.cpp"
-		)
-		message(STATUS "Enabling alterhook armv7 support")
-	endif()
-else()
-	message(
-		FATAL_ERROR 
-		"'ALTERHOOK_TARGET_ARCH=${ALTERHOOK_TARGET_ARCH}' is invalid, valid values are: X86, ARM, ARM64"
+if (NOT ALTERHOOK_TARGET_ARCH IN_LIST ALTERHOOK_TARGET_ARCHS)
+	string(
+		CONCAT ALTERHOOK_INVALID_ARCH_OUTPUT
+		"ALTERHOOK_TARGET_ARCH is invalid, "
+		"determining the target architecture from the preprocessor"
 	)
+	message(STATUS "${ALTERHOOK_INVALID_ARCH_OUTPUT}")
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/scripts")
+	include(TargetArch)
+	target_architecture(arch)
+
+	if (arch MATCHES "x86|x64")
+		set(ALTERHOOK_TARGET_ARCH "X86")
+		message(STATUS "Auto-detected x86 target architecture")
+	elseif (arch STREQUAL "armv7")
+		set(ALTERHOOK_TARGET_ARCH "ARM")
+		message(STATUS "Auto-detected armv7 target architecture")
+	elseif (arch STREQUAL "aarch64")
+		set(ALTERHOOK_TARGET_ARCH "ARM64")
+		message(STATUS "Auto-detected aarch64 target architecture")
+	else()
+		string(
+			CONCAT ERROR_OUTPUT
+			"Failed to auto-detect 'ALTERHOOK_TARGET_ARCH=${ALTERHOOK_TARGET_ARCH}', "
+			"consider specifying one of: X86, ARM, ARM64"
+		)
+		message(FATAL_ERROR "${ERROR_OUTPUT}")
+	endif()
 endif()
+
+set(CAPSTONE_ARCHITECTURE_DEFAULT OFF CACHE BOOL "Whether architectures are enabled by default" FORCE)
+if (ALTERHOOK_TARGET_ARCH STREQUAL "X86")
+	set(CAPSTONE_X86_SUPPORT ON CACHE BOOL "x86 support" FORCE)
+	message(STATUS "Enabling alterhook x86 support")
+elseif (ALTERHOOK_TARGET_ARCH STREQUAL "ARM64")
+	set(CAPSTONE_AARCH64_SUPPORT ON CACHE BOOL "AARCH64 support" FORCE)
+	message(STATUS "Enabling alterhook aarch64 support")
+else()
+	set(CAPSTONE_ARM_SUPPORT ON CACHE BOOL "ARM support" FORCE)
+	message(STATUS "Enabling alterhook armv7 support")
+endif()
+
+string(TOLOWER "${ALTERHOOK_TARGET_ARCH}" ALTERHOOK_TARGET_ARCH_LOWER)
+list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/${ALTERHOOK_TARGET_ARCH_LOWER}_instructions.h")
+foreach (SRC "trampoline" "injection" "thread_processing")
+	list(APPEND ALTERHOOK_CPP_FILES "src/${ALTERHOOK_TARGET_ARCH}/${SRC}.cpp")
+endforeach()
 
 if (WIN32)
-	set(ALTERHOOK_PCH "pre-compiled headers/windows")
-	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/windows_thread_handler.h")
-	list(
-		APPEND ALTERHOOK_CPP_FILES 
-		"src/windows/other.cpp"
-		"src/windows/allocation.cpp"
-		"src/windows/freezer.cpp"
-		"src/windows/exceptions.cpp"
-	)
+	set(OS_STR "windows")
 else()
-	set(ALTERHOOK_PCH "pre-compiled headers/linux")
-	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/linux_thread_handler.h")
-	list(
-		APPEND ALTERHOOK_CPP_FILES 
-		"src/linux/other.cpp"
-		"src/linux/allocation.cpp"
-		"src/linux/freezer.cpp"
-		"src/linux/exceptions.cpp"
-	)
+	set(OS_STR "linux")
 endif()
+
+set(ALTERHOOK_PCH "pre-compiled headers/${OS_STR}/pch.h")
+list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/${OS_STR}_thread_handler.h")
+foreach (SRC "other" "allocation" "freezer" "exceptions")
+	list(APPEND ALTERHOOK_CPP_FILES "src/${OS_STR}/${SRC}.cpp")
+endforeach()
 
 FetchContent_MakeAvailable(capstone)
 
@@ -190,14 +152,15 @@ set(
 	${ALTERHOOK_UTILITIES_HEADERS}
 	${ALTERHOOK_PUBLIC_HEADERS}
 	${ALTERHOOK_DETAIL_HEADERS}
-	${ALTERHOOK_PCH}/pch.h
+	${ALTERHOOK_PCH}
 )
 
 source_group("Source Files" ${CPP_FILES})
 source_group("Header Files" ${ALTERHOOK_PRIVATE_HEADERS})
 source_group("Include\\utilities" ${ALTERHOOK_UTILITIES_HEADERS})
+source_group("Include\\detail" ${ALTERHOOK_DETAIL_HEADERS})
 source_group("Include" ${ALTERHOOK_PUBLIC_HEADERS})
-source_group("PCH" ${ALTERHOOK_PCH}/pch.h)
+source_group("PCH" ${ALTERHOOK_PCH})
 
 if (ALTERHOOK_SHARED)
 	add_library(AlterHook SHARED ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})
@@ -222,13 +185,13 @@ PUBLIC
 PRIVATE
 	$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/alterhook>
 	$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/headers>
-	$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/${ALTERHOOK_PCH}>
+	"$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/pre-compiled headers/${OS_STR}>"
 	$<BUILD_INTERFACE:${capstone_SOURCE_DIR}/include>
 )
 
 target_link_libraries(AlterHook PRIVATE capstone)
 
-target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH}/pch.h)
+target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH})
 
 if (MSVC)
 	target_compile_options(AlterHook PRIVATE /W3)

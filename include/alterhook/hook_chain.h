@@ -630,7 +630,7 @@ namespace alterhook
     memcpy(backup.data(), other.backup.data(), backup.size());
     __alterhook_def_thumb_var(ptarget);
     list_iterator itr = disabled.emplace(disabled.end());
-    itr->init(*this, itr, __alterhook_get_other_dtr(other),
+    itr->init(*this, itr, other.pdetour,
               __alterhook_add_thumb_bit(ptrampoline.get()), original, false);
   }
 

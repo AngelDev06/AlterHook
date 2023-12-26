@@ -4,6 +4,11 @@
 #include <atomic>
 #include "hook_map.h"
 
+#if utils_clang
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wunused-local-typedef"
+#endif
+
 namespace alterhook
 {
   class managed_concurrent_hook_map : concurrent_hook_map<std::string>
@@ -810,3 +815,7 @@ public                                                                         \
   __modifier((utils_map_list(__alterhook_gen_tag, __VA_ARGS__)),               \
              modifier_name, modifier_target)
 } // namespace alterhook
+
+#if utils_clang
+  #pragma clang diagnostic pop
+#endif
