@@ -17,12 +17,38 @@ namespace alterhook
     trampoline_buffer::deallocate(ptrampoline);
   }
 
-  int get_protection(const std::byte* address);
+  inline namespace init_impl
+  {
+    struct trampoline_entry
+    {
 
-  void trampoline::init(std::byte* target) 
-  { 
+    };
+  }
+
+  void trampoline::init(std::byte* target)
+  {
     if (ptarget == target)
       return;
+    protection_info tmp_protinfo = get_protection(target);
+    if (!tmp_protinfo.execute)
+      throw(exceptions::invalid_address(target));
+    if (!ptrampoline)
+      ptrampoline = trampoline_ptr(trampoline_buffer::allocate(target));
+    if (ptarget)
+      reset();
 
+#ifndef NDEBUG
+    // fill the buffer with debug breakpoints (BRK #0)
+    std::fill_n(reinterpret_cast<uint32_t*>(ptrampoline.get()),
+                memory_slot_size, 0xD4'20'00'00);
+#endif
+
+    size_t       tramp_pos = 0;
+    disassembler aarch64{ target };
+
+    for (const cs_insn& instr : aarch64.disasm(memory_slot_size))
+    {
+
+    }
   }
 } // namespace alterhook

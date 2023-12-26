@@ -37,7 +37,57 @@ namespace alterhook
     return true;
   }
 
+  static bool in_overriden_area(const std::byte* target,
+                                uintptr_t        address) noexcept
+  {
+#if utils_x64
+    constexpr size_t max_range = sizeof(JMP_ABS);
+#else
+    constexpr size_t max_range = sizeof(JMP);
+#endif
+    return reinterpret_cast<uintptr_t>(target) <= address &&
+           address < (reinterpret_cast<uintptr_t>(target) + max_range);
+  }
+
+  template <x86_insn_group group>
+  static bool is_in_group(const cs_insn& instr) noexcept
+  {
+    return memchr(instr.detail->groups, group, instr.detail->groups_count);
+  }
+
+  static bool is_relative_branch(const cs_insn& instr) noexcept
+  {
+    return is_in_group<X86_GRP_BRANCH_RELATIVE>(instr);
+  }
+
+  static bool is_jump(const cs_insn& instr) noexcept
+  {
+    return is_in_group<X86_GRP_JUMP>(instr);
+  }
+
+  static bool is_return(const cs_insn& instr) noexcept
+  {
+    return is_in_group<X86_GRP_RET>(instr);
+  }
+
+  static void fits_in_trampoline(std::byte* target, size_t current_size)
+  {
+    if (current_size > memory_slot_size)
+      throw(exceptions::trampoline_max_size_exceeded(target, current_size,
+                                                     memory_slot_size));
+  }
+
 #if !utils_windows && utils_x86
+  static bool is_linux_ip_thunk(const cs_insn& instr) noexcept
+  {
+    const cs_x86& detail = instr.detail->x86;
+    return instr.id == X86_INS_MOV && detail.op_count == 2 &&
+           detail.operands[0].type == X86_OP_REG &&
+           detail.operands[1].type == X86_OP_MEM &&
+           detail.operands[1].mem.base == X86_REG_ESP &&
+           detail.operands[1].mem.disp == 0;
+  }
+
   static uint8_t x86_reg_bit_num(x86_reg reg)
   {
     switch (reg)
@@ -64,6 +114,137 @@ namespace alterhook
   #pragma GCC diagnostic ignored "-Wstrict-overflow"
 #endif
 
+  inline namespace init_impl
+  {
+    constexpr size_t max_trampoline_entries = 5;
+
+#if utils_x64
+    constexpr size_t big_jump_size = sizeof(JMP_ABS);
+    constexpr size_t big_call_size = sizeof(CALL_ABS);
+    constexpr size_t big_jcc_size  = sizeof(JCC_ABS);
+
+  #define BIG_JUMP(dest, src) JMP_ABS(dest)
+  #define BIG_CALL(dest, src) CALL_ABS(dest)
+  #define BIG_JCC(condition, dest, src)                                        \
+    JCC_ABS(static_cast<uint8_t>(0x71 ^ condition), dest)
+#else
+    constexpr size_t big_jump_size = sizeof(JMP);
+    constexpr size_t big_call_size = sizeof(CALL);
+    constexpr size_t big_jcc_size  = sizeof(JCC);
+
+  #define BIG_JUMP(dest, src) JMP((dest) - ((src) + sizeof(JMP)))
+  #define BIG_CALL(dest, src) CALL((dest) - ((src) + sizeof(CALL)))
+  #define BIG_JCC(condition, dest, src)                                        \
+    JCC(static_cast<uint8_t>(0x80 | condition), (dest) - ((src) + sizeof(JCC)))
+#endif
+
+    struct trampoline_entry
+    {
+      static constexpr size_t max_references = 5;
+
+      struct reference
+      {
+        std::byte* src;
+        uint16_t   instruction_size;
+        uint8_t    immediate_offset;
+        uint8_t    immediate_size;
+      };
+
+      typedef utils::static_vector<reference, max_references> references_t;
+
+      uint8_t      id    = 0;
+      std::byte*   instr = nullptr;
+      references_t references;
+
+      trampoline_entry(uint8_t id) : id(id) {}
+    };
+
+    struct entry_list
+        : utils::static_vector<trampoline_entry, max_trampoline_entries>
+    {
+      iterator get_entry(uint8_t id) noexcept
+      {
+        return std::find_if(begin(), end(),
+                            [=](trampoline_entry& item)
+                            { return item.id == id; });
+      }
+
+      void process(uint8_t id)
+      {
+        auto result = get_entry(id);
+        if (result == end())
+          return;
+        utils_assert(result->instr, "entry_list::process: a trampoline entry "
+                                    "doesn't have its new location set");
+
+        for (auto& reference : result->references)
+        {
+          intptr_t relative_address =
+              result->instr - (reference.src + reference.instruction_size);
+          memcpy(reference.src + reference.immediate_offset, &relative_address,
+                 reference.immediate_size);
+        }
+
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+        if (id < sizeof(JMP))
+#endif
+          erase(result);
+      }
+
+      void set_new_location(uint8_t id, std::byte* instr)
+      {
+        auto result = get_entry(id);
+        if (result == end())
+          return;
+        result->instr = instr;
+      }
+
+      void insert_or_add_reference(
+          uint8_t id, const typename trampoline_entry::reference& reference)
+      {
+        auto result = get_entry(id);
+        if (result != end())
+        {
+          result->references.push_back(reference);
+          return;
+        }
+
+        auto& new_element = emplace_back(id);
+        new_element.references.push_back(reference);
+      }
+
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+      void fix_outer_branches(std::byte* target)
+      {
+        for (trampoline_entry& entry : *this)
+        {
+          for (auto& reference : entry.references)
+          {
+            const intptr_t relative_address =
+                (target + entry.id) -
+                (reference.src + reference.instruction_size);
+            const intptr_t max = reference.immediate_size == 1
+                                     ? (std::numeric_limits<int8_t>::max)()
+                                 : reference.immediate_size == 2
+                                     ? (std::numeric_limits<int16_t>::max)()
+                                 : reference.immediate_size == 4
+                                     ? (std::numeric_limits<int32_t>::max)()
+                                     : (std::numeric_limits<int64_t>::max)();
+
+            if (llabs(relative_address) >= max)
+              throw(exceptions::instructions_in_branch_handling_fail(target));
+
+            memcpy(reference.src + reference.immediate_offset,
+                   &relative_address, reference.immediate_size);
+          }
+        }
+
+        clear();
+      }
+#endif
+    };
+  } // namespace init_impl
+
   void trampoline::init(std::byte* target)
   {
     if (ptarget == target)
@@ -77,13 +258,36 @@ namespace alterhook
     if (ptarget)
       reset();
 
-    std::array<std::byte, 16> tmpbuff{};
-    positions_t               tmp_positions{};
-    size_t                    tramp_pos   = 0;
-    bool                      finished    = false;
-    uintptr_t                 branch_dest = 0;
-    uint64_t                  addr        = 0;
-    disassembler              x86{ target };
+    constexpr size_t max_tmp_buffer_size = 16;
+#ifndef ALTERHOOK_ALWAYS_USE_RELAY
+    constexpr size_t size_needed = big_jump_size;
+#else
+    constexpr size_t size_needed = sizeof(JMP);
+#endif
+
+    const uintptr_t utarget = reinterpret_cast<uintptr_t>(target);
+
+    typedef std::array<std::byte, max_tmp_buffer_size> tmpbuff_t;
+    typedef typename trampoline_entry::reference       entry_reference;
+
+    tmpbuff_t   tmpbuff{};
+    entry_list  entries{};
+    positions_t tmp_positions{};
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+    // this variable is required for the small jump & relay function strategy.
+    // basically if the target function isn't long enough to hold a full
+    // absolute jump to the detour a small one is placed instead that leads to
+    // the relay function which does the absolute jump. This marks the end of
+    // the trampoline function after at least 5 bytes of instructions have been
+    // relocated from the target in order to fallback to the small jump strategy
+    // if the target function proves to be too small.
+    std::byte* small_trampoline_end = nullptr;
+    std::byte* small_target_end     = nullptr;
+#endif
+    size_t       tramp_pos    = 0;
+    bool         finished     = false;
+    size_t       current_size = 0;
+    disassembler x86{ target };
 
     for (const cs_insn& instr : x86.disasm(memory_slot_size))
     {
@@ -96,7 +300,10 @@ namespace alterhook
                       *operands_end   = detail.operands + detail.op_count;
       const size_t   instr_size       = instr.size;
       const uint64_t instr_address    = instr.address;
-      addr                            = instr.address + instr.size;
+      current_size                    = (instr.address + instr.size) - utarget;
+
+      entries.set_new_location(static_cast<uint8_t>(instr.address - utarget),
+                               ptrampoline.get() + tramp_pos);
 
 #if utils_x64
       auto has_rip = std::find_if(operands_begin, operands_end,
@@ -118,8 +325,7 @@ namespace alterhook
       // clang-format off
       else
 #endif
-      if (memchr(instr.detail->groups, X86_GRP_BRANCH_RELATIVE,
-                 instr.detail->groups_count))
+      if (is_relative_branch(instr))
       {
         // clang-format on
         auto imm_op = std::find_if(operands_begin, operands_end,
@@ -130,28 +336,29 @@ namespace alterhook
                      "branch instruction wasn't found");
 
         // clang-format on
-        if (memchr(instr.detail->groups, X86_GRP_JUMP,
-                   instr.detail->groups_count))
+        if (is_jump(instr))
         {
-          if (reinterpret_cast<uintptr_t>(target) <= imm_op->imm &&
-              imm_op->imm < (reinterpret_cast<uintptr_t>(target) + sizeof(JMP)))
+          if (in_overriden_area(target, imm_op->imm))
           {
+            // on forward branch we save a reference to the destination for
+            // later modification if needed
             if (imm_op->imm > instr.address)
-              branch_dest = imm_op->imm;
+              entries.insert_or_add_reference(
+                  static_cast<uint8_t>(imm_op->imm - utarget),
+                  entry_reference{
+                      .src = reinterpret_cast<std::byte*>(instr.address),
+                      .instruction_size = instr.size,
+                      .immediate_offset = detail.encoding.imm_offset,
+                      .immediate_size   = detail.encoding.imm_size });
           }
           else
           {
             if (instr.id == X86_INS_JMP)
             {
-#if utils_x64
-              new (tmpbuff.data()) JMP_ABS(static_cast<uint64_t>(imm_op->imm));
-              copy_size = sizeof(JMP_ABS);
-#else
-              new (tmpbuff.data()) JMP(static_cast<uint32_t>(
-                  imm_op->imm - (tramp_addr + sizeof(JMP))));
-              copy_size = sizeof(JMP);
-#endif
-              finished = instr.address >= branch_dest;
+              new (tmpbuff.data())
+                  BIG_JUMP(static_cast<uintptr_t>(imm_op->imm), tramp_addr);
+              copy_size = big_jump_size;
+              finished  = entries.empty();
             }
             else if ((X86_INS_LOOP <= instr.id && instr.id <= X86_INS_LOOPNE) ||
                      instr.id == X86_INS_JRCXZ || instr.id == X86_INS_JECXZ)
@@ -163,21 +370,10 @@ namespace alterhook
                   (detail.opcode[0] != 0x0F ? detail.opcode[0]
                                             : detail.opcode[1]) &
                   0x0F;
-#if utils_x64
-              // for x64 the condition should be inverted so that the big jump
-              // is executed on false
-              new (tmpbuff.data())
-                  JCC_ABS(static_cast<uint8_t>(0x71 ^ condition),
-                          static_cast<uint64_t>(imm_op->imm));
-              copy_size = sizeof(JCC_ABS);
-#else
-              // turn any short jcc to big one
-              new (tmpbuff.data())
-                  JCC(static_cast<uint8_t>(0x80 | condition),
-                      static_cast<uint32_t>(imm_op->imm -
-                                            (tramp_addr + sizeof(JCC))));
-              copy_size = sizeof(JCC);
-#endif
+
+              new (tmpbuff.data()) BIG_JCC(
+                  condition, static_cast<uintptr_t>(imm_op->imm), tramp_addr);
+              copy_size = big_jcc_size;
             }
 
             copy_src = tmpbuff.data();
@@ -192,12 +388,10 @@ namespace alterhook
           const int64_t dest = imm_op->imm;
 
 #if !utils_windows && utils_x86
+          // handling for linux binaries compiled with -fpic (it deals with the
+          // call to the thunk that returns a relative address)
           auto itr = x86.follow_instruction(instr, memory_slot_size);
-          if (itr && instr.id == X86_INS_MOV && detail.op_count == 2 &&
-              detail.operands[0].type == X86_OP_REG &&
-              detail.operands[1].type == X86_OP_MEM &&
-              detail.operands[1].mem.base == X86_REG_ESP &&
-              detail.operands[1].mem.disp == 0)
+          if (itr && is_linux_ip_thunk(instr))
           {
             uint8_t register_used = x86_reg_bit_num(detail.operands[0].reg);
             ++itr;
@@ -212,72 +406,96 @@ namespace alterhook
           }
 #endif
 
-#if utils_x64
-          new (tmpbuff.data()) CALL_ABS(static_cast<uint64_t>(dest));
-          copy_size = sizeof(CALL_ABS);
-#else
           new (tmpbuff.data())
-              CALL(static_cast<uint32_t>(dest - (tramp_addr + sizeof(CALL))));
-          copy_size = sizeof(CALL);
-#endif
+              BIG_CALL(static_cast<uintptr_t>(dest), tramp_addr);
+          copy_size = big_call_size;
+
 #if !utils_windows && utils_x86
         CALL_HANDLING_END:
 #endif
           copy_src = tmpbuff.data();
         }
       }
-      else if (memchr(instr.detail->groups, X86_GRP_RET,
-                      instr.detail->groups_count))
-        finished = instr_address >= branch_dest;
+      else if (is_return(instr))
+        finished = entries.empty();
 
-      if (instr_address < branch_dest && copy_size != instr_size)
-        throw(exceptions::instructions_in_branch_handling_fail(target));
-      if ((tramp_pos + copy_size) > memory_slot_size)
-        throw(exceptions::trampoline_max_size_exceeded(
-            target, tramp_pos + copy_size, memory_slot_size));
-
-      tmp_positions.push_back(
-          { instr_address - reinterpret_cast<uintptr_t>(target), tramp_pos });
+      fits_in_trampoline(target, tramp_pos + copy_size);
+      entries.process(static_cast<uint8_t>(instr.address - utarget));
+      tmp_positions.push_back({ instr_address - utarget, tramp_pos });
       memcpy(reinterpret_cast<void*>(tramp_addr), copy_src, copy_size);
       tramp_pos += copy_size;
 
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+      if (!small_trampoline_end && current_size >= sizeof(JMP))
+      {
+        small_trampoline_end =
+            reinterpret_cast<std::byte*>(tramp_addr) + copy_size;
+        small_target_end =
+            reinterpret_cast<std::byte*>(instr_address) + instr_size;
+      }
+#endif
+
       if (finished)
         break;
-      if (((instr_address + instr_size) -
-           reinterpret_cast<uintptr_t>(target)) >= sizeof(JMP))
-      {
-#if utils_x64
-        new (tmpbuff.data()) JMP_ABS(instr_address + instr_size);
-        copy_size = sizeof(JMP_ABS);
-#else
-        new (tmpbuff.data())
-            JMP(static_cast<uint32_t>((instr_address + instr_size) -
-                                      (tramp_addr + copy_size + sizeof(JMP))));
-        copy_size = sizeof(JMP);
-#endif
-        if ((tramp_pos + copy_size) > memory_slot_size)
-          throw(exceptions::trampoline_max_size_exceeded(
-              target, tramp_pos + copy_size, memory_slot_size));
 
-        memcpy(ptrampoline.get() + tramp_pos, tmpbuff.data(), copy_size);
-        tramp_pos += copy_size;
+      if (current_size >= size_needed)
+      {
+        fits_in_trampoline(target, tramp_pos + big_jump_size);
+        new (ptrampoline.get() + tramp_pos)
+            BIG_JUMP(instr_address + instr_size, tramp_addr + copy_size);
+        tramp_pos += big_jump_size;
         break;
       }
     }
 
-    const size_t origpos = addr - reinterpret_cast<uintptr_t>(target);
-    if (origpos < sizeof(JMP) &&
-        !is_pad(reinterpret_cast<std::byte*>(addr), sizeof(JMP) - origpos))
+    const std::byte* current_target_address = target + current_size;
+    if (current_size < size_needed &&
+        !is_pad(current_target_address, size_needed - current_size))
     {
-      if ((origpos < sizeof(JMP_SHORT) &&
-           !is_pad(reinterpret_cast<std::byte*>(addr),
-                   sizeof(JMP_SHORT) - origpos)) ||
-          !is_executable_address(target - sizeof(JMP)) ||
-          !is_pad(target - sizeof(JMP), sizeof(JMP)))
-        throw(exceptions::insufficient_function_size(target, origpos,
-                                                     sizeof(JMP)));
+#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+      if (current_size >= sizeof(JMP) ||
+          is_pad(current_target_address, sizeof(JMP) - current_size))
+      {
+        utils_assert(small_trampoline_end,
+                     "trampoline::init: small trampoline end is not set");
+        const size_t current_pos = small_trampoline_end - ptrampoline.get();
+        entries.fix_outer_branches(target);
 
-      patch_above = true;
+        // if finished is set to true it means that an instruction that leads to
+        // the outside was relocated from the target function and therefore it
+        // is not required to place a custom jump back to the target function.
+        // However we also need to check if that instruction is the last one in
+        // the 5 bytes of instructions needed to be relocated, otherwise it's
+        // outside the range.
+        if (!finished || current_pos != tramp_pos)
+        {
+          if (current_pos != tramp_pos)
+            tmp_positions.erase(
+                std::remove_if(tmp_positions.begin(), tmp_positions.end(),
+                               [=](std::pair<uint8_t, uint8_t> element)
+                               { return element.second >= tramp_pos; }),
+                tmp_positions.end());
+
+          tramp_pos = current_pos + big_jump_size;
+          fits_in_trampoline(target, tramp_pos);
+          new (small_trampoline_end)
+              BIG_JUMP(reinterpret_cast<uintptr_t>(small_target_end),
+                       reinterpret_cast<uintptr_t>(small_trampoline_end));
+        }
+      }
+      else
+#endif
+      {
+        if ((current_size < sizeof(JMP_SHORT) &&
+             !is_pad(current_target_address,
+                     sizeof(JMP_SHORT) - current_size)) ||
+            !is_executable_address(target - sizeof(JMP)) ||
+            !is_pad(target - sizeof(JMP), sizeof(JMP)))
+          throw(exceptions::insufficient_function_size(target, current_size,
+                                                       sizeof(JMP)));
+
+        patch_above = true;
+      }
     }
 
     ptarget    = target;
@@ -288,9 +506,12 @@ namespace alterhook
 #endif
 
 #if utils_x64
-    // if prelay is already set, we don't touch it
-    if (prelay)
+  #ifndef ALTERHOOK_ALWAYS_USE_RELAY
+    if (current_size >= size_needed)
       return;
+  #endif
+
+    fits_in_trampoline(target, tramp_size + sizeof(JMP_ABS));
     prelay = ptrampoline.get() + tramp_pos;
     new (prelay) JMP_ABS();
 #endif
@@ -352,8 +573,7 @@ namespace alterhook
         copy_src = tmpbuff.data();
       }
 #else
-      if (memchr(instr.detail->groups, X86_GRP_BRANCH_RELATIVE,
-                 instr.detail->groups_count))
+      if (is_relative_branch(instr))
       {
         auto imm_op = std::find_if(operands_begin, operands_end,
                                    [](const cs_x86_op& element)
@@ -361,10 +581,7 @@ namespace alterhook
         utils_assert(imm_op != operands_end,
                      "(unreachable) The immediate operand of a relative branch "
                      "instruction wasn't found");
-        if (!memchr(instr.detail->groups, X86_GRP_JUMP,
-                    instr.detail->groups_count) ||
-            reinterpret_cast<uintptr_t>(src) > imm_op->imm ||
-            imm_op->imm >= (reinterpret_cast<uintptr_t>(src) + sizeof(JMP)))
+        if (!is_jump(instr) || !in_overriden_area(src, imm_op->imm))
         {
           memcpy(tmpbuff.data(), copy_src, instr.size);
           uint32_t* const immaddr = reinterpret_cast<uint32_t*>(
@@ -395,8 +612,11 @@ namespace alterhook
     old_protect = other.old_protect;
 #endif
 #if utils_x64
-    prelay = ptrampoline.get() + tramp_size;
-    memcpy(prelay, other.prelay, sizeof(JMP_ABS));
+    if (other.prelay)
+    {
+      prelay = ptrampoline.get() + tramp_size;
+      memcpy(prelay, other.prelay, sizeof(JMP_ABS));
+    }
 #endif
   }
 
@@ -445,8 +665,13 @@ namespace alterhook
     old_protect = other.old_protect;
 #endif
 #if utils_x64
-    prelay = ptrampoline.get() + tramp_size;
-    memcpy(prelay, other.prelay, sizeof(JMP_ABS));
+    prelay = nullptr;
+
+    if (other.prelay)
+    {
+      prelay = ptrampoline.get() + tramp_size;
+      memcpy(prelay, other.prelay, sizeof(JMP_ABS));
+    }
 #endif
     return *this;
   }
