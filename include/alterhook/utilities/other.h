@@ -168,6 +168,10 @@ namespace alterhook::utils
   template <typename func_type, typename cls>
   using add_cls_t = func_type cls::*;
 
+  template <typename derived, typename... bases>
+  utils_concept derived_from_any_of =
+      (std::is_base_of_v<bases, derived> || ...);
+
 #if utils_cpp20
   template <auto left, auto right>
   concept compare_or_false = requires { left == right; } && left == right;
@@ -184,52 +188,5 @@ namespace alterhook::utils
   template <auto left, auto right>
   inline constexpr bool compare_or_false =
       helpers::compare_or_false_impl<left, right>;
-#endif
-
-// why on earth did we have to wait till c++20 to get bitwise rotate added
-#if utils_cpp20
-  #define utils_ror(x, s) std::rotr(x, s)
-  #define utils_rol(x, s) std::rotl(x, s)
-#else
-  template <typename T>
-  constexpr T ror(T x, unsigned int s) noexcept
-  {
-    static_assert(std::is_unsigned_v<T>, "ror: type passed is not unsigned");
-    constexpr auto digits = std::numeric_limits<T>::digits;
-  #if utils_msvc
-    if constexpr (digits == 64)
-      return _rotr64(x, s);
-    else if constexpr (digits == 32)
-      return _rotr(x, s);
-    else if constexpr (digits == 16)
-      return _rotr16(x, static_cast<unsigned char>(s));
-    else
-      return _rotr8(x, static_cast<unsigned char>(s));
-  #else
-    return (x >> s) | (x << (digits - s));
-  #endif
-  }
-
-  template <typename T>
-  constexpr T rol(T x, unsigned int s) noexcept
-  {
-    static_assert(std::is_unsigned_v<T>, "rol: type passed is not unsigned");
-    constexpr auto digits = std::numeric_limits<T>::digits;
-  #if utils_msvc
-    if constexpr (digits == 64)
-      return _rotl64(x, s);
-    else if constexpr (digits == 32)
-      return _rotl(x, s);
-    else if constexpr (digits == 16)
-      return _rotl16(x, static_cast<unsigned char>(s));
-    else
-      return _rotl8(x, static_cast<unsigned char>(s));
-  #else
-    return (x << s) | (x >> (digits - s));
-  #endif
-  }
-
-  #define utils_ror(x, s) ::alterhook::utils::ror(x, s)
-  #define utils_rol(x, s) ::alterhook::utils::rol(x, s)
 #endif
 } // namespace alterhook::utils

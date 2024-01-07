@@ -23,6 +23,10 @@ namespace alterhook
 
   extern std::shared_mutex hook_lock;
 
+#if !utils_windows
+  #pragma GCC visibility push(hidden)
+#endif
+
   static bool is_pad(const std::byte* target, size_t size) noexcept
   {
     if (target[0] != std::byte() && target[0] != std::byte(0x90) &&
@@ -245,6 +249,10 @@ namespace alterhook
     };
   } // namespace init_impl
 
+#if !utils_windows
+  #pragma GCC visibility pop
+#endif
+
   void trampoline::init(std::byte* target)
   {
     if (ptarget == target)
@@ -420,7 +428,7 @@ namespace alterhook
         finished = entries.empty();
 
       fits_in_trampoline(target, tramp_pos + copy_size);
-      entries.process(static_cast<uint8_t>(instr.address - utarget));
+      entries.process(static_cast<uint8_t>(instr_address - utarget));
       tmp_positions.push_back({ instr_address - utarget, tramp_pos });
       memcpy(reinterpret_cast<void*>(tramp_addr), copy_src, copy_size);
       tramp_pos += copy_size;

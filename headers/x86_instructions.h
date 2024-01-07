@@ -1,6 +1,9 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#if !utils_windows
+  #pragma GCC visibility push(hidden)
+#endif
 
 namespace alterhook
 {
@@ -91,3 +94,7 @@ namespace alterhook
 
   utils_pack_end()
 } // namespace alterhook
+
+#if !utils_windows
+  #pragma GCC visibility pop
+#endif
