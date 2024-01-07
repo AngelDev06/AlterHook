@@ -35,38 +35,27 @@ option(ALTERHOOK_TARGET_ARCH "Specifies the target architecture to use")
 option(ALTERHOOK_BUILD_TESTS "Determines whether to build the tests on folder 'tests/'" ${ALTERHOOK_TOP_LEVEL})
 set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM" "ARM64")
 
-set(
-	ALTERHOOK_PRIVATE_HEADERS
-	"headers/buffer.h"
-	"headers/disassembler.h"
-	"headers/injection.h"
-)
+foreach (HEADER "buffer" "disassembler" "injection")
+	list(APPEND ALTERHOOK_PRIVATE_HEADERS "headers/${HEADER}.h")
+endforeach()
 
-set(
-	ALTERHOOK_UTILITIES_HEADERS
-	"include/alterhook/utilities/calling_conventions.h"
-	"include/alterhook/utilities/concepts.h"
-	"include/alterhook/utilities/function_traits.h"
-	"include/alterhook/utilities/other.h"
-	"include/alterhook/utilities/static_vector.h"
-	"include/alterhook/utilities/type_sequence.h"
-	"include/alterhook/utilities/utils.h"
-	"include/alterhook/utilities/utils_macros.h"
-	"include/alterhook/utilities/properties.h"
+foreach (
+	HEADER 
+	"calling_conventions" "concepts" "function_traits" 
+	"other" "static_vector" "type_sequence" "utils"
+	"utils_macros" "properties" "data_processing"
 )
+	list(APPEND ALTERHOOK_UTILITIES_HEADERS "include/alterhook/utilities/${HEADER}.h")
+endforeach()
 
-set(
-	ALTERHOOK_PUBLIC_HEADERS
-	"include/alterhook.h"
-	"include/alterhook/addresser.h"
-	"include/alterhook/exceptions.h"
-	"include/alterhook/tools.h"
-	"include/alterhook/trampoline.h"
-	"include/alterhook/hook.h"
-	"include/alterhook/hook_chain.h"
-	"include/alterhook/hook_map.h"
-	"include/alterhook/modifier.h"
+set(ALTERHOOK_PUBLIC_HEADERS "include/alterhook.h")
+foreach (
+	HEADER 
+	"addresser" "exceptions" "tools" "trampoline" 
+	"hook" "hook_chain" "hook_map" "modifier"
 )
+	list(APPEND ALTERHOOK_PUBLIC_HEADERS "include/alterhook/${HEADER}.h")
+endforeach()
 
 set(
 	ALTERHOOK_DETAIL_HEADERS
@@ -74,14 +63,9 @@ set(
 	"include/alterhook/detail/constants.h"
 )
 
-set(
-	ALTERHOOK_CPP_FILES
-	"src/addresser.cpp"
-	"src/buffer.cpp"
-	"src/misc.cpp"
-	"src/hook.cpp"
-	"src/hook_chain.cpp"
-)
+foreach (SRC "addresser" "buffer" "misc" "hook" "hook_chain")
+	list(APPEND ALTERHOOK_CPP_FILES "src/${SRC}.cpp")
+endforeach()
 
 get_property(ALTERHOOK_TARGET_ARCHS CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS)
 if (NOT ALTERHOOK_TARGET_ARCH IN_LIST ALTERHOOK_TARGET_ARCHS)
@@ -124,6 +108,7 @@ elseif (ALTERHOOK_TARGET_ARCH STREQUAL "ARM64")
 else()
 	set(CAPSTONE_ARM_SUPPORT ON CACHE BOOL "ARM support" FORCE)
 	message(STATUS "Enabling alterhook armv7 support")
+	list(APPEND ALTERHOOK_CPP_FILES "src/ARM/exceptions.cpp")
 endif()
 
 string(TOLOWER "${ALTERHOOK_TARGET_ARCH}" ALTERHOOK_TARGET_ARCH_LOWER)
@@ -155,12 +140,12 @@ set(
 	${ALTERHOOK_PCH}
 )
 
-source_group("Source Files" ${CPP_FILES})
-source_group("Header Files" ${ALTERHOOK_PRIVATE_HEADERS})
-source_group("Include\\utilities" ${ALTERHOOK_UTILITIES_HEADERS})
-source_group("Include\\detail" ${ALTERHOOK_DETAIL_HEADERS})
-source_group("Include" ${ALTERHOOK_PUBLIC_HEADERS})
-source_group("PCH" ${ALTERHOOK_PCH})
+source_group("Source Files" FILES ${CPP_FILES})
+source_group("Header Files" FILES ${ALTERHOOK_PRIVATE_HEADERS})
+source_group("Include\\utilities" FILES ${ALTERHOOK_UTILITIES_HEADERS})
+source_group("Include\\detail" FILES ${ALTERHOOK_DETAIL_HEADERS})
+source_group("Include" FILES ${ALTERHOOK_PUBLIC_HEADERS})
+source_group("PCH" FILES ${ALTERHOOK_PCH})
 
 if (ALTERHOOK_SHARED)
 	add_library(AlterHook SHARED ${ALTERHOOK_ALL_HEADERS} ${ALTERHOOK_CPP_FILES})

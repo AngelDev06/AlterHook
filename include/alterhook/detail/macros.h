@@ -302,3 +302,9 @@
   const_##itr chain_c##name() const noexcept { return hook_chain::name(); }
 
 #define __alterhook_decl_itr_func(params) __alterhook_decl_itr_func2 params
+
+#if defined(ALTERHOOK_ALWAYS_USE_RELAY) && utils_x64
+  #define always_use_relay true
+#else
+  #define always_use_relay false
+#endif

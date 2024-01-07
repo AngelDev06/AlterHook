@@ -129,10 +129,6 @@ TEST(test_group(TrampolineTest), Test11)
 
 TEST(test_group(TrampolineTest), Test12)
 {
-#ifndef TEST_TARGET_ARM
-  EXPECT_THROW(alterhook::trampoline trampoline{ target_prefix test12::func },
-               alterhook::exceptions::instructions_in_branch_handling_fail);
-#else
   alterhook::trampoline trampoline{ target_prefix test12::func };
   volatile auto trg      = target_prefix test12::func;
   volatile auto callback = trampoline.get_callback<void()>();
@@ -141,7 +137,6 @@ TEST(test_group(TrampolineTest), Test12)
 
   func(trg, callback);
   std::cout << "CONTENT:\n" << trampoline.str() << '\n';
-#endif
 }
 
 #undef test_target

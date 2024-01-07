@@ -83,7 +83,7 @@ namespace alterhook
   {
     bool patch_above : 1;
     bool enable      : 1;
-#if !utils_x86 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if !utils_x86 && !always_use_relay
     bool use_small_jmp : 1;
 #endif
 #if !utils_windows
@@ -94,7 +94,7 @@ namespace alterhook
   struct patcher_flags
   {
     bool patch_above : 1;
-#if !utils_x86 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if !utils_x86 && !always_use_relay
     bool use_small_jmp : 1;
 #endif
 #if !utils_windows
@@ -122,9 +122,9 @@ namespace alterhook
     {
       static_assert(std::is_same_v<T, injector_flags> ||
                     std::is_same_v<T, patcher_flags>);
-      T flags{ .patch_above = instance.patch_above };
+      T flags{ instance.patch_above };
 
-#if !utils_x86 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if !utils_x86 && !always_use_relay
       flags.use_small_jmp = instance.prelay;
 #endif
 #if !utils_windows
@@ -171,7 +171,7 @@ namespace alterhook
     static void patch(obj&& instance, const std::byte* detour)
     {
 #if !utils_x86
-  #ifndef ALTERHOOK_ALWAYS_USE_RELAY
+  #if !always_use_relay
       if (instance.prelay)
   #endif
       {
@@ -180,7 +180,7 @@ namespace alterhook
       }
 #endif
 
-#if utils_x86 || !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if utils_x86 || !always_use_relay
       patch_jmp(instance.ptarget, detour, make_patcher_flags(instance));
 #endif
     }
