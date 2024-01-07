@@ -194,7 +194,46 @@ namespace alterhook::exceptions
         std::byte        m_buffer[24]{};
         bool             m_thumb;
     )
+
+    utils_generate_exception(
+        ambiguous_instruction_set, trampoline_exception,
+        (
+            (const std::byte*, branch_dest)
+        ), 
+        (
+            (const std::byte*, target)
+        ),
+        ambiguous_instruction_set(
+          std::byte* src, size_t size, std::bitset<32> instruction_sets, 
+          const std::byte* branch_dest, const std::byte* target) 
+            : trampoline_exception(target), m_size(size), 
+              m_instruction_sets(instruction_sets), m_branch_dest(branch_dest) 
+        {
+          memcpy(m_buffer, src, size);
+        }
+        std::string info() const override;
+        const char* what() const noexcept override 
+        {
+          return "More than one branch instruction lead to the same "
+                 "destination but with different instruction sets";
+        }
+    private:
+        std::byte       m_buffer[32]{};
+        size_t          m_size{};
+        std::bitset<32> m_instruction_sets{};
+    )
 #endif
+
+    utils_generate_exception_no_fields(
+        bad_target, trampoline_exception, 
+        (
+          (const std::byte*, target)
+        ),
+        const char* what() const noexcept override
+        {
+          return "The target failed to be disassembled";
+        }
+    )
 
     utils_generate_exception_no_fields(
         instructions_in_branch_handling_fail, trampoline_exception,

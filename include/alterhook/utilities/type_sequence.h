@@ -8,6 +8,17 @@ namespace alterhook::utils
   template <typename... types>
   struct type_sequence
   {
+    template <template <typename...> typename trg>
+    using to = trg<types...>;
+
+    template <template <typename> typename cls>
+    using apply = type_sequence<cls<types>...>;
+
+    template <typename T>
+    using push_front = type_sequence<T, types...>;
+
+    template <typename T>
+    using push_back = type_sequence<types..., T>;
   };
 
   template <size_t i, typename... types>
