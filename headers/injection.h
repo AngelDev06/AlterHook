@@ -105,7 +105,7 @@ namespace alterhook
   void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
                         injector_flags flags);
 
-#if utils_x86 || !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if utils_x86 || !always_use_relay
   void patch_jmp(std::byte* target, const std::byte* detour,
                  patcher_flags flags);
 #endif

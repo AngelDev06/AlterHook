@@ -490,24 +490,24 @@ namespace alterhook::utils
      * ABSTRACTED GENERATORS
      */
   #define __utils_convertible_checks(...)                                      \
-    utils_map_seperated(__utils_gen_convertible_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_convertible_checker, &&, __VA_ARGS__)
 
   #define __utils_const_convertible_checks(...)                                \
-    utils_map_seperated(__utils_gen_const_convertible_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_const_convertible_checker, &&, __VA_ARGS__)
 
   #define __utils_same_method_return_types(...)                                \
-    utils_map_seperated(__utils_gen_same_types_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_same_types_checker, &&, __VA_ARGS__)
 
   #define __utils_same_const_method_return_types(...)                          \
-    utils_map_seperated(__utils_gen_const_same_types_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_const_same_types_checker, &&, __VA_ARGS__)
 
   #define __utils_has_methods(...)                                             \
-    utils_map_seperated(__utils_gen_method_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_method_checker, &&, __VA_ARGS__)
   #define __utils_has_const_methods(...)                                       \
-    utils_map_seperated(__utils_gen_const_method_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_const_method_checker, &&, __VA_ARGS__)
 
   #define __utils_has_types(...)                                               \
-    utils_map_seperated(__utils_gen_type_member_checker, &&, __VA_ARGS__)
+    utils_map_separated(__utils_gen_type_member_checker, &&, __VA_ARGS__)
 
     /*
      * IMPLEMENTATION GENERATION

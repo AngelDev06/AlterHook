@@ -348,7 +348,7 @@ namespace alterhook
         return reg <= register_max_value;
       }
 
-      static void assert_register(uint8_t reg) noexcept
+      static void assert_register([[maybe_unused]] uint8_t reg) noexcept
       {
         if constexpr (register_format == register_type::reg3_8)
           utils_assert(register_fits(reg),
@@ -404,7 +404,7 @@ namespace alterhook
       {
       }
 
-      void assert_register(uint8_t reg)
+      void assert_register([[maybe_unused]] uint8_t reg)
       {
         utils_assert(!prohibited_registers[reg],
                      "register is prohibited in the instruction's reglist");
@@ -465,6 +465,11 @@ namespace alterhook
       {
         base::instr &= ~(0b1111 << 28);
         base::instr |= (condition << 28);
+      }
+
+      CondCodes get_condition() noexcept
+      {
+        return CondCodes(base::instr >> 28);
       }
     };
 
@@ -596,17 +601,51 @@ namespace alterhook
       {
       }
 
-      void set_destination_register(uint8_t reg)
+      void set_destination_register(uint8_t reg) noexcept
       {
         property_at<2>::set_register(reg);
       }
 
-      void set_source_register(uint8_t reg)
+      void set_source_register(uint8_t reg) noexcept
       {
         property_at<3>::set_register(reg);
       }
 
-      void set_register(uint8_t reg)
+      void set_register(uint8_t reg) noexcept
+      {
+        set_destination_register(reg);
+        set_source_register(reg);
+      }
+    };
+
+    struct SUB : instruction_properties<
+                     utils::property<templates::condition_operand>,
+                     utils::property<templates::register_operand,
+                                     utils::val<register_type::reg12>>,
+                     utils::property<templates::register_operand,
+                                     utils::val<register_type::reg16>>,
+                     utils::property<templates::offset_operand,
+                                     utils::val<offset_type::uimm12_0>>>
+    {
+      static constexpr uint32_t opcode = 0x2'40'00'00;
+
+      SUB(uint8_t dstreg, uint8_t srcreg, uint16_t offset,
+          CondCodes condition = ARMCC_AL)
+          : base(opcode, offset, srcreg, dstreg, condition)
+      {
+      }
+
+      void set_destination_register(uint8_t reg) noexcept
+      {
+        property_at<2>::set_register(reg);
+      }
+
+      void set_source_register(uint8_t reg) noexcept
+      {
+        property_at<3>::set_register(reg);
+      }
+
+      void set_register(uint8_t reg) noexcept
       {
         set_destination_register(reg);
         set_source_register(reg);
@@ -762,7 +801,7 @@ namespace alterhook
         LDR_LITERAL ldr;
 
         CALL(int16_t ldr_offset, CondCodes ldr_condition = ARMCC_AL)
-            : mov(lr, pc), ldr(pc, ldr_offset, ldr_condition)
+            : mov(lr, pc), ldr(pc, ldr_offset - 4, ldr_condition)
         {
         }
 
@@ -774,6 +813,46 @@ namespace alterhook
           ldr.set_condition(cond);
         }
       };
+
+      struct BX_RELATIVE : templates::custom_instruction<1>
+      {
+      public:
+        typedef int16_t                  offset_t;
+        static constexpr instruction_set instr_set = instruction_set::ARM;
+        BX_RELATIVE(offset_t offset, CondCodes condition);
+
+        void set_offset(int16_t offset)
+        {
+          if (offset >= 0)
+            new (&instr)
+                instr_t(ADD(pc, pc, offset ^ 1, instr.add.get_condition()));
+          else
+            new (&instr)
+                instr_t(SUB(pc, pc, -(offset ^ 1), instr.sub.get_condition()));
+        }
+
+        static bool offset_fits(int16_t offset) noexcept
+        {
+          return ADD::offset_fits(abs(offset));
+        }
+
+      private:
+        union instr_t
+        {
+          ADD add;
+          SUB sub;
+
+          instr_t(ADD add) : add(add) {}
+
+          instr_t(SUB sub) : sub(sub) {}
+        } instr;
+      };
+
+      inline BX_RELATIVE::BX_RELATIVE(offset_t offset, CondCodes condition)
+          : instr(offset >= 0 ? instr_t(ADD(pc, pc, offset ^ 1, condition))
+                              : instr_t(SUB(pc, pc, -(offset ^ 1), condition)))
+      {
+      }
     } // namespace custom
   }   // namespace arm
 
@@ -1054,7 +1133,7 @@ namespace alterhook
         LDR_LITERAL ldr;
 
         CALL(int16_t ldr_offset, bool align)
-            : add(lr, pc, align ? 7 : 5), ldr(pc, ldr_offset)
+            : add(lr, pc, align ? 7 : 5), ldr(pc, ldr_offset - 4)
         {
         }
 
@@ -1454,7 +1533,8 @@ namespace alterhook
                        "cannot seek it block iterator past the end");
       }
 
-      void compatible(const const_iterator& other) const noexcept
+      void compatible(
+          [[maybe_unused]] const const_iterator& other) const noexcept
       {
         utils_assert(ptr == other.ptr, "it block iterators are incompatible");
       }

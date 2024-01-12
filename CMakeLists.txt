@@ -30,9 +30,18 @@ if (POLICY CMP0141)
   )
 endif()
 
+string(
+	CONCAT ALWAYS_RELAY_NOTE
+	"On x64 builds it instructs the library to always use the relay function strategy "
+	"regardless of the size of the target function "
+	"(meaning it won't place a big jump on the target even if it fits)."
+	"Gets ignored for other archs."
+)
+
 option(ALTERHOOK_SHARED "Use shared version of AlterHook")
 option(ALTERHOOK_TARGET_ARCH "Specifies the target architecture to use")
 option(ALTERHOOK_BUILD_TESTS "Determines whether to build the tests on folder 'tests/'" ${ALTERHOOK_TOP_LEVEL})
+option(ALTERHOOK_ALWAYS_USE_RELAY "${ALWAYS_RELAY_NOTE}")
 set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM" "ARM64")
 
 foreach (HEADER "buffer" "disassembler" "injection")
@@ -44,6 +53,7 @@ foreach (
 	"calling_conventions" "concepts" "function_traits" 
 	"other" "static_vector" "type_sequence" "utils"
 	"utils_macros" "properties" "data_processing"
+	"boilerplate"
 )
 	list(APPEND ALTERHOOK_UTILITIES_HEADERS "include/alterhook/utilities/${HEADER}.h")
 endforeach()
@@ -117,6 +127,11 @@ foreach (SRC "trampoline" "injection" "thread_processing")
 	list(APPEND ALTERHOOK_CPP_FILES "src/${ALTERHOOK_TARGET_ARCH}/${SRC}.cpp")
 endforeach()
 
+if (ALTERHOOK_ALWAYS_USE_RELAY AND NOT ALTERHOOK_TARGET_ARCH STREQUAL "X86")
+	message(WARNING "ALTERHOOK_ALWAYS_USE_RELAY is ignored for non x86/x64 builds")
+	set(ALTERHOOK_ALWAYS_USE_RELAY OFF)
+endif()
+
 if (WIN32)
 	set(OS_STR "windows")
 else()
@@ -129,7 +144,21 @@ foreach (SRC "other" "allocation" "freezer" "exceptions")
 	list(APPEND ALTERHOOK_CPP_FILES "src/${OS_STR}/${SRC}.cpp")
 endforeach()
 
+string(
+	CONCAT CLANG_CL_SPECIFIC
+	$<AND:
+		$<CXX_COMPILER_ID:Clang>,
+		$<STREQUAL:${CMAKE_CXX_COMPILER_FRONTEND_VARIANT},MSVC>
+	>
+)
+
 FetchContent_MakeAvailable(capstone)
+target_compile_options(
+	capstone 
+PRIVATE 
+	$<$<BOOL:${MSVC}>:/wd4715>
+	$<${CLANG_CL_SPECIFIC}:-Wno-return-type>
+)
 
 set(
 	ALTERHOOK_ALL_HEADERS
@@ -161,6 +190,7 @@ PUBLIC
 	$<$<BOOL:${ALTERHOOK_SHARED}>:ALTERHOOK_SHARED>
 PRIVATE
 	$<$<BOOL:${ALTERHOOK_SHARED}>:ALTERHOOK_EXPORT>
+	$<$<BOOL:${ALTERHOOK_ALWAYS_USE_RELAY}>:ALTERHOOK_ALWAYS_USE_RELAY>
 )
 
 target_include_directories(

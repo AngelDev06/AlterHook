@@ -6,24 +6,6 @@
 #endif
 #include "detail/macros.h"
 #include "utilities/utils.h"
-#if utils_windows
-  #define __alterhook_is_virtual(memfunc)                                      \
-    is_virtual_msvc_impl(reinterpret_cast<void*>(&memfunc))
-#else
-  #define __alterhook_is_virtual(memfunc)                                      \
-    is_virtual_impl(reinterpret_cast<void*>(&memfunc))
-#endif
-
-#if utils_windows
-  #if utils_msvc && !defined(NDEBUG)
-    #define __alterhook_follow_thunk(address)                                  \
-      follow_thunk_function(follow_msvc_debug_jmp(address))
-  #else
-    #define __alterhook_follow_thunk(address) follow_thunk_function(address)
-  #endif
-#else
-  #define __alterhook_follow_thunk(address) address
-#endif
 
 #if utils_cpp20
   #define __alterhook_must_be_memfuncptr_nd(x) utils::member_function_type x
@@ -72,8 +54,6 @@ namespace alterhook
     template <__alterhook_must_be_memfuncptr(T)>
     static uintptr_t address_of(T memfuncptr);
 
-    // in order for both msvc & non-msvc implementation of this to work the
-    // library has to get built with a compiler other than msvc
     template <__alterhook_must_be_memfuncptr(T)>
     static uintptr_t address_of_virtual(T memfuncptr);
 
@@ -109,20 +89,21 @@ namespace alterhook
 
 #if utils_windows
     static uintptr_t follow_thunk_function(uintptr_t address) noexcept;
-  #ifndef NDEBUG
-    // msvc adds an extra jump when calling functions on debug builds
-    static uintptr_t follow_msvc_debug_jmp(uintptr_t address) noexcept;
-  #endif
     // msvc abi specific implementation
-    static bool is_virtual_msvc_impl(void* address) noexcept;
+    static bool      is_virtual_impl(void* address) noexcept;
 #else
+    static uintptr_t follow_thunk_function(uintptr_t address) noexcept
+    {
+      return address;
+    }
+
     static bool is_virtual_impl(void* address) noexcept;
 #endif
   };
 
   /*
-  * TEMPLATE DEFINITIONS (ignore them)
-  */
+   * TEMPLATE DEFINITIONS (ignore them)
+   */
   template <__alterhook_must_be_memfuncptr_nd(T)>
   bool addresser::is_virtual(T memfuncptr)
   {
@@ -131,9 +112,8 @@ namespace alterhook
                   "`addresser::is_virtual` doesn't work for windows builds "
                   "using the clang compiler due to ABI issues, use "
                   "`address_of_virtual` ahead of time");
-#else
-    return __alterhook_is_virtual(memfuncptr);
 #endif
+    return is_virtual_impl(reinterpret_cast<void*>(&memfuncptr));
   }
 
   template <__alterhook_must_be_memfuncptr_nd(T)>
@@ -159,20 +139,20 @@ namespace alterhook
         *reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(inst) +
                                       adjustment) +
         vtable_index);
-    return __alterhook_follow_thunk(address);
+    return follow_thunk_function(address);
   }
 
   template <__alterhook_must_be_memfuncptr_nd(T)>
   uintptr_t addresser::address_of_regular(T memfuncptr)
   {
-    return __alterhook_follow_thunk(*reinterpret_cast<uintptr_t*>(&memfuncptr));
+    return follow_thunk_function(*reinterpret_cast<uintptr_t*>(&memfuncptr));
   }
 
   template <typename T>
   uintptr_t addresser::vtableindexof(T memfuncptr)
   {
     typedef utils::fn_class_t<T> cls;
-    typedef uintptr_t (cls::*method_t)();
+    typedef uintptr_t            (cls::*method_t)();
     return (reinterpret_cast<cls*>(instance())
                 ->*reinterpret_cast<method_t>(memfuncptr))();
   }

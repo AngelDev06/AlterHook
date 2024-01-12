@@ -6,21 +6,24 @@
 #include "x86_instructions.h"
 #include "injection.h"
 
+#if !utils_windows
+  #pragma GCC visibility push(hidden)
+#endif
+
 namespace alterhook
 {
   template <typename T>
   static size_t get_jump_size(T&& flags) noexcept
   {
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if !always_use_relay && utils_x64
     if (flags.use_small_jmp)
       return detail::constants::small_backup_size;
 #endif
     return detail::constants::backup_size;
   }
 
-  ALTERHOOK_HIDDEN void inject_to_target(std::byte*       target,
-                                         const std::byte* backup_or_detour,
-                                         injector_flags   flags)
+  void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
+                        injector_flags flags)
   {
     utils_assert(target, "inject_to_target: no target address specified");
     utils_assert(backup_or_detour,
@@ -38,7 +41,7 @@ namespace alterhook
 
     if (flags.enable)
     {
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if !always_use_relay && utils_x64
       if (!flags.use_small_jmp)
         new (address) JMP_ABS(reinterpret_cast<uintptr_t>(backup_or_detour));
       else
@@ -59,16 +62,15 @@ namespace alterhook
     execflush(address, size);
   }
 
-#if utils_x86 || !defined(ALTERHOOK_ALWAYS_USE_RELAY)
-  ALTERHOOK_HIDDEN void patch_jmp(std::byte* target, const std::byte* detour,
-                                  patcher_flags flags)
+#if utils_x86 || !always_use_relay
+  void patch_jmp(std::byte* target, const std::byte* detour,
+                 [[maybe_unused]] patcher_flags flags)
   {
     utils_assert(target, "patch_jmp: no target address specified");
     utils_assert(detour, "patch_jmp: no detour specified");
     __define_old_protect(flags);
     constexpr size_t size = detail::constants::backup_size;
   #if utils_x64
-    (void)flags;
     std::byte* const address = target;
   #else
     std::byte* const address =
@@ -95,10 +97,14 @@ namespace alterhook
 #endif
 
 #if !utils_x86
-  ALTERHOOK_HIDDEN void set_relay(std::byte* prelay, const std::byte* detour)
+  void set_relay(std::byte* prelay, const std::byte* detour)
   {
     std::launder(reinterpret_cast<JMP_ABS*>(prelay))->address =
         reinterpret_cast<uintptr_t>(detour);
   }
 #endif
 } // namespace alterhook
+
+#if !utils_windows
+  #pragma GCC visibility pop
+#endif

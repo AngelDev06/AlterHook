@@ -2,6 +2,9 @@
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
 #include "addresser.h"
+#if utils_windows
+  #include "x86_instructions.h"
+#endif
 
 // Addresser inspiration from:
 // https://gist.github.com/altalk23/29b97969e9f0624f783b673f6c1cd279
@@ -10,7 +13,7 @@ namespace alterhook
 #define __alterhook_noseperator()
 #define __alterhook_comma_seperator() ,
 
-// clang-format off
+  // clang-format off
 #define __alterhook_for_hex_digit0(FN, PREFIX, SEPERATOR) \
   FN(PREFIX##0)SEPERATOR()                                \
   FN(PREFIX##1)SEPERATOR()                                \
@@ -136,31 +139,49 @@ namespace alterhook
   }
 
 #if utils_windows
-  uintptr_t addresser::follow_thunk_function(uintptr_t address) noexcept
-  {
-    uintptr_t result = address;
-    if (*reinterpret_cast<std::byte*>(address) == std::byte(0xFF) &&
-        *reinterpret_cast<std::byte*>(address + 1) == std::byte(0x25))
-    {
-      result = *reinterpret_cast<uintptr_t*>(address + 2);
-      if (!result)
-        return address;
-      result = *reinterpret_cast<uintptr_t*>(address);
-    }
-    return result;
-  }
-
-  #ifndef NDEBUG
-  uintptr_t addresser::follow_msvc_debug_jmp(uintptr_t address) noexcept
-  {
-    intptr_t result = address;
-    if (*reinterpret_cast<std::byte*>(address) == std::byte(0xE9))
-      result += *reinterpret_cast<int32_t*>(address + 1) + 5;
-    return result;
-  }
+  #if utils_msvc
+    #pragma warning(push)
+    #pragma warning(disable : 6011 4312)
   #endif
 
-  bool addresser::is_virtual_msvc_impl(void* address) noexcept
+  enum class instr_opcodes : uint8_t
+  {
+    MOV        = 0x8B,
+    JMP_ABS    = 0xFF,
+    JMP_SHORT  = 0xEB,
+    JMP        = 0xE9,
+    X64_PREFIX = 0x48
+  };
+
+  uintptr_t addresser::follow_thunk_function(uintptr_t address) noexcept
+  {
+    assert(address);
+
+    union
+    {
+      uintptr_t      address;
+      const JMP*     jmp;
+      const JMP_ABS* jmp_abs;
+    } result{ address };
+
+    if (result.jmp->id == JMP::opcode)
+    {
+      const auto* const dest =
+          reinterpret_cast<JMP_ABS*>(result.jmp->destination(address));
+      if (dest->id == JMP_ABS::opcode && dest->imm)
+        result.jmp_abs = dest;
+    }
+
+    // note: for x64 this may lead to a warning as `uint32_t` is smaller in size
+    // than a pointer however the immediate of the absolute jump is guaranteed
+    // to be a valid pointer that refers to the location of the real 64-bit
+    // address of the target function
+    if (result.jmp_abs->id == JMP_ABS::opcode && result.jmp_abs->imm)
+      result.address = *reinterpret_cast<uintptr_t*>(result.jmp_abs->imm);
+    return result.address;
+  }
+
+  bool addresser::is_virtual_impl(void* address) noexcept
   {
     constexpr std::byte ecx = std::byte(1);
     uint8_t             reg = (std::numeric_limits<uint8_t>::max)();
@@ -171,14 +192,6 @@ namespace alterhook
       intptr_t current  = ip;
       current          += offset;
       ip                = current;
-    };
-    enum class instr_opcodes : uint8_t
-    {
-      MOV        = 0x8B,
-      JMP_ABS    = 0xFF,
-      JMP_SHORT  = 0xEB,
-      JMP        = 0xE9,
-      X64_PREFIX = 0x48
     };
 
     while (true)
@@ -220,6 +233,10 @@ namespace alterhook
       }
     }
   }
+
+  #if utils_msvc
+    #pragma warning(pop)
+  #endif
 #else
   bool addresser::is_virtual_impl(void* address) noexcept
   {
