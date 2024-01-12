@@ -337,7 +337,8 @@ namespace alterhook
       struct reference
       {
         typedef std::variant<arm::B*, thumb2::B*, thumb2::B_cond*, arm::BL*,
-                             thumb2::BL*, arm::BLX*, thumb2::BLX*>
+                             thumb2::BL*, arm::BLX*, thumb2::BLX*,
+                             arm::custom::BX_RELATIVE*>
               src_t;
         src_t src;
 
@@ -684,7 +685,8 @@ namespace alterhook
 
     struct trampoline_context::session
     {
-      typedef std::array<std::byte, 16> buffer_t;
+      static constexpr size_t                    buffer_size = 32;
+      typedef std::array<std::byte, buffer_size> buffer_t;
 
       template <typename T>
       class reference
@@ -758,6 +760,7 @@ namespace alterhook
         bool thumb_ldr_like        : 1;
         bool has_reglist           : 1;
         bool is_thumb_adr          : 1;
+        bool is_conditional        : 1;
 
         union
         {
@@ -794,13 +797,12 @@ namespace alterhook
         ctx.positions.push_back({ target_pos, tramp_pos });
         if (ctx.it_context.remaining)
           --ctx.it_context.remaining;
-        auto branch_entry = ctx.branch_list.get_entry(target_pos);
-        if (branch_entry != ctx.branch_list.end())
+        if (instruction_info.is_branch &&
+            instruction_info.branch_destination == ctx.target.end &&
+            ctx.thumb != instruction_info.switches_to_thumb)
         {
-          bool thumb_dest = branch_entry->instr_set != instruction_set::ARM;
-          if (thumb_dest != ctx.thumb)
-            arm.switch_instruction_set();
-          ctx.thumb = thumb_dest;
+          arm.switch_instruction_set();
+          ctx.thumb = instruction_info.switches_to_thumb;
         }
         memcpy(ctx.trampoline.end, copy_source, copy_size);
         ctx.trampoline.end += copy_size;
@@ -840,6 +842,17 @@ namespace alterhook
       bool holds_instructions() const noexcept
       {
         return copy_source == buffer.data();
+      }
+
+      void break_pc_handling()
+      {
+        if (!ctx.pc_handling)
+          return;
+        if (ctx.thumb)
+          add_instruction(thumb::POP(r7)).register_as_to_be_modified();
+        else
+          add_instruction(arm::POP(r7)).register_as_to_be_modified();
+        ctx.pc_handling = false;
       }
 
     private:
@@ -1113,6 +1126,9 @@ namespace alterhook
 
       void inspect_operands(const cs_insn& instr)
       {
+        if (!utils::any_of(instr.detail->arm.cc, ARMCC_AL, ARMCC_UNDEF))
+          instruction_info.is_conditional = true;
+
         for (uint8_t i = 0; i != instr.detail->arm.op_count; ++i)
         {
           const cs_arm_op& operand = instr.detail->arm.operands[i];
@@ -1248,13 +1264,8 @@ namespace alterhook
       // and re-enable it if ever needed in the future
       if (session.instruction_info.breaks_pc_handling && ctx.pc_handling)
       {
-        if (ctx.thumb)
-          session.add_instruction(thumb::POP(r7)).register_as_to_be_modified();
-        else
-          session.add_instruction(arm::POP(r7)).register_as_to_be_modified();
-
+        session.break_pc_handling();
         session.add_instruction(instr);
-        ctx.pc_handling = false;
 
         // is it `pop { regs..., pc }` or similar? then exit
         if (session.instruction_info.is_branch && ctx.branch_list.empty())
@@ -1271,9 +1282,9 @@ namespace alterhook
 
         if (session.instruction_info.branch_destination)
         {
-          typedef utils::type_sequence<arm::BL, arm::BLX, thumb2::BL,
-                                       thumb2::BLX, arm::B, thumb2::B,
-                                       thumb2::B_cond>::
+          typedef utils::type_sequence<
+              arm::BL, arm::BLX, thumb2::BL, thumb2::BLX, arm::B, thumb2::B,
+              thumb2::B_cond, arm::custom::BX_RELATIVE>::
               template apply<trampoline_context::session::template reference>::
                   template push_front<std::monostate>::template to<std::variant>
                       branch_ref_t;
@@ -1288,7 +1299,7 @@ namespace alterhook
 
           if (ctx.thumb)
           {
-            if (!utils::any_of(instr.detail->arm.cc, ARMCC_AL, ARMCC_UNDEF) &&
+            if (session.instruction_info.is_conditional &&
                 !ctx.it_context.remaining)
             {
               assert(!session.instruction_info.is_call);
@@ -1318,10 +1329,16 @@ namespace alterhook
             if (ctx.thumb != session.instruction_info.switches_to_thumb)
             {
               if (session.instruction_info.is_call &&
-                  utils::any_of(instr.detail->arm.cc, ARMCC_AL, ARMCC_UNDEF) &&
+                  !session.instruction_info.is_conditional &&
                   arm::BLX::offset_fits(relative_address))
                 branch_ref =
                     session.add_instruction(arm::BLX(relative_address));
+              else if (!ctx.thumb &&
+                       abs(relative_address) <=
+                           std::numeric_limits<int16_t>::max() &&
+                       arm::custom::BX_RELATIVE::offset_fits(relative_address))
+                branch_ref = session.add_instruction(arm::custom::BX_RELATIVE(
+                    relative_address, instr.detail->arm.cc));
             }
             else if (arm::B::offset_fits(relative_address))
             {
@@ -1350,48 +1367,49 @@ namespace alterhook
                 branch_ref);
 #endif
           }
-          else if (std::holds_alternative<std::monostate>(branch_ref))
+          else
           {
-            const uint8_t thumb_bit =
-                session.instruction_info.switches_to_thumb;
-            uintptr_t dataloc = ctx.allocate_address(
-                session.instruction_info.ubranch_destination + thumb_bit);
-            const uint8_t ldr_relative_address =
-                dataloc - arm_pc_align(ctx.trampoline.uend + pc_offset);
+            if (!session.instruction_info.is_call)
+              session.break_pc_handling();
 
-            if (session.instruction_info.is_call)
+            if (std::holds_alternative<std::monostate>(branch_ref))
             {
-              if (ctx.thumb)
-                session.add_instruction(thumb2::custom::CALL(
-                    ldr_relative_address - 4, ctx.trampoline.uend % 4));
-              else
-                session.add_instruction(
-                    arm::custom::CALL(ldr_relative_address - 4));
-            }
-            else
-            {
-              if (ctx.pc_handling)
+              const uint8_t thumb_bit =
+                  session.instruction_info.switches_to_thumb;
+              const uintptr_t dataloc = ctx.allocate_address(
+                  session.instruction_info.ubranch_destination | thumb_bit);
+              const uint8_t ldr_relative_address =
+                  dataloc - arm_pc_align(ctx.trampoline.uend + pc_offset);
+              if (session.instruction_info.is_call)
               {
                 if (ctx.thumb)
-                  session.add_instruction(thumb::POP(r7))
-                      .register_as_to_be_modified();
+                  session.add_instruction(thumb2::custom::CALL(
+                      ldr_relative_address, ctx.trampoline.uend % 4));
                 else
-                  session.add_instruction(arm::POP(r7))
-                      .register_as_to_be_modified();
-                ctx.pc_handling = false;
+                  session.add_instruction(arm::custom::CALL(
+                      ldr_relative_address, instr.detail->arm.cc));
               }
-
-              if (ctx.thumb)
-                session.add_instruction(
-                    thumb2::custom::JMP(ldr_relative_address));
               else
-                session.add_instruction(arm::custom::JMP(ldr_relative_address));
-
-              if (ctx.branch_list.empty())
               {
-                ctx.finished = true;
-                break;
+                if (ctx.thumb)
+                {
+                  if (session.instruction_info.is_conditional &&
+                      !ctx.it_context.remaining)
+                    session.add_instruction(thumb::IT(instr.detail->arm.cc));
+                  session.add_instruction(
+                      thumb2::custom::JMP(ldr_relative_address));
+                }
+                else
+                  session.add_instruction(arm::custom::JMP(
+                      ldr_relative_address, instr.detail->arm.cc));
               }
+            }
+
+            if (!session.instruction_info.is_call && ctx.branch_list.empty() &&
+                !session.instruction_info.is_conditional)
+            {
+              ctx.finished = true;
+              break;
             }
           }
         }
@@ -1401,16 +1419,9 @@ namespace alterhook
             throw(exceptions::pc_relative_handling_fail(
                 reinterpret_cast<std::byte*>(instr.address), ctx.target.begin,
                 ctx.thumb));
-          if (ctx.pc_handling)
-          {
-            if (ctx.thumb)
-              session.add_instruction(thumb::POP(r7))
-                  .register_as_to_be_modified();
-            else
-              session.add_instruction(arm::POP(r7))
-                  .register_as_to_be_modified();
-          }
-          if (ctx.branch_list.empty())
+          session.break_pc_handling();
+          if (ctx.branch_list.empty() &&
+              !session.instruction_info.is_conditional)
           {
             ctx.finished = true;
             break;
@@ -1568,16 +1579,7 @@ namespace alterhook
 
         if (!session.holds_instructions())
           session.add_instruction(instr);
-
-        if (ctx.pc_handling)
-        {
-          if (ctx.thumb)
-            session.add_instruction(thumb::POP(r7))
-                .register_as_to_be_modified();
-          else
-            session.add_instruction(arm::POP(r7)).register_as_to_be_modified();
-          ctx.pc_handling = false;
-        }
+        session.break_pc_handling();
 
         const uint8_t   pc_offset    = ctx.thumb ? 4 : 8;
         const uintptr_t current_last = ctx.trampoline.uend + session.copy_size;

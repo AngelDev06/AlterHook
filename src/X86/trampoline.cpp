@@ -29,16 +29,11 @@ namespace alterhook
 
   static bool is_pad(const std::byte* target, size_t size) noexcept
   {
-    if (target[0] != std::byte() && target[0] != std::byte(0x90) &&
-        target[0] != std::byte(0xCC))
+    if (!utils::any_of(target[0], std::byte(), std::byte(0x90),
+                       std::byte(0xCC)))
       return false;
-
-    for (size_t i = 1; i < size; ++i)
-    {
-      if (target[i] != target[0])
-        return false;
-    }
-    return true;
+    return std::all_of(target + 1, target + size,
+                       [x = target[0]](std::byte data) { return x == data; });
   }
 
   static bool in_overriden_area(const std::byte* target,
@@ -189,10 +184,7 @@ namespace alterhook
                  reference.immediate_size);
         }
 
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
-        if (id < sizeof(JMP))
-#endif
-          erase(result);
+        erase(result);
       }
 
       void set_new_location(uint8_t id, std::byte* instr)
@@ -217,35 +209,32 @@ namespace alterhook
         new_element.references.push_back(reference);
       }
 
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
-      void fix_outer_branches(std::byte* target)
+      void fix_leftover_branches(std::byte* target)
       {
         for (trampoline_entry& entry : *this)
         {
-          for (auto& reference : entry.references)
+          for (auto& ref : entry.references)
           {
-            const intptr_t relative_address =
-                (target + entry.id) -
-                (reference.src + reference.instruction_size);
-            const intptr_t max = reference.immediate_size == 1
-                                     ? (std::numeric_limits<int8_t>::max)()
-                                 : reference.immediate_size == 2
-                                     ? (std::numeric_limits<int16_t>::max)()
-                                 : reference.immediate_size == 4
-                                     ? (std::numeric_limits<int32_t>::max)()
-                                     : (std::numeric_limits<int64_t>::max)();
-
+            const ptrdiff_t relative_address =
+                (target + entry.id) - (ref.src + ref.instruction_size);
+            constexpr std::array<intptr_t, 4> maxes = {
+              (std::numeric_limits<int8_t>::max)(),
+              (std::numeric_limits<int16_t>::max)(),
+              (std::numeric_limits<int32_t>::max)(),
+              (std::numeric_limits<int64_t>::max)()
+            };
+            const intptr_t max =
+                maxes[utils::bitscanf(ref.immediate_size).value()];
             if (llabs(relative_address) >= max)
               throw(exceptions::instructions_in_branch_handling_fail(target));
 
-            memcpy(reference.src + reference.immediate_offset,
-                   &relative_address, reference.immediate_size);
+            memcpy(ref.src + ref.immediate_offset, &relative_address,
+                   ref.immediate_size);
           }
         }
 
         clear();
       }
-#endif
     };
   } // namespace init_impl
 
@@ -267,7 +256,7 @@ namespace alterhook
       reset();
 
     constexpr size_t max_tmp_buffer_size = 16;
-#ifndef ALTERHOOK_ALWAYS_USE_RELAY
+#if !always_use_relay
     constexpr size_t size_needed = big_jump_size;
 #else
     constexpr size_t size_needed = sizeof(JMP);
@@ -278,20 +267,9 @@ namespace alterhook
     typedef std::array<std::byte, max_tmp_buffer_size> tmpbuff_t;
     typedef typename trampoline_entry::reference       entry_reference;
 
-    tmpbuff_t   tmpbuff{};
-    entry_list  entries{};
-    positions_t tmp_positions{};
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
-    // this variable is required for the small jump & relay function strategy.
-    // basically if the target function isn't long enough to hold a full
-    // absolute jump to the detour a small one is placed instead that leads to
-    // the relay function which does the absolute jump. This marks the end of
-    // the trampoline function after at least 5 bytes of instructions have been
-    // relocated from the target in order to fallback to the small jump strategy
-    // if the target function proves to be too small.
-    std::byte* small_trampoline_end = nullptr;
-    std::byte* small_target_end     = nullptr;
-#endif
+    tmpbuff_t    tmpbuff{};
+    entry_list   entries{};
+    positions_t  tmp_positions{};
     size_t       tramp_pos    = 0;
     bool         finished     = false;
     size_t       current_size = 0;
@@ -433,16 +411,6 @@ namespace alterhook
       memcpy(reinterpret_cast<void*>(tramp_addr), copy_src, copy_size);
       tramp_pos += copy_size;
 
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
-      if (!small_trampoline_end && current_size >= sizeof(JMP))
-      {
-        small_trampoline_end =
-            reinterpret_cast<std::byte*>(tramp_addr) + copy_size;
-        small_target_end =
-            reinterpret_cast<std::byte*>(instr_address) + instr_size;
-      }
-#endif
-
       if (finished)
         break;
 
@@ -452,44 +420,27 @@ namespace alterhook
         new (ptrampoline.get() + tramp_pos)
             BIG_JUMP(instr_address + instr_size, tramp_addr + copy_size);
         tramp_pos += big_jump_size;
+        finished   = true;
         break;
       }
     }
+
+    if (!finished)
+      throw(exceptions::bad_target(target));
+
+    entries.fix_leftover_branches(target);
 
     const std::byte* current_target_address = target + current_size;
     if (current_size < size_needed &&
         !is_pad(current_target_address, size_needed - current_size))
     {
-#if utils_x64 && !defined(ALTERHOOK_ALWAYS_USE_RELAY)
+#if !always_use_relay && utils_x64
       if (current_size >= sizeof(JMP) ||
           is_pad(current_target_address, sizeof(JMP) - current_size))
       {
-        utils_assert(small_trampoline_end,
-                     "trampoline::init: small trampoline end is not set");
-        const size_t current_pos = small_trampoline_end - ptrampoline.get();
-        entries.fix_outer_branches(target);
-
-        // if finished is set to true it means that an instruction that leads to
-        // the outside was relocated from the target function and therefore it
-        // is not required to place a custom jump back to the target function.
-        // However we also need to check if that instruction is the last one in
-        // the 5 bytes of instructions needed to be relocated, otherwise it's
-        // outside the range.
-        if (!finished || current_pos != tramp_pos)
-        {
-          if (current_pos != tramp_pos)
-            tmp_positions.erase(
-                std::remove_if(tmp_positions.begin(), tmp_positions.end(),
-                               [=](std::pair<uint8_t, uint8_t> element)
-                               { return element.second >= tramp_pos; }),
-                tmp_positions.end());
-
-          tramp_pos = current_pos + big_jump_size;
-          fits_in_trampoline(target, tramp_pos);
-          new (small_trampoline_end)
-              BIG_JUMP(reinterpret_cast<uintptr_t>(small_target_end),
-                       reinterpret_cast<uintptr_t>(small_trampoline_end));
-        }
+        fits_in_trampoline(target, tramp_pos + sizeof(JMP_ABS));
+        prelay = ptrampoline.get() + tramp_pos;
+        new (prelay) JMP_ABS();
       }
       else
 #endif
@@ -513,12 +464,7 @@ namespace alterhook
     old_protect = tmp_protinfo;
 #endif
 
-#if utils_x64
-  #ifndef ALTERHOOK_ALWAYS_USE_RELAY
-    if (current_size >= size_needed)
-      return;
-  #endif
-
+#if always_use_relay
     fits_in_trampoline(target, tramp_size + sizeof(JMP_ABS));
     prelay = ptrampoline.get() + tramp_pos;
     new (prelay) JMP_ABS();

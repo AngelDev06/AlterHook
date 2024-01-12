@@ -95,6 +95,15 @@
     <ClInclude Include="..\..\include\alterhook\detail\macros.h">
       <Filter>Include\detail</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\utilities\boilerplate.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\utilities\data_processing.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\utilities\properties.h">
+      <Filter>Include\utilities</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\addresser.cpp">
@@ -125,6 +134,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\windows\allocation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\exceptions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\freezer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\X86\thread_processing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

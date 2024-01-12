@@ -144,7 +144,7 @@ TEST(ModifierTest, OriginalClsModifier)
 TEST(ModifierTest, TargetModifier)
 {
   std::cout << "modifier2 -> target\n\n";
-  target instance{ 1, 2, 3 }; 
+  target instance{ 1, 2, 3 };
   modifier2::enable_modifier();
 
   instance.multiply_by(10);

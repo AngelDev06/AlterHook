@@ -221,7 +221,6 @@ namespace alterhook
 
 #define __alterhook_call(x, y)  x y
 #define __alterhook_call2(x, y) x y
-#define __alterhook_expand(...) __VA_ARGS__
 
 /*
  * original wrappers generator
@@ -503,11 +502,11 @@ public                                                                         \
 
 #define __alterhook_select_asserter__alterhook_unique_method_getter_setup(     \
     unique_asserter, overloaded_asserter, ...)                                 \
-  __utils_defer(unique_asserter)(__VA_ARGS__)
+  utils_defer(unique_asserter)(__VA_ARGS__)
 
 #define __alterhook_select_asserter__alterhook_overloaded_method_getter_setup( \
     unique_asserter, overloaded_asserter, ...)                                 \
-  __utils_defer(overloaded_asserter)(__VA_ARGS__)
+  utils_defer(overloaded_asserter)(__VA_ARGS__)
 
 /*
  * TAG generation along with additional info such as which type of method getter
@@ -519,73 +518,71 @@ public                                                                         \
 
 #define __alterhook_gen_tag_overloaded_method(pair)                            \
   (__alterhook_overloaded_method_getter_setup,                                 \
-   utils_concat(modifier_tag_, __COUNTER__), __alterhook_expand pair)
+   utils_concat(modifier_tag_, __COUNTER__), utils_expand pair)
 
 #define __alterhook_gen_tag(name)                                              \
-  __alterhook_call(                                                            \
-      utils_is_call_operator(name, __alterhook_gen_tag_overloaded_method,      \
-                             __alterhook_gen_tag_unique_method),               \
-      (name))
+  utils_if(utils_is_call_operator(name))(                                      \
+      __alterhook_gen_tag_overloaded_method,                                   \
+      __alterhook_gen_tag_unique_method)(name)
 
 /*
  * Forward info to callbacks responsible for setting up stuff
  */
 #define __alterhook_setup_method_getter_impl(callback, ...)                    \
-  __utils_defer(callback)(__VA_ARGS__)
+  utils_defer(callback)(__VA_ARGS__)
 
 #define __alterhook_setup_method_getter(data, cls)                             \
   __alterhook_call(__alterhook_setup_method_getter_impl,                       \
-                   (__alterhook_expand data, cls))
+                   (utils_expand data, cls))
 
 #define __alterhook_setup_original_wrapper_impl(cls, callback, ...)            \
-  __utils_defer(__alterhook_original_wrapper_setup)(cls, __VA_ARGS__)
+  utils_defer(__alterhook_original_wrapper_setup)(cls, __VA_ARGS__)
 
 #define __alterhook_setup_original_wrapper(data, cls)                          \
   __alterhook_call(__alterhook_setup_original_wrapper_impl,                    \
-                   (cls, __alterhook_expand data))
+                   (cls, utils_expand data))
 
 #define __alterhook_setup_original_wrapper_implementation_impl(cls, base_name, \
                                                                callback, ...)  \
-  __utils_defer(__alterhook_implement_original_wrappers)(cls, base_name,       \
-                                                         __VA_ARGS__)
+  utils_defer(__alterhook_implement_original_wrappers)(cls, base_name,         \
+                                                       __VA_ARGS__)
 
 #define __alterhook_setup_original_wrapper_implementation(data, extra)         \
   __alterhook_call(__alterhook_setup_original_wrapper_implementation_impl,     \
-                   (__alterhook_expand extra, __alterhook_expand data))
+                   (utils_expand extra, utils_expand data))
 
 #define __alterhook_generate_call(callback, modifier_name, dummy_callback,     \
                                   tag, name, ...)                              \
-  __utils_defer(callback)(modifier_name, tag, name)
+  utils_defer(callback)(modifier_name, tag, name)
 
 #define __alterhook_generate_insertion(data, modifier_name)                    \
   __alterhook_call(                                                            \
       __alterhook_generate_call,                                               \
-      (__alterhook_make_insertion, modifier_name, __alterhook_expand data))
+      (__alterhook_make_insertion, modifier_name, utils_expand data))
 
 #define __alterhook_generate_erase(data, modifier_name)                        \
-  __alterhook_call(                                                            \
-      __alterhook_generate_call,                                               \
-      (__alterhook_make_erase, modifier_name, __alterhook_expand data))
+  __alterhook_call(__alterhook_generate_call,                                  \
+                   (__alterhook_make_erase, modifier_name, utils_expand data))
 
 #define __alterhook_generate_enable(data, modifier_name)                       \
   __alterhook_call(                                                            \
       __alterhook_generate_call,                                               \
-      (__alterhook_make_enable, modifier_name, __alterhook_expand data))
+      (__alterhook_make_enable, modifier_name, utils_expand data))
 
 #define __alterhook_generate_disable(data, modifier_name)                      \
   __alterhook_call(                                                            \
       __alterhook_generate_call,                                               \
-      (__alterhook_make_disable, modifier_name, __alterhook_expand data))
+      (__alterhook_make_disable, modifier_name, utils_expand data))
 
 #define __alterhook_generate_cached_target_address_method_impl(callback, tag,  \
                                                                ...)            \
-  __utils_defer(__alterhook_generate_cached_method)(tag)
+  utils_defer(__alterhook_generate_cached_method)(tag)
 
 #define __alterhook_generate_cached_target_address_method(data)                \
   __alterhook_generate_cached_target_address_method_impl data
 
 #define __alterhook_generate_castable_asserter_impl(callback, ...)             \
-  __utils_defer(utils_concat(__alterhook_select_asserter, callback))(          \
+  utils_defer(utils_concat(__alterhook_select_asserter, callback))(            \
       __alterhook_unique_castable_asserter,                                    \
       __alterhook_overloaded_castable_asserter, __VA_ARGS__)
 
@@ -594,43 +591,43 @@ public                                                                         \
 
 #define __alterhook_generate_diff_static_asserter_impl(modifier_name,          \
                                                        callback, ...)          \
-  __utils_defer(utils_concat(__alterhook_select_asserter, callback))(          \
+  utils_defer(utils_concat(__alterhook_select_asserter, callback))(            \
       __alterhook_unique_ptr_t_asserter,                                       \
       __alterhook_overloaded_ptr_t_asserter, modifier_name, __VA_ARGS__)
 
 #define __alterhook_generate_diff_static_asserter(data, modifier_name)         \
   __alterhook_call(__alterhook_generate_diff_static_asserter_impl,             \
-                   (modifier_name, __alterhook_expand data))
+                   (modifier_name, utils_expand data))
 
 #define __alterhook_generate_return_static_asserter_impl(modifier_name,        \
                                                          callback, ...)        \
-  __utils_defer(utils_concat(__alterhook_select_asserter, callback))(          \
+  utils_defer(utils_concat(__alterhook_select_asserter, callback))(            \
       __alterhook_unique_return_t_asserter,                                    \
       __alterhook_overloaded_return_t_asserter, modifier_name, __VA_ARGS__)
 
 #define __alterhook_generate_return_static_asserter(data, modifier_name)       \
   __alterhook_call(__alterhook_generate_return_static_asserter_impl,           \
-                   (modifier_name, __alterhook_expand data))
+                   (modifier_name, utils_expand data))
 
 #define __alterhook_generate_cc_static_asserter_impl(modifier_name, callback,  \
                                                      ...)                      \
-  __utils_defer(utils_concat(__alterhook_select_asserter, callback))(          \
+  utils_defer(utils_concat(__alterhook_select_asserter, callback))(            \
       __alterhook_unique_cc_asserter, __alterhook_overloaded_cc_asserter,      \
       modifier_name, __VA_ARGS__)
 
 #define __alterhook_generate_cc_static_asserter(data, modifier_name)           \
   __alterhook_call(__alterhook_generate_cc_static_asserter_impl,               \
-                   (modifier_name, __alterhook_expand data))
+                   (modifier_name, utils_expand data))
 
 #define __alterhook_generate_args_static_asserter_impl(modifier_name,          \
                                                        callback, ...)          \
-  __utils_defer(utils_concat(__alterhook_select_asserter, callback))(          \
+  utils_defer(utils_concat(__alterhook_select_asserter, callback))(            \
       __alterhook_unique_args_asserter, __alterhook_overloaded_args_asserter,  \
       modifier_name, __VA_ARGS__)
 
 #define __alterhook_generate_args_static_asserter(data, modifier_name)         \
   __alterhook_call(__alterhook_generate_args_static_asserter_impl,             \
-                   (modifier_name, __alterhook_expand data))
+                   (modifier_name, utils_expand data))
 
 /*
  * MODIFIER METHODS
@@ -642,14 +639,14 @@ public                                                                         \
       namespace __modifier_helpers                                             \
       {                                                                        \
         __alterhook_call2(utils_map, (__alterhook_generate_castable_asserter,  \
-                                      __alterhook_expand info))                \
+                                      utils_expand info))                      \
       }                                                                        \
     }
   #if utils_cc_assertions
     #define __alterhook_add_cc_assertions(info, modifier_name)                 \
       __alterhook_call2(utils_map_ud,                                          \
                         (__alterhook_generate_cc_static_asserter,              \
-                         modifier_name, __alterhook_expand info))
+                         modifier_name, utils_expand info))
   #else
     #define __alterhook_add_cc_assertions(info, modifier_name)
   #endif
@@ -665,15 +662,15 @@ public                                                                         \
               __LINE__) " defines its own fields which is not allowed");       \
       __alterhook_call2(utils_map_ud,                                          \
                         (__alterhook_generate_diff_static_asserter,            \
-                         modifier_name, __alterhook_expand info))              \
+                         modifier_name, utils_expand info))                    \
           __alterhook_call2(utils_map_ud,                                      \
                             (__alterhook_generate_return_static_asserter,      \
-                             modifier_name, __alterhook_expand info))          \
+                             modifier_name, utils_expand info))                \
               __alterhook_add_cc_assertions(info, modifier_name)               \
                   __alterhook_call2(                                           \
                       utils_map_ud,                                            \
                       (__alterhook_generate_args_static_asserter,              \
-                       modifier_name, __alterhook_expand info)) return true;   \
+                       modifier_name, utils_expand info)) return true;         \
     }
 
   #define __alterhook_define_modifier_activate(info, modifier_name)            \
@@ -684,11 +681,10 @@ public                                                                         \
         if (modifier_activated)                                                \
           return;                                                              \
         auto& instance = ::alterhook::hook_manager::get();                     \
-        __alterhook_call2(utils_map_ud,                                        \
-                          (__alterhook_generate_insertion, modifier_name,      \
-                           __alterhook_expand info)) modifier_activated =      \
-            true;                                                              \
-        modifier_enabled = true;                                               \
+        __alterhook_call2(utils_map_ud, (__alterhook_generate_insertion,       \
+                                         modifier_name, utils_expand info))    \
+            modifier_activated = true;                                         \
+        modifier_enabled       = true;                                         \
       }                                                                        \
     }
   #define __alterhook_define_modifier_deactivate(info, modifier_name)          \
@@ -699,11 +695,10 @@ public                                                                         \
         if (!modifier_activated)                                               \
           return;                                                              \
         auto& instance = ::alterhook::hook_manager::get();                     \
-        __alterhook_call2(utils_map_ud,                                        \
-                          (__alterhook_generate_erase, modifier_name,          \
-                           __alterhook_expand info)) modifier_activated =      \
-            false;                                                             \
-        modifier_enabled = false;                                              \
+        __alterhook_call2(utils_map_ud, (__alterhook_generate_erase,           \
+                                         modifier_name, utils_expand info))    \
+            modifier_activated = false;                                        \
+        modifier_enabled       = false;                                        \
       }                                                                        \
     }
   #define __alterhook_define_modifier_enable(info, modifier_name)              \
@@ -714,9 +709,9 @@ public                                                                         \
       if (modifier_enabled)                                                    \
         return;                                                                \
       auto& instance = ::alterhook::hook_manager::get();                       \
-      __alterhook_call2(utils_map_ud,                                          \
-                        (__alterhook_generate_enable, modifier_name,           \
-                         __alterhook_expand info)) modifier_enabled = true;    \
+      __alterhook_call2(utils_map_ud, (__alterhook_generate_enable,            \
+                                       modifier_name, utils_expand info))      \
+          modifier_enabled = true;                                             \
     }
   #define __alterhook_define_modifier_disable(info, modifier_name)             \
     static void disable_modifier()                                             \
@@ -724,9 +719,9 @@ public                                                                         \
       if (!modifier_activated || !modifier_enabled)                            \
         return;                                                                \
       auto& instance = ::alterhook::hook_manager::get();                       \
-      __alterhook_call2(utils_map_ud,                                          \
-                        (__alterhook_generate_disable, modifier_name,          \
-                         __alterhook_expand info)) modifier_enabled = false;   \
+      __alterhook_call2(utils_map_ud, (__alterhook_generate_disable,           \
+                                       modifier_name, utils_expand info))      \
+          modifier_enabled = false;                                            \
     }
 #else
   #define __alterhook_define_castable_concepts(info)
@@ -748,11 +743,11 @@ public                                                                         \
   #define __alterhook_gen_orig_wrap_impl(modifier_target, base_name, info)     \
     __alterhook_call2(utils_map_ud,                                            \
                       (__alterhook_setup_original_wrapper_implementation,      \
-                       (modifier_target, base_name), __alterhook_expand info))
+                       (modifier_target, base_name), utils_expand info))
   #define __alterhook_gen_cache_methods(info)                                  \
     __alterhook_call2(utils_map,                                               \
                       (__alterhook_generate_cached_target_address_method,      \
-                       __alterhook_expand info))
+                       utils_expand info))
 #else
   #define __alterhook_gen_orig_wrap_impl(modifier_target, base_name, info)
   #define __alterhook_gen_cache_methods(info)
@@ -768,7 +763,7 @@ public                                                                         \
         : public modifier_target,                                              \
           __alterhook_call2(utils_map_list,                                    \
                             (__alterhook_inherit_from_original_wrapper,        \
-                             __alterhook_expand info))                         \
+                             utils_expand info))                         \
     {                                                                          \
     private:                                                                   \
       inline static bool modifier_enabled   = false;                           \
@@ -779,7 +774,7 @@ public                                                                         \
       typedef base_name original;                                              \
       __alterhook_call2(utils_map,                                             \
                         (__alterhook_make_original_wrapper_methods_available,  \
-                         __alterhook_expand info))                             \
+                         utils_expand info))                             \
       __alterhook_define_modifier_activate(info, modifier_name)                \
       __alterhook_define_modifier_deactivate(info, modifier_name)              \
       __alterhook_define_modifier_enable(info, modifier_name)                  \
@@ -800,10 +795,9 @@ public                                                                         \
  */
 #define __modifier(info, modifier_name, modifier_target)                       \
   __alterhook_call2(utils_map_ud, (__alterhook_setup_method_getter,            \
-                                   modifier_target, __alterhook_expand info))  \
-      __alterhook_call2(utils_map_ud,                                          \
-                        (__alterhook_setup_original_wrapper, modifier_target,  \
-                         __alterhook_expand info))                             \
+                                   modifier_target, utils_expand info))        \
+      __alterhook_call2(utils_map_ud, (__alterhook_setup_original_wrapper,     \
+                                       modifier_target, utils_expand info))    \
           __alterhook_define_castable_concepts(info)                           \
               __alterhook_define_modifier(info, modifier_name,                 \
                                           modifier_target)

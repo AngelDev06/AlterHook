@@ -1,6 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include "boilerplate.h"
 #include <cassert>
 
 #define utils_assert(expr, msg) assert(((void)msg, expr))
@@ -281,160 +282,146 @@
 #define __utils_member_call_cv_ref_noexcept(fn)                                \
   __utils_member_call_cv_ref(fn, ) __utils_member_call_cv_ref(fn, noexcept)
 
-// Needed for some reason
-#define __utils_concat(x, y) x##y
-#define utils_concat(x, y)   __utils_concat(x, y)
-
 #define utils_align(value, alignment) ((alignment) * ((value) / (alignment)))
 
-// All of the following come from: https://github.com/swansontec/map-macro
-// Which is an implementation of a "recursive" macro allowing a macro
-// to be "invoked" with each argument of __VA_ARGS__ at a time
-#define __utils_map_out
-#define __utils_map_end(...)
-#define __utils_empty()
-// This is needed for msvc
-#define __utils_defer(id) id __utils_empty()
-
-#define __utils_eval0(...) __VA_ARGS__
-#define __utils_eval1(...)                                                     \
-  __utils_eval0(__utils_eval0(__utils_eval0(__VA_ARGS__)))
-#define __utils_eval2(...)                                                     \
-  __utils_eval1(__utils_eval1(__utils_eval1(__VA_ARGS__)))
-#define __utils_eval3(...)                                                     \
-  __utils_eval2(__utils_eval2(__utils_eval2(__VA_ARGS__)))
-#define __utils_eval4(...)                                                     \
-  __utils_eval3(__utils_eval3(__utils_eval3(__VA_ARGS__)))
-#define __utils_eval5(...)                                                     \
-  __utils_eval4(__utils_eval4(__utils_eval4(__VA_ARGS__)))
-
-#if (!defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL) && utils_msvc
-  #define __utils_eval6(...)                                                   \
-    __utils_eval5(__utils_eval5(__utils_eval5(__VA_ARGS__)))
-  #define __utils_eval(...) __utils_eval6(__utils_eval6(__VA_ARGS__))
-#else
-  #define __utils_eval(...) __utils_eval5(__VA_ARGS__)
-#endif
-
-#define __utils_map_get_end2()    0, __utils_map_end
-#define __utils_map_get_end1(...) __utils_map_get_end2
-#define __utils_map_get_end(...)  __utils_map_get_end1
-
-#define __utils_map_next0(item, next, ...) next __utils_map_out
-#define __utils_map_next1(item, next)                                          \
-  __utils_defer(__utils_map_next0)(item, next, 0)
-#define __utils_map_next(item, next)                                           \
-  __utils_map_next1(__utils_map_get_end item, next)
-
-#define __utils_map0(fn, x, peek, ...)                                         \
-  fn(x) __utils_defer(__utils_map_next(peek, __utils_map1))(fn, peek,          \
-                                                            __VA_ARGS__)
-#define __utils_map1(fn, x, peek, ...)                                         \
-  fn(x) __utils_defer(__utils_map_next(peek, __utils_map0))(fn, peek,          \
-                                                            __VA_ARGS__)
-
-#define __utils_map0_ud(fn, userdata, x, peek, ...)                            \
-  fn(x, userdata) __utils_defer(__utils_map_next(peek, __utils_map1_ud))(      \
-      fn, userdata, peek, __VA_ARGS__)
-#define __utils_map1_ud(fn, userdata, x, peek, ...)                            \
-  fn(x, userdata) __utils_defer(__utils_map_next(peek, __utils_map0_ud))(      \
-      fn, userdata, peek, __VA_ARGS__)
-
-#define __utils_map_seperated0(fn, seperator, x, peek, ...)                    \
-  seperator fn(x) __utils_defer(__utils_map_next(                              \
-      peek, __utils_map_seperated1))(fn, seperator, peek, __VA_ARGS__)
-#define __utils_map_seperated1(fn, seperator, x, peek, ...)                    \
-  seperator fn(x) __utils_defer(__utils_map_next(                              \
-      peek, __utils_map_seperated0))(fn, seperator, peek, __VA_ARGS__)
-#define __utils_map_seperated2(fn, seperator, x, peek, ...)                    \
-  fn(x) __utils_defer(__utils_map_next(peek, __utils_map_seperated1))(         \
-      fn, seperator, peek, __VA_ARGS__)
-
-#define __utils_map_seperated0_ud(fn, seperator, userdata, x, peek, ...)       \
-  seperator fn(x, userdata)                                                    \
-      __utils_defer(__utils_map_next(peek, __utils_map_seperated1_ud))(        \
-          fn, seperator, userdata, peek, __VA_ARGS__)
-#define __utils_map_seperated1_ud(fn, seperator, userdata, x, peek, ...)       \
-  seperator fn(x, userdata)                                                    \
-      __utils_defer(__utils_map_next(peek, __utils_map_seperated0_ud))(        \
-          fn, seperator, userdata, peek, __VA_ARGS__)
-#define __utils_map_seperated2_ud(fn, seperator, userdata, x, peek, ...)       \
-  fn(x, userdata)                                                              \
-      __utils_defer(__utils_map_next(peek, __utils_map_seperated1_ud))(        \
-          fn, seperator, userdata, peek, __VA_ARGS__)
-
-#define __utils_map_list0(fn, x, peek, ...)                                    \
-  , fn(x) __utils_defer(__utils_map_next(peek, __utils_map_list1))(            \
-        fn, peek, __VA_ARGS__)
-#define __utils_map_list1(fn, x, peek, ...)                                    \
-  , fn(x) __utils_defer(__utils_map_next(peek, __utils_map_list0))(            \
-        fn, peek, __VA_ARGS__)
-#define __utils_map_list2(fn, x, peek, ...)                                    \
-  fn(x) __utils_defer(__utils_map_next(peek, __utils_map_list1))(fn, peek,     \
-                                                                 __VA_ARGS__)
-
-#define __utils_map_list0_ud(fn, userdata, x, peek, ...)                       \
-  , fn(x, userdata) __utils_defer(__utils_map_next(                            \
-        peek, __utils_map_list1_ud))(fn, userdata, peek, __VA_ARGS__)
-#define __utils_map_list1_ud(fn, userdata, x, peek, ...)                       \
-  , fn(x, userdata) __utils_defer(__utils_map_next(                            \
-        peek, __utils_map_list0_ud))(fn, userdata, peek, __VA_ARGS__)
-#define __utils_map_list2_ud(fn, userdata, x, peek, ...)                       \
-  fn(x, userdata) __utils_defer(__utils_map_next(peek, __utils_map_list1_ud))( \
-      fn, userdata, peek, __VA_ARGS__)
-
-// Applies the function macro `macro` to each of the remaining parameters
+// Applies the function-like macro `macro` to each of the remaining elements
+// e.g. utils_map(func, a, b, c) evaluates to `func(a) func(b) func(c)`
 #define utils_map(macro, ...)                                                  \
-  __utils_eval(__utils_map1(macro, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
+  __utils_eval(__utils_map2(macro, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
 
-// Applies the function macro `macro` to each of the remaining parameters
-// and seperates the results with `seperator`
-#define utils_map_seperated(macro, seperator, ...)                             \
-  __utils_eval(__utils_map_seperated2(macro, seperator, __VA_ARGS__, ()()(),   \
-                                      ()()(), ()()(), 0))
-
-// Applies the function macro `macro` to each of the remaining parameters
-// and seperates the results with comma
+// Applies the function-like macro `macro` to each of the remaining elements and
+// separates the result with comma e.g. utils_map_list(func, a, b, c) evaluates
+// to `func(a), func(b), func(c)`
 #define utils_map_list(macro, ...)                                             \
   __utils_eval(__utils_map_list2(macro, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
 
-// Applies the function macro `macro` to each of the remaining parameters
-// and passes the `userdata` as a second parameter to each invocation,
-// e.g. utils_map_ud(f, x, a, b, c) evaluates to f(a, x) f(b, x) f(c, x)
+// Applies the function-like macro `macro` to each of the remaining elements and
+// separates the result with `separator` e.g. utils_map_separated(func, <<, a,
+// b, c) evaluates to `func(a) << func(b) << func(c)`
+#define utils_map_separated(macro, separator, ...)                             \
+  __utils_eval(__utils_map_separated2(macro, separator, __VA_ARGS__, ()()(),   \
+                                      ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements and
+// passes `userdata` as second parameter e.g. utils_map_ud(func, x, a, b, c)
+// evaluates to `func(a, x) func(b, x) func(c, x)`
 #define utils_map_ud(macro, userdata, ...)                                     \
-  __utils_eval(__utils_map1_ud(macro, userdata, __VA_ARGS__, ()()(), ()()(),   \
+  __utils_eval(__utils_map_ud2(macro, userdata, __VA_ARGS__, ()()(), ()()(),   \
                                ()()(), 0))
 
-// Applies the function macro `macro` to each of the remaining parameters,
-// passes the `userdata` as a second parameter to each invocation
-// and seperates the results with `seperator`
-// e.g. utils_map_seperated_ud(f, <<, x, a, b, c) evaluates to f(a, x) << f(b,
-// x) << f(c, x)
-#define utils_map_seperated_ud(macro, seperator, userdata, ...)                \
-  __utils_eval(__utils_map_seperated2_ud(                                      \
-      macro, seperator, userdata, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
+// Applies the function-like macro `macro` to each of the remaining elements and
+// passes an index starting from 0 and incremented by 1 after each invocation as
+// last argument e.g. utils_map_indexed(func, a, b, c) evaluates to `func(a, 0)
+// func(b, 1) func(c, 2)`
+#define utils_map_indexed(macro, ...)                                          \
+  __utils_eval(                                                                \
+      __utils_map_indexed2(macro, 0, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
 
-// Applies the function macro `macro` to each of the remaining parameters,
-// passes the `userdata` as a second parameter to each invocation
-// and seperates the results with comma,
-// e.g. utils_map_list_ud(f, x, a, b, c) evaluates to f(a, x), f(b, x), f(c, x)
+// Applies the function-like macro `macro` to each of the remaining elements,
+// separates the result with comma and passes `userdata` as second parameter
+// e.g. utils_map_list_ud(func, x, a, b, c) evaluates to `func(a, x), func(b,
+// x), func(c, x)`
 #define utils_map_list_ud(macro, userdata, ...)                                \
-  __utils_eval(__utils_map_list2_ud(macro, userdata, __VA_ARGS__, ()()(),      \
+  __utils_eval(__utils_map_list_ud2(macro, userdata, __VA_ARGS__, ()()(),      \
                                     ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements,
+// separates the result with comma and passes an index starting from 0 and
+// incremented by 1 after each invocation as last argument e.g.
+// utils_map_list_indexed(func, a, b, c) evaluates to `func(a, 0), func(b, 1),
+// func(c, 2)`
+#define utils_map_list_indexed(macro, ...)                                     \
+  __utils_eval(__utils_map_list_indexed2(macro, 0, __VA_ARGS__, ()()(),        \
+                                         ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements,
+// separates the result with `separator` and passes `userdata` as second
+// parameter e.g. utils_map_separated_ud(func, <<, x, a, b, c) evaluates to
+// `func(a, x) << func(b, x) << func(c, x)`
+#define utils_map_separated_ud(macro, separator, userdata, ...)                \
+  __utils_eval(__utils_map_separated_ud2(                                      \
+      macro, separator, userdata, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements,
+// separates the result with `separator` and passes an index starting from 0 and
+// incremented by 1 after each invocation as last argument e.g.
+// utils_map_separated_indexed(func, <<, a, b, c) evaluates to `func(a, 0) <<
+// func(b, 1) << func(c, 2)`
+#define utils_map_separated_indexed(macro, separator, ...)                     \
+  __utils_eval(__utils_map_separated_indexed2(                                 \
+      macro, separator, 0, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements,
+// passes `userdata` as second parameter and passes an index starting from 0 and
+// incremented by 1 after each invocation as last argument e.g.
+// utils_map_ud_indexed(func, x, a, b, c) evaluates to `func(a, x, 0) func(b, x,
+// 1) func(c, x, 2)`
+#define utils_map_ud_indexed(macro, userdata, ...)                             \
+  __utils_eval(__utils_map_ud_indexed2(macro, userdata, 0, __VA_ARGS__,        \
+                                       ()()(), ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements,
+// separates the result with comma, passes `userdata` as second parameter and
+// passes an index starting from 0 and incremented by 1 after each invocation as
+// last argument e.g. utils_map_list_ud_indexed(func, x, a, b, c) evaluates to
+// `func(a, x, 0), func(b, x, 1), func(c, x, 2)`
+#define utils_map_list_ud_indexed(macro, userdata, ...)                        \
+  __utils_eval(__utils_map_list_ud_indexed2(macro, userdata, 0, __VA_ARGS__,   \
+                                            ()()(), ()()(), ()()(), 0))
+
+// Applies the function-like macro `macro` to each of the remaining elements,
+// separates the result with `separator`, passes `userdata` as second parameter
+// and passes an index starting from 0 and incremented by 1 after each
+// invocation as last argument e.g. utils_map_separated_ud_indexed(func, <<, x,
+// a, b, c) evaluates to `func(a, x, 0) << func(b, x, 1) << func(c, x, 2)`
+#define utils_map_separated_ud_indexed(macro, separator, userdata, ...)        \
+  __utils_eval(__utils_map_separated_ud_indexed2(                              \
+      macro, separator, userdata, 0, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
 
 #define __utils_print_helper(x) ' ' << x
 
-// Print each argument to stdout seperated by space
+// Print each argument to stdout separated by space
 #define utils_print(...)                                                       \
-  std::cout << utils_map_seperated(__utils_print_helper, <<, __VA_ARGS__)
+  std::cout << utils_map_separated(__utils_print_helper, <<, __VA_ARGS__)
 
-#define __utils_call(x, y)                                  x y
-#define __utils_expand_2(...)                               0, 0
-#define __utils_is_call_operator2(item, dummy, result, ...) result
-#define __utils_is_call_operator(item, success, failure)                       \
-  __utils_call(__utils_is_call_operator2, (item, success, failure))
-#define utils_is_call_operator(item, success, failure)                         \
-  __utils_is_call_operator(__utils_expand_2 item, success, failure)
+#define __utils_call(x, y)    x y
+#define __utils_expand_2(...) 0, 0
+
+#define __utils_check_expanded_impl(x, n, ...) n
+#define __utils_check_expanded(...)                                            \
+  __utils_call(__utils_check_expanded_impl, (__VA_ARGS__, false, ))
+
+#define utils_not(x)      __utils_check_expanded(utils_concat(__utils_not_, x))
+#define __utils_not_0     ~, true
+#define __utils_not_false ~, true
+#define __utils_not_1     ~, false
+#define __utils_not_true  ~, false
+
+#define utils_bool(x) utils_not(utils_not(x))
+
+#define utils_if(condition)                                                    \
+  __utils_call(utils_concat, (__utils_if_, utils_bool(condition)))
+#define __utils_if_false(first, ...) __VA_ARGS__
+#define __utils_if_true(first, ...)  first
+
+#define utils_and(first_condition, second_condition)                           \
+  __utils_check_expanded(utils_concat(                                         \
+      utils_concat(utils_concat(__utils_and_, utils_bool(first_condition)),    \
+                   _),                                                         \
+      utils_bool(second_condition)))
+#define __utils_and_true_true ~, true
+
+#define utils_or(first_condition, second_condition)                            \
+  __utils_check_expanded(utils_concat(                                         \
+      utils_concat(utils_concat(__utils_or_, utils_bool(first_condition)), _), \
+      utils_bool(second_condition)))
+#define __utils_or_true_false ~, true
+#define __utils_or_false_true ~, true
+#define __utils_or_true_true  ~, true
+
+#define utils_is_call_operator(x)                                              \
+  __utils_check_expanded(__utils_is_call_operator x)
+#define __utils_is_call_operator(...) ~, true
 
 #define utils_expand(...) __VA_ARGS__
 
@@ -478,11 +465,7 @@
     count
 #endif
 
-#define __utils_define_fields0(type, identifier)                               \
-  type utils_concat(m_, identifier);
-#define __utils_define_fields1(pair) __utils_define_fields0 pair
-#define __utils_define_fields(...)                                             \
-  utils_map(__utils_define_fields1, __VA_ARGS__)
+#define utils_is_void_type(x)
 
 #define __utils_define_arguments0(type, identifier) type identifier
 #define __utils_define_arguments1(pair)             __utils_define_arguments0 pair
@@ -493,6 +476,12 @@
 #define __utils_pass_parameters1(pair)             __utils_pass_parameters0 pair
 #define __utils_pass_parameters(...)                                           \
   utils_map_list(__utils_pass_parameters1, __VA_ARGS__)
+
+#define __utils_define_fields0(type, identifier)                               \
+  type utils_concat(m_, identifier);
+#define __utils_define_fields1(pair) __utils_define_fields0 pair
+#define __utils_define_fields(...)                                             \
+  utils_map(__utils_define_fields1, __VA_ARGS__)
 
 #define __utils_init_fields0(type, identifier)                                 \
   utils_concat(m_, identifier)(identifier)

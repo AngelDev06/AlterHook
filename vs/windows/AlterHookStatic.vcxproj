@@ -39,10 +39,13 @@
     <ClInclude Include="..\..\include\alterhook\modifier.h" />
     <ClInclude Include="..\..\include\alterhook\tools.h" />
     <ClInclude Include="..\..\include\alterhook\trampoline.h" />
+    <ClInclude Include="..\..\include\alterhook\utilities\boilerplate.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\calling_conventions.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\concepts.h" />
+    <ClInclude Include="..\..\include\alterhook\utilities\data_processing.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\function_traits.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\other.h" />
+    <ClInclude Include="..\..\include\alterhook\utilities\properties.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\static_vector.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\type_sequence.h" />
     <ClInclude Include="..\..\include\alterhook\utilities\utils.h" />
@@ -62,8 +65,11 @@
     <ClCompile Include="..\..\src\hook_chain.cpp" />
     <ClCompile Include="..\..\src\misc.cpp" />
     <ClCompile Include="..\..\src\windows\allocation.cpp" />
+    <ClCompile Include="..\..\src\windows\exceptions.cpp" />
+    <ClCompile Include="..\..\src\windows\freezer.cpp" />
     <ClCompile Include="..\..\src\windows\other.cpp" />
     <ClCompile Include="..\..\src\X86\injection.cpp" />
+    <ClCompile Include="..\..\src\X86\thread_processing.cpp" />
     <ClCompile Include="..\..\src\X86\trampoline.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
