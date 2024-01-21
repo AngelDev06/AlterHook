@@ -3,20 +3,10 @@
 #pragma once
 #pragma GCC visibility push(hidden)
 
-#define add_asserter_impl(expr, optype, bitcount, enumval)                     \
-  if constexpr (optype##_format == enumval)                                    \
-    utils_assert(expr, #optype " too large to fit in " #bitcount " bits");
-
-#define add_asserter(pair, extradata)                                          \
-  __utils_call(add_asserter_impl, (utils_expand extradata, utils_expand pair))
-
-#define generate_asserters(expr, optype, ...)                                  \
-  utils_map_ud(add_asserter, (expr, optype), __VA_ARGS__)
-
 namespace alterhook::aarch64
 {
   // clang-format off
-  enum reg_t
+  enum reg_t : uint8_t
   {
     W0  = 0,  W1  = 1,  W2  = 2,  W3  = 3,  W4  = 4,
     W5  = 5,  W6  = 6,  W7  = 7,  W8  = 8,  W9  = 9,
@@ -25,41 +15,164 @@ namespace alterhook::aarch64
     W20 = 20, W21 = 21, W22 = 22, W23 = 23, W24 = 24,
     W25 = 25, W26 = 26, W27 = 27, W28 = 28, W29 = 29,
     W30 = 30,
-    X0 = W0, X1 = W1, X2 = W2, X3 = W3, X4 = W4,
-    X5 = W5, X6 = W6, X7 = W7, X8 = W8, X9 = W9,
-    X10 = W10, X11 = W11, X12 = W12, X13 = W13, X14 = W14,
-    X15 = W15, X16 = W16, X17 = W17, X18 = W18, X19 = W19,
-    X20 = W20, X21 = W21, X22 = W22, X23 = W23, X24 = W24,
-    X25 = W25, X26 = W26, X27 = W27, X28 = W28, X29 = W29,
-    X30 = W30
+    X0  = W0,  X1  = W1,  X2  = W2,  X3  = W3,
+    X4  = W4,  X5  = W5,  X6  = W6,  X7  = W7,  X8  = W8,
+    X9  = W9,  X10 = W10, X11 = W11, X12 = W12, X13 = W13,
+    X14 = W14, X15 = W15, X16 = W16, X17 = W17, X18 = W18,
+    X19 = W19, X20 = W20, X21 = W21, X22 = W22, X23 = W23,
+    X24 = W24, X25 = W25, X26 = W26, X27 = W27, X28 = W28,
+    X29 = W29, X30 = W30
+  };
+
+  enum class wregisters : uint8_t
+  {
+    W0  = 0,  W1  = 1,  W2  = 2,  W3  = 3,  W4  = 4,
+    W5  = 5,  W6  = 6,  W7  = 7,  W8  = 8,  W9  = 9,
+    W10 = 10, W11 = 11, W12 = 12, W13 = 13, W14 = 14,
+    W15 = 15, W16 = 16, W17 = 17, W18 = 18, W19 = 19,
+    W20 = 20, W21 = 21, W22 = 22, W23 = 23, W24 = 24,
+    W25 = 25, W26 = 26, W27 = 27, W28 = 28, W29 = 29,
+    W30 = 30
+  };
+
+  enum class xregisters : uint8_t
+  {
+    X0  = 0,  X1  = 1,  X2  = 2,  X3  = 3,
+    X4  = 4,  X5  = 5,  X6  = 6,  X7  = 7,  X8  = 8,
+    X9  = 9,  X10 = 10, X11 = 11, X12 = 12, X13 = 13,
+    X14 = 14, X15 = 15, X16 = 16, X17 = 17, X18 = 18,
+    X19 = 19, X20 = 20, X21 = 21, X22 = 22, X23 = 23,
+    X24 = 24, X25 = 25, X26 = 26, X27 = 27, X28 = 28,
+    X29 = 29, X30 = 30
+  };
+
+  enum class qregisters : uint8_t
+  {
+    Q0  = 0,  Q1  = 1,  Q2  = 2,  Q3  = 3,
+    Q4  = 4,  Q5  = 5,  Q6  = 6,  Q7  = 7,  Q8  = 8,
+    Q9  = 9,  Q10 = 10, Q11 = 11, Q12 = 12, Q13 = 13,
+    Q14 = 14, Q15 = 15, Q16 = 16, Q17 = 17, Q18 = 18,
+    Q19 = 19, Q20 = 20, Q21 = 21, Q22 = 22, Q23 = 23,
+    Q24 = 24, Q25 = 25, Q26 = 26, Q27 = 27, Q28 = 28,
+    Q29 = 29, Q30 = 30
+  };
+
+  // clang-format on
+
+  namespace helpers
+  {
+    template <size_t last_index, typename operand_t, size_t... indexes>
+    static void patch_operand_impl(const cs_operand_encoding& encoding,
+                                   uint32_t& instr, operand_t value,
+                                   std::index_sequence<indexes...>) noexcept
+    {
+      const auto *sizes_begin = encoding.sizes,
+                 *sizes_end   = encoding.sizes + encoding.operand_pieces_count;
+      const uint8_t operand_size =
+          std::accumulate(sizes_begin, sizes_end, uint8_t{});
+      uint8_t current_size = 0;
+
+      const auto do_patch = [&](const size_t i, const uint32_t op_part)
+      {
+        const uint8_t  op_index  = encoding.indexes[i];
+        const uint32_t mask      = (1u << encoding.sizes[i]) - 1;
+        instr                   &= ~(mask << op_index);
+        instr                   |= op_part << op_index;
+      };
+      const auto process = [&](const size_t i) -> bool
+      {
+        if (encoding.operand_pieces_count < (i + 1))
+          return false;
+        current_size        += encoding.sizes[i];
+        const uint32_t mask  = (1u << encoding.sizes[i]) - 1;
+        const uint32_t op_part =
+            (value >> (operand_size - current_size)) & mask;
+
+        do_patch(i, op_part);
+        return true;
+      };
+
+      if ((!process(indexes) || ...) ||
+          encoding.operand_pieces_count != (last_index + 1))
+        return;
+
+      const uint32_t mask    = (1u << encoding.sizes[last_index]) - 1;
+      const uint32_t op_part = value & mask;
+      do_patch(last_index, op_part);
+    }
+  } // namespace helpers
+
+  template <size_t max_pieces, typename operand_t>
+  static auto patch_operand(const cs_operand_encoding& encoding, uint32_t instr,
+                            operand_t value) noexcept
+      -> std::enable_if_t<
+          std::is_integral_v<operand_t> || std::is_enum_v<operand_t>, uint32_t>
+  {
+    helpers::patch_operand_impl<max_pieces - 1>(
+        encoding, instr, value, std::make_index_sequence<max_pieces - 1>());
+    return instr;
+  }
+
+  constexpr std::array offset_encodings = {
+    cs_operand_encoding{1,  { 0 },     { 26 }   },
+    cs_operand_encoding{ 1, { 5 },     { 19 }   },
+    cs_operand_encoding{ 1, { 5 },     { 14 }   },
+    cs_operand_encoding{ 2, { 29, 5 }, { 2, 19 }},
+    cs_operand_encoding{ 2, { 29, 5 }, { 2, 19 }},
+    cs_operand_encoding{ 1, { 5 },     { 16 }   },
+    cs_operand_encoding{ 1, { 10 },    { 12 }   },
+    cs_operand_encoding{ 1, { 10 },    { 12 }   },
+    cs_operand_encoding{ 1, { 10 },    { 12 }   },
+    cs_operand_encoding{ 1, { 10 },    { 12 }   },
+    cs_operand_encoding{ 1, { 10 },    { 12 }   }
+  };
+
+  constexpr std::array register_encodings = {
+    cs_operand_encoding{1,  { 0 }, { 5 }},
+    cs_operand_encoding{ 1, { 5 }, { 5 }}
+  };
+
+  constexpr std::array resizable_register_encodings = {
+    cs_operand_encoding{1,  { 0 }, { 5 }},
+    cs_operand_encoding{ 1, { 0 }, { 5 }},
+    cs_operand_encoding{ 1, { 0 }, { 5 }},
+    cs_operand_encoding{ 1, { 5 }, { 5 }}
+  };
+
+  constexpr std::array regsize_encodings = {
+    cs_operand_encoding{1,  { 31 }, { 1 }},
+    cs_operand_encoding{ 1, { 30 }, { 2 }},
+    cs_operand_encoding{ 1, { 30 }, { 1 }}
   };
 
   enum class offset_type
   {
-    imm26_0, imm19_5, imm14_5
+    imm26_0_pad2,
+    imm19_5_pad2,
+    imm14_5_pad2,
+    imm2_29_19_5,
+    imm2_29_19_5_pad12,
+    uimm16_5,
+    uimm12_10,
+    uimm12_10_pad2,
+    uimm12_10_pad3,
+    uimm12_10_pad1,
+    uimm12_10_pad4
   };
 
   enum class register_type
   {
-    reg5_0, reg5_5
+    reg5_0,
+    reg5_5
   };
 
-  enum class size_type
+  enum class resizable_register_type
   {
-    size_31, size_30, size2_30
+    reg5_0_size1_31,
+    reg5_0_size2_30,
+    reg5_0_size1_30,
+    reg5_5_size1_31
   };
-
-  enum class offset_pad_type
-  {
-    none, twelve
-  };
-
-  enum class register_size
-  {
-    word, dword, qword
-  };
-
-  // clang-format on
 
   struct INSTRUCTION
   {
@@ -72,69 +185,165 @@ namespace alterhook::aarch64
 
   namespace templates
   {
-    template <typename offset_format_t, typename base = INSTRUCTION>
-    struct offset_operand : base
-    {
-      static constexpr offset_type offset_format = offset_format_t::value;
-      static constexpr uint32_t    offset_mask =
-          offset_format == offset_type::imm26_0   ? 0x3'FF'FF'FF
-             : offset_format == offset_type::imm19_5 ? 0x7'FF'FF
-             : offset_format == offset_type::imm14_5 ? 0x3F'FF
-                                                     : 0;
-      static constexpr uint32_t offset_shift =
-          offset_format == offset_type::imm19_5 ||
-                  offset_format == offset_type::imm14_5
-              ? 5
-              : 0;
-      typedef std::conditional_t<offset_format == offset_type::imm26_0 ||
-                                     offset_format == offset_type::imm19_5,
-                                 int32_t, int16_t>
-          offset_t;
+    template <typename T, typename offset_t, typename = void>
+    inline constexpr bool has_custom_convert_offset = false;
+    template <typename T, typename offset_t>
+    inline constexpr bool has_custom_convert_offset<
+        T, offset_t,
+        std::void_t<decltype(T::convert_offset(std::declval<offset_t>()))>> =
+        true;
 
-      template <typename... types>
-      offset_operand(uint32_t opcode, offset_t offset, types&&... args)
-          : base(opcode | (static_cast<uint32_t>(offset >> 2) << offset_shift),
-                 std::forward<types>(args)...)
+    template <typename T, typename offset_t, typename = void>
+    inline constexpr bool has_custom_offset_fits = false;
+    template <typename T, typename offset_t>
+    inline constexpr bool has_custom_offset_fits<
+        T, offset_t,
+        std::void_t<decltype(T::offset_fits(std::declval<offset_t>()))>> =
+        std::is_same_v<decltype(T::offset_fits(std::declval<offset_t>())),
+                       bool>;
+
+    template <typename T, typename offset_t, typename = void>
+    inline constexpr bool has_custom_assert_offset = false;
+    template <typename T, typename offset_t>
+    inline constexpr bool has_custom_assert_offset<
+        T, offset_t,
+        std::void_t<decltype(T::assert_offset(std::declval<offset_t>()))>> =
+        true;
+
+    template <typename customcls, typename offset_format_t,
+              typename base = INSTRUCTION>
+    struct customized_offset_operand : base
+    {
+      typedef utils::type_sequence<int32_t, int32_t, int16_t, int32_t, int32_t,
+                                   uint16_t, uint16_t, uint16_t, uint16_t,
+                                   uint16_t>
+                                  offset_types;
+      static constexpr std::array offset_pads = {
+        2, 2, 2, 0, 12, 0, 2, 3, 1, 4
+      };
+      static constexpr std::array offset_max_values = {
+        0x3'FF'FF'FF, 0x7'FF'FF, 0x3F'FF, 0x1F'FF'FF, 0x1F'FF'FF, 0xFF'FF,
+        0xFFF,        0xFFF,     0xFFF,   0xFFF,      0xFFF
+      };
+      static constexpr offset_type offset_format = offset_format_t::value;
+      static constexpr cs_operand_encoding offset_encoding =
+          offset_encodings[utils::to_underlying(offset_format)];
+      static constexpr size_t offset_pad =
+          offset_pads[utils::to_underlying(offset_format)];
+      static constexpr size_t offset_max =
+          offset_max_values[utils::to_underlying(offset_format)];
+      typedef offset_types::template at<utils::to_underlying(offset_format)>
+          offset_t;
+      typedef std::conditional_t<std::is_signed_v<offset_t>, int32_t, uint32_t>
+          offset_fits_t;
+
+      static uint32_t convert_offset(offset_t offset) noexcept
       {
-        offset_assert(offset);
+        if constexpr (has_custom_convert_offset<customcls, offset_t>)
+          return customcls::convert_offset(offset);
+        else
+          return (offset >> offset_pad);
       }
 
-      static void offset_assert(offset_t offset)
+      static bool offset_fits(offset_fits_t offset) noexcept
       {
-        generate_asserters(llabs(offset >> 2) < (offset_mask >> 1), offset,
-                           (26, offset_type::imm26_0),
-                           (19, offset_type::imm19_5),
-                           (14, offset_type::imm14_5));
+        if constexpr (has_custom_offset_fits<customcls, offset_t>)
+          return customcls::offset_fits(offset);
+        else
+        {
+          if constexpr (offset_pad != 0)
+          {
+            if (offset & utils::bitsfill<uint32_t>(offset_pad))
+              return false;
+          }
+          if constexpr (std::is_signed_v<offset_t>)
+            return convert_offset(abs(offset)) <= (offset_max >> 1);
+          else
+            return convert_offset(offset) <= offset_max;
+        }
+      }
+
+      static void assert_offset(offset_t offset)
+      {
+        if constexpr (has_custom_assert_offset<customcls, offset_t>)
+          customcls::assert_offset(offset);
+        else if constexpr (offset_format == offset_type::imm26_0_pad2)
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 26 bits");
+        else if constexpr (utils::any_of(offset_format,
+                                         offset_type::imm2_29_19_5,
+                                         offset_type::imm2_29_19_5_pad12))
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 21 bits");
+        else if constexpr (offset_format == offset_type::imm19_5_pad2)
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 19 bits");
+        else if constexpr (offset_format == offset_type::uimm16_5)
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 16 bits");
+        else if constexpr (offset_format == offset_type::imm14_5_pad2)
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 14 bits");
+        else if constexpr (utils::any_of(offset_format, offset_type::uimm12_10,
+                                         offset_type::uimm12_10_pad1,
+                                         offset_type::uimm12_10_pad2,
+                                         offset_type::uimm12_10_pad3))
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 12 bits");
+        else
+          static_assert(utils::always_false<base>, "offset type not covered");
+      }
+
+      template <typename... types>
+      customized_offset_operand(uint32_t opcode, offset_t offset,
+                                types&&... rest)
+          : base((assert_offset(offset),
+                  patch_operand<2>(offset_encoding, opcode,
+                                   convert_offset(offset))),
+                 std::forward<types>(rest)...)
+      {
       }
 
       void set_offset(offset_t offset)
       {
-        offset_assert(offset);
-        base::instr &= ~(offset_mask << offset_shift);
-        base::instr |= ((offset >> 2) << offset_shift);
+        assert_offset(offset);
+        base::instr = patch_operand<2>(offset_encoding, base::instr, offset);
       }
     };
+
+    template <typename offset_format_t, typename base = INSTRUCTION>
+    using offset_operand =
+        customized_offset_operand<void, offset_format_t, base>;
 
     template <typename base = INSTRUCTION>
     struct condition_operand : base
     {
-      static constexpr uint32_t condition_mask = 0xF;
+      static constexpr cs_operand_encoding condition_encoding = { 1,
+                                                                  { 0 },
+                                                                  { 4 } };
+      static constexpr size_t              condition_max      = 0xF;
+      typedef uint8_t                      condition_t;
 
-      template <typename... types>
-      condition_operand(uint32_t opcode, uint8_t cond, types&&... args)
-          : base(opcode | static_cast<uint32_t>(cond),
-                 std::forward<types>(args)...)
+      static void
+          assert_condition([[maybe_unused]] condition_t condition) noexcept
       {
-        utils_assert(cond <= condition_mask,
+        utils_assert(condition <= condition_max,
                      "condition value too large to fit in 4 bits");
       }
 
-      void set_condition(uint8_t cond)
+      template <typename... types>
+      condition_operand(uint32_t opcode, condition_t condition, types&&... rest)
+          : base((assert_condition(condition),
+                  patch_operand<1>(condition_encoding, opcode, condition)),
+                 std::forward<types>(rest)...)
       {
-        utils_assert(cond <= condition_mask,
-                     "condition value too large to fit in 4 bits");
-        base::instr &= ~condition_mask;
-        base::instr |= cond;
+      }
+
+      void set_condition(condition_t condition) noexcept
+      {
+        assert_condition(condition);
+        base::instr =
+            patch_operand<1>(condition_encoding, base::instr, condition);
       }
     };
 
@@ -142,283 +351,481 @@ namespace alterhook::aarch64
     struct register_operand : base
     {
       static constexpr register_type register_format = register_format_t::value;
-      static constexpr uint32_t      register_mask   = 0x1F;
-      static constexpr uint32_t      register_shift =
-          register_format == register_type::reg5_5 ? 5 : 0;
+      static constexpr cs_operand_encoding register_encoding =
+          register_encodings[utils::to_underlying(register_format)];
+      static constexpr uint32_t register_max = 0x1F;
+      typedef reg_t             register_t;
 
-      template <typename... types>
-      register_operand(uint32_t opcode, uint8_t reg, types&&... args)
-          : base(opcode | (static_cast<uint32_t>(reg) << register_shift),
-                 std::forward<types>(args)...)
+      static void assert_register([[maybe_unused]] register_t reg) noexcept
       {
-        utils_assert(reg < register_mask,
+        utils_assert(reg <= register_max,
                      "register value too large to fit in 5 bits");
       }
 
-      void set_register(uint8_t reg)
+      template <typename... types>
+      register_operand(uint32_t opcode, register_t reg, types&&... args)
+          : base((assert_register(reg),
+                  patch_operand<1>(register_encoding, opcode, reg)),
+                 std::forward<types>(args)...)
       {
-        utils_assert(reg < register_mask,
-                     "register value too large to fit in 5 bits");
-        base::instr &= ~(register_mask << register_shift);
-        base::instr |= (static_cast<uint32_t>(reg) << register_shift);
+      }
+
+      void set_register(register_t reg) noexcept
+      {
+        assert_register(reg);
+        base::instr = patch_operand<1>(register_encoding, base::instr, reg);
       }
     };
 
-    template <typename size_format_t, typename base = INSTRUCTION>
-    struct size_operand : base
+    template <typename resizable_register_format_t, typename base = INSTRUCTION>
+    struct resizable_register_operand : base
     {
-      static constexpr size_type size_format = size_format_t::value;
-      static constexpr uint32_t  size_mask =
-          size_format == size_type::size2_30 ? 0b11 : 1;
-      static constexpr uint32_t size_shift =
-          size_format == size_type::size_31 ? 31 : 30;
+      static constexpr resizable_register_type resizable_register_format =
+          resizable_register_format_t::value;
+      static constexpr cs_operand_encoding resizable_register_encoding =
+          resizable_register_encodings[utils::to_underlying(
+              resizable_register_format)];
+      static constexpr cs_operand_encoding regsize_encoding =
+          regsize_encodings[utils::to_underlying(resizable_register_format)];
+      static constexpr uint32_t register_max = 0x1F;
+      typedef utils::type_sequence<wregisters, xregisters, qregisters>
+          valid_registers;
 
-      template <typename... types>
-      size_operand(uint32_t opcode, register_size size, types&&... args)
-          : base(opcode | (static_cast<uint32_t>(size) << size_shift),
-                 std::forward<types>(args)...)
+      template <typename T>
+      static void assert_resizable_register([[maybe_unused]] T reg) noexcept
       {
-        if constexpr (size_mask == 1)
-          utils_assert(size != register_size::qword,
-                       "size cannot be qword on this instruction");
+        utils_assert(utils::to_underlying(reg) <= register_max,
+                     "register value too large to fit in 5 bits");
       }
 
-      void set_size(register_size size)
+      template <typename T>
+      static constexpr void ctime_assert()
       {
-        if constexpr (size_mask == 1)
-          utils_assert(size != register_size::qword,
-                       "size cannot be qword on this instruction");
+        static_assert(valid_registers::template has<T>,
+                      "an invalid register type was passed to "
+                      "`assert_resizable_register`");
+        static_assert(valid_registers::template find<T> <=
+                          regsize_encoding.sizes[0],
+                      "register size type not allowed on this instruction");
+      }
 
-        base::instr &= ~(size_mask << size_shift);
-        base::instr |= (static_cast<uint32_t>(size) << size_shift);
+      template <typename T, typename... types>
+      resizable_register_operand(uint32_t opcode, T reg, types&&... rest)
+          : base((assert_resizable_register(reg),
+                  patch_operand<1>(resizable_register_encoding, opcode,
+                                   utils::to_underlying(reg)) |
+                      patch_operand<1>(regsize_encoding, opcode,
+                                       valid_registers::template find<T>)),
+                 std::forward<types>(rest)...)
+      {
+        ctime_assert<T>();
+      }
+
+      template <typename T>
+      void set_register(T reg) noexcept
+      {
+        ctime_assert<T>();
+        assert_resizable_register(reg);
+        base::instr = patch_operand<1>(
+            resizable_register_encoding,
+            patch_operand<1>(regsize_encoding, base::instr,
+                             valid_registers::template find<T>),
+            utils::to_underlying(reg));
       }
     };
 
     template <typename base = INSTRUCTION>
-    struct bit_pos_operand : base
+    struct bitpos_operand : base
     {
-      static constexpr uint32_t bit_pos_mask1  = 0x1F;
-      static constexpr uint32_t bit_pos_mask2  = 1;
-      static constexpr uint32_t bit_pos_shift1 = 19;
-      static constexpr uint32_t bit_pos_shift2 = 31;
+      static constexpr cs_operand_encoding bitpos_encoding = {
+        2, {31, 19},
+         { 1, 5 }
+      };
+      static constexpr size_t bitpos_max = 0x3F;
+      typedef uint8_t         bitpos_t;
 
-      template <typename... types>
-      bit_pos_operand(uint32_t opcode, uint8_t pos, types&&... args)
-          : base(opcode | ((pos & bit_pos_mask1) << bit_pos_shift1) |
-                     ((pos >> 5) << bit_pos_shift2),
-                 std::forward<types>(args)...)
+      static void assert_bitpos([[maybe_unused]] bitpos_t bitpos) noexcept
       {
-        utils_assert(pos <= 0x3F, "bit position too large to fit in 6 bits");
+        utils_assert(bitpos <= bitpos_max,
+                     "bit position value too large to fit in 6 bits");
       }
 
-      void set_bit_position(uint8_t pos)
+      template <typename... types>
+      bitpos_operand(uint32_t opcode, bitpos_t bitpos, types&&... rest)
+          : base((assert_bitpos(bitpos),
+                  patch_operand<2>(bitpos_encoding, opcode, bitpos)),
+                 std::forward<types>(rest)...)
       {
-        utils_assert(pos <= 0x3F, "bit position too large to fit in 6 bits");
-        base::instr &= ~((bit_pos_mask1 << bit_pos_shift1) |
-                         (bit_pos_mask2 << bit_pos_shift2));
-        base::instr |= (((pos & bit_pos_mask1) << bit_pos_shift1) |
-                        ((pos >> 5) << bit_pos_shift2));
+      }
+
+      void set_bit_position(bitpos_t bitpos) noexcept
+      {
+        assert_bitpos(bitpos);
+        base::instr = patch_operand<2>(bitpos_encoding, base::instr, bitpos);
       }
     };
 
-    template <typename offset_pad_num_t, typename base = INSTRUCTION>
-    struct splited_offset_operand : base
+    template <size_t pad = 0>
+    struct rorimmhi_immlo
     {
-      static constexpr offset_pad_type offset_pad_num = offset_pad_num_t::value;
-      static constexpr uint32_t        offset_max     = 0x1F'FF'FF;
-      static constexpr uint32_t        offset_maskhi  = 0x7'FF'FF;
-      static constexpr uint32_t        offset_masklo  = 0b11;
-      static constexpr uint32_t        offset_shifthi = 5;
-      static constexpr uint32_t        offset_shiftlo = 29;
-      static constexpr uint32_t        offset_pad =
-          offset_pad_num == offset_pad_type::twelve ? 12 : 0;
-
-      template <typename... types>
-      splited_offset_operand(uint32_t opcode, int32_t offset, types&&... args)
-          : base(opcode |
-                     ((static_cast<uint32_t>(offset >> offset_pad) &
-                       offset_masklo)
-                      << offset_shiftlo) |
-                     (static_cast<uint32_t>(offset >> (offset_pad + 2))
-                      << offset_shifthi),
-                 std::forward<types>(args)...)
+      static uint32_t convert_offset(int32_t offset) noexcept
       {
-        utils_assert(llabs(offset >> offset_pad) < (offset_max >> 1),
-                     "offset too large to fit in 21 bits");
-      }
-
-      void set_offset(int32_t offset)
-      {
-        utils_assert(llabs(offset >> offset_pad) < (offset_max >> 1),
-                     "offset too large to fit in 21 bits");
-        base::instr &= ~((offset_masklo << offset_shiftlo) |
-                         (offset_maskhi << offset_shifthi));
-        base::instr |=
-            (((static_cast<uint32_t>(offset >> offset_pad) & offset_masklo)
-              << offset_shiftlo) |
-             (static_cast<uint32_t>(offset >> (offset_pad + 2))
-              << offset_shifthi));
+        offset >>= pad;
+        return ((offset & 0b11) << 19) | (offset >> 2);
       }
     };
   } // namespace templates
 
+  struct ADD : utils::properties<
+                   utils::property<
+                       templates::resizable_register_operand,
+                       utils::val<resizable_register_type::reg5_0_size1_31>>,
+                   utils::property<
+                       templates::resizable_register_operand,
+                       utils::val<resizable_register_type::reg5_5_size1_31>>,
+                   utils::property<templates::offset_operand,
+                                   utils::val<offset_type::uimm12_10>>>
+  {
+    static constexpr uint32_t opcode = 0x11'00'00'00;
+
+    template <typename T = wregisters>
+    ADD(T destreg = T(), T srcreg = T(), offset_t offset = 0)
+        : base(opcode, offset, srcreg, destreg)
+    {
+    }
+
+    template <typename T>
+    void set_destination_register(T reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    template <typename T>
+    void set_source_register(T reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    template <typename T>
+    void set_register(T) noexcept = delete;
+  };
+
+  struct SUB : utils::properties<
+                   utils::property<
+                       templates::resizable_register_operand,
+                       utils::val<resizable_register_type::reg5_0_size1_31>>,
+                   utils::property<
+                       templates::resizable_register_operand,
+                       utils::val<resizable_register_type::reg5_5_size1_31>>,
+                   utils::property<templates::offset_operand,
+                                   utils::val<offset_type::uimm12_10>>>
+  {
+    static constexpr uint32_t opcode = 0x51'00'00'00;
+
+    template <typename T = wregisters>
+    SUB(T destreg = T(), T srcreg = T(), offset_t offset = 0)
+        : base(opcode, offset, srcreg, destreg)
+    {
+    }
+
+    template <typename T>
+    void set_destination_register(T reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    template <typename T>
+    void set_source_register(T reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    template <typename T>
+    void set_register(T) noexcept = delete;
+  };
+
   struct B
-      : utils::properties<utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm26_0>>>
+      : utils::properties<utils::property<
+            templates::offset_operand, utils::val<offset_type::imm26_0_pad2>>>
   {
     static constexpr uint32_t opcode = 0x14'00'00'00;
 
-    B(int32_t offset = 0) : base(opcode, offset) {}
+    B(offset_t offset = 0) : base(opcode, offset) {}
   };
 
   struct BL
-      : utils::properties<utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm26_0>>>
+      : utils::properties<utils::property<
+            templates::offset_operand, utils::val<offset_type::imm26_0_pad2>>>
   {
     static constexpr uint32_t opcode = 0x94'00'00'00;
 
-    BL(int32_t offset = 0) : base(opcode, offset) {}
+    BL(offset_t offset = 0) : base(opcode, offset) {}
   };
 
-  struct B_cond
-      : utils::properties<utils::property<templates::condition_operand>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm19_5>>>
+  struct B_cond : utils::properties<
+                      utils::property<templates::condition_operand>,
+                      utils::property<templates::offset_operand,
+                                      utils::val<offset_type::imm19_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x54'00'00'00;
 
-    B_cond(int32_t offset = 0, uint8_t cond = 0) : base(opcode, offset, cond) {}
+    B_cond(offset_t offset = 0, condition_t cond = 0)
+        : base(opcode, offset, cond)
+    {
+    }
   };
 
-  struct CBZ
-      : utils::properties<utils::property<templates::size_operand,
-                                          utils::val<size_type::size_31>>,
-                          utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm19_5>>>
+  struct CBZ : utils::properties<
+                   utils::property<
+                       templates::resizable_register_operand,
+                       utils::val<resizable_register_type::reg5_0_size1_31>>,
+                   utils::property<templates::offset_operand,
+                                   utils::val<offset_type::imm19_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x34'00'00'00;
 
-    CBZ(int32_t offset = 0, reg_t reg = W0,
-        register_size size = register_size::word)
-        : base(opcode, offset, reg, size)
+    template <typename T = wregisters>
+    CBZ(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
     {
     }
   };
 
-  struct CBNZ
-      : utils::properties<utils::property<templates::size_operand,
-                                          utils::val<size_type::size_31>>,
-                          utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm19_5>>>
+  struct CBNZ : utils::properties<
+                    utils::property<
+                        templates::resizable_register_operand,
+                        utils::val<resizable_register_type::reg5_0_size1_31>>,
+                    utils::property<templates::offset_operand,
+                                    utils::val<offset_type::imm19_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x35'00'00'00;
 
-    CBNZ(int32_t offset = 0, reg_t reg = W0,
-         register_size size = register_size::word)
-        : base(opcode, offset, reg, size)
+    template <typename T = wregisters>
+    CBNZ(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
     {
     }
   };
 
-  struct TBZ
-      : utils::properties<utils::property<templates::bit_pos_operand>,
-                          utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm14_5>>>
+  struct TBZ : utils::properties<
+                   utils::property<templates::bitpos_operand>,
+                   utils::property<templates::register_operand,
+                                   utils::val<register_type::reg5_5>>,
+                   utils::property<templates::offset_operand,
+                                   utils::val<offset_type::imm14_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x36'00'00'00;
 
-    TBZ(int16_t offset = 0, reg_t reg = W0, uint8_t bit_pos = 0)
-        : base(opcode, offset, reg, bit_pos)
+    TBZ(offset_t offset = 0, register_t reg = W0, bitpos_t bitpos = 0)
+        : base(opcode, offset, reg, bitpos)
     {
     }
   };
 
-  struct TBNZ
-      : utils::properties<utils::property<templates::bit_pos_operand>,
-                          utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm14_5>>>
+  struct TBNZ : utils::properties<
+                    utils::property<templates::bitpos_operand>,
+                    utils::property<templates::register_operand,
+                                    utils::val<register_type::reg5_5>>,
+                    utils::property<templates::offset_operand,
+                                    utils::val<offset_type::imm14_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x37'00'00'00;
 
-    TBNZ(int16_t offset = 0, reg_t reg = W0, uint8_t bit_pos = 0)
-        : base(opcode, offset, reg, bit_pos)
+    TBNZ(offset_t offset = 0, register_t reg = W0, bitpos_t bitpos = 0)
+        : base(opcode, offset, reg, bitpos)
     {
     }
   };
 
-  struct LDR
-      : utils::properties<utils::property<templates::size_operand,
-                                          utils::val<size_type::size_30>>,
-                          utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm19_5>>>
+  struct LDRu32 : utils::properties<
+                      utils::property<templates::register_operand,
+                                      utils::val<register_type::reg5_0>>,
+                      utils::property<templates::register_operand,
+                                      utils::val<register_type::reg5_5>>,
+                      utils::property<templates::offset_operand,
+                                      utils::val<offset_type::uimm12_10_pad2>>>
+  {
+    static constexpr uint32_t opcode = 0xB9'40'00'00;
+
+    LDRu32(reg_t destreg = W0, reg_t basereg = W0, offset_t offset = 0)
+        : base(opcode, offset, basereg, destreg)
+    {
+    }
+
+    void set_destination_register(reg_t reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    void set_base_register(reg_t reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    void set_register(reg_t) noexcept = delete;
+  };
+
+  struct LDRu64 : utils::properties<
+                      utils::property<templates::register_operand,
+                                      utils::val<register_type::reg5_0>>,
+                      utils::property<templates::register_operand,
+                                      utils::val<register_type::reg5_5>>,
+                      utils::property<templates::offset_operand,
+                                      utils::val<offset_type::uimm12_10_pad3>>>
+  {
+    static constexpr uint32_t opcode = 0xF9'40'00'00;
+
+    LDRu64(reg_t destreg = W0, reg_t basereg = W0, offset_t offset = 0)
+        : base(opcode, offset, basereg, destreg)
+    {
+    }
+
+    void set_destination_register(reg_t reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    void set_base_register(reg_t reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    void set_register(reg_t) noexcept = delete;
+  };
+
+  struct LDR_LITERAL
+      : utils::properties<
+            utils::property<
+                templates::resizable_register_operand,
+                utils::val<resizable_register_type::reg5_0_size1_30>>,
+            utils::property<templates::offset_operand,
+                            utils::val<offset_type::imm19_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x18'00'00'00;
 
-    LDR(int32_t offset = 0, reg_t reg = W0,
-        register_size size = register_size::word)
-        : base(opcode, offset, reg, size)
+    template <typename T = wregisters>
+    LDR_LITERAL(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
     {
     }
   };
 
-  struct LDRSW
-      : utils::properties<utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm19_5>>>
+  struct LDRSWu : utils::properties<
+                      utils::property<templates::register_operand,
+                                      utils::val<register_type::reg5_0>>,
+                      utils::property<templates::register_operand,
+                                      utils::val<register_type::reg5_5>>,
+                      utils::property<templates::offset_operand,
+                                      utils::val<offset_type::uimm12_10_pad3>>>
+  {
+    static constexpr uint32_t opcode = 0xB9'80'00'00;
+
+    LDRSWu(reg_t destreg = W0, reg_t basereg = W0, offset_t offset = 0)
+        : base(opcode, offset, basereg, destreg)
+    {
+    }
+
+    void set_destination_register(reg_t reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    void set_base_register(reg_t reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    void set_register(reg_t) noexcept = delete;
+  };
+
+  struct LDRSW_LITERAL
+      : utils::properties<
+            utils::property<templates::register_operand,
+                            utils::val<register_type::reg5_0>>,
+            utils::property<templates::offset_operand,
+                            utils::val<offset_type::imm19_5_pad2>>>
   {
     static constexpr uint32_t opcode = 0x98'00'00'00;
 
-    LDRSW(int32_t offset = 0, reg_t reg = W0) : base(opcode, offset, reg) {}
-  };
-
-  struct LDRV
-      : utils::properties<utils::property<templates::size_operand,
-                                          utils::val<size_type::size2_30>>,
-                          utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::offset_operand,
-                                          utils::val<offset_type::imm19_5>>>
-  {
-    static constexpr uint32_t opcode = 0x1C'00'00'00;
-
-    LDRV(int32_t offset = 0, reg_t reg = W0,
-         register_size size = register_size::word)
-        : base(opcode, offset, reg, size)
+    LDRSW_LITERAL(offset_t offset = 0, register_t reg = X0)
+        : base(opcode, offset, reg)
     {
     }
   };
 
-  struct ADR
-      : utils::properties<utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::splited_offset_operand,
-                                          utils::val<offset_pad_type::none>>>
+  template <
+      uint32_t opc, offset_type offtype,
+      typename base = utils::properties<
+          utils::property<templates::register_operand,
+                          utils::val<register_type::reg5_0>>,
+          utils::property<templates::register_operand,
+                          utils::val<register_type::reg5_5>>,
+          utils::property<templates::offset_operand, utils::val<offtype>>>>
+  struct LDRVu : base
+  {
+    typedef typename base::template property_at<0> usefirst;
+    typedef typename base::template property_at<1> usesecond;
+
+    static constexpr uint32_t opcode = opc;
+
+    LDRVu(uint8_t destreg = 0, reg_t basereg = W0,
+          typename base::offset_t offset = 0)
+        : base(opcode, offset, basereg, static_cast<reg_t>(destreg))
+    {
+    }
+
+    void set_destination_register(uint8_t reg) noexcept
+    {
+      usefirst::set_register(static_cast<reg_t>(reg));
+    }
+
+    void set_base_register(reg_t reg) noexcept { usesecond::set_register(reg); }
+
+    void set_register(reg_t) noexcept = delete;
+  };
+
+  using LDRVu8   = LDRVu<0x3D'40'00'00, offset_type::uimm12_10>;
+  using LDRVu16  = LDRVu<0x7D'40'00'00, offset_type::uimm12_10_pad1>;
+  using LDRVu32  = LDRVu<0xBD'40'00'00, offset_type::uimm12_10_pad2>;
+  using LDRVu64  = LDRVu<0xFD'40'00'00, offset_type::uimm12_10_pad3>;
+  using LDRVu128 = LDRVu<0x3D'C0'00'00, offset_type::uimm12_10_pad4>;
+
+  struct LDRV_LITERAL
+      : utils::properties<
+            utils::property<
+                templates::resizable_register_operand,
+                utils::val<resizable_register_type::reg5_0_size2_30>>,
+            utils::property<templates::offset_operand,
+                            utils::val<offset_type::imm19_5_pad2>>>
+  {
+    static constexpr uint32_t opcode = 0x1C'00'00'00;
+
+    template <typename T = wregisters>
+    LDRV_LITERAL(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
+    {
+    }
+  };
+
+  struct ADR : utils::properties<
+                   utils::property<templates::register_operand,
+                                   utils::val<register_type::reg5_0>>,
+                   utils::property<templates::customized_offset_operand,
+                                   templates::rorimmhi_immlo<0>,
+                                   utils::val<offset_type::imm2_29_19_5>>>
   {
     static constexpr uint32_t opcode = 0x10'00'00'00;
 
-    ADR(int32_t offset = 0, reg_t reg = W0) : base(opcode, offset, reg) {}
+    ADR(offset_t offset = 0, reg_t reg = X0) : base(opcode, offset, reg) {}
   };
 
   struct ADRP
-      : utils::properties<utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_0>>,
-                          utils::property<templates::splited_offset_operand,
-                                          utils::val<offset_pad_type::twelve>>>
+      : utils::properties<
+            utils::property<templates::register_operand,
+                            utils::val<register_type::reg5_0>>,
+            utils::property<templates::customized_offset_operand,
+                            templates::rorimmhi_immlo<12>,
+                            utils::val<offset_type::imm2_29_19_5_pad12>>>
   {
     static constexpr uint32_t opcode = 0x90'00'00'00;
 
-    ADRP(int32_t offset = 0, reg_t reg = W0) : base(opcode, offset, reg) {}
+    ADRP(offset_t offset = 0, reg_t reg = X0) : base(opcode, offset, reg) {}
   };
 
   struct BR
@@ -429,6 +836,60 @@ namespace alterhook::aarch64
 
     BR(reg_t reg = W0) : base(opcode, reg) {}
   };
+
+  struct BRK
+      : utils::properties<utils::property<templates::offset_operand,
+                                          utils::val<offset_type::uimm16_5>>>
+  {
+    static constexpr uint32_t opcode = 0xD4'20'00'00;
+
+    BRK(offset_t offset = 0) : base(opcode, offset) {}
+  };
+
+  struct NOP : INSTRUCTION
+  {
+    static constexpr uint32_t opcode = 0xD5'03'20'1F;
+
+    NOP() : INSTRUCTION(opcode) {}
+  };
+
+  namespace custom
+  {
+    struct FULL_JMP
+    {
+      const LDR_LITERAL ldr{ 8, xregisters::X17 };
+      const BR          br{ X17 };
+      uint64_t          address = 0;
+
+      FULL_JMP(uint64_t address = 0) : address(address) {}
+    };
+
+    struct JMP
+    {
+      const LDR_LITERAL ldr;
+      const BR          br{ X17 };
+
+      JMP(int32_t ldr_offset = 0) : ldr(ldr_offset, xregisters::X17) {}
+    };
+
+    template <typename T>
+    struct LDR_LIKE_ABS
+    {
+      const LDR_LITERAL fetch_ldr;
+      const T           ldr;
+
+      LDR_LIKE_ABS(reg_t reg = X0, reg_t tmp_reg = X0, int32_t offset = 0)
+          : fetch_ldr(offset, tmp_reg), ldr(reg, tmp_reg)
+      {
+      }
+    };
+
+    using LDR_ABS     = LDR_LIKE_ABS<LDRu64>;
+    using LDRSW_ABS   = LDR_LIKE_ABS<LDRSWu>;
+    using LDRV32_ABS  = LDR_LIKE_ABS<LDRVu32>;
+    using LDRV64_ABS  = LDR_LIKE_ABS<LDRVu64>;
+    using LDRV128_ABS = LDR_LIKE_ABS<LDRVu128>;
+  } // namespace custom
 } // namespace alterhook::aarch64
 
 #pragma GCC visibility pop

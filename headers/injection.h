@@ -6,19 +6,15 @@
 #else
   #include "windows_thread_handler.h"
 #endif
-
-#if !utils_msvc
-  #pragma GCC diagnostic push
-  #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
+#pragma GCC visibility push(hidden)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
 namespace alterhook
 {
   extern std::shared_mutex hook_lock;
 
 #if utils_windows
-  #define __int_old_protect
-  #define __old_protect_from(other)
   #define __define_old_protect(flags) DWORD old_protect = 0
   #define __prot_data(address, size)  std::pair(address, size)
   #define execset(address, size)                                               \
@@ -32,31 +28,27 @@ namespace alterhook
   #define execflush(address, size)                                             \
     FlushInstructionCache(GetCurrentProcess(), address, size)
 #else
-  extern const long memory_block_size;
+  extern const size_t memory_block_size;
 
-  #define __int_old_protect         , int old_protect
-  #define __old_protect_from(other) , to_linux_prot(other.old_protect)
   #define __define_old_protect(flags)                                          \
     int old_protect = to_linux_prot(flags.old_protect)
 
-  ALTERHOOK_HIDDEN inline std::pair<std::byte*, size_t>
-      __prot_data(std::byte* address, size_t size) noexcept
+  inline std::pair<std::byte*, size_t> __prot_data(std::byte* address,
+                                                   size_t     size) noexcept
   {
-    std::byte* const prot_addr = reinterpret_cast<std::byte*>(
-        utils_align(reinterpret_cast<uintptr_t>(address), memory_block_size));
-    const size_t prot_size =
-        utils_align((address - prot_addr) + size + (memory_block_size - 1),
-                    memory_block_size);
+    std::byte* const prot_addr = utils::align(address, memory_block_size);
+    const size_t     prot_size =
+        utils::align_up((address - prot_addr) + size, memory_block_size);
     return { prot_addr, prot_size };
   }
 
-  ALTERHOOK_HIDDEN inline bool execset(std::byte* address, size_t size) noexcept
+  inline bool execset(std::byte* address, size_t size) noexcept
   {
     constexpr int execprot = PROT_READ | PROT_WRITE | PROT_EXEC;
     return mprotect(address, size, execprot) != -1;
   }
 
-  ALTERHOOK_HIDDEN inline int to_linux_prot(protection_info protinfo) noexcept
+  inline int to_linux_prot(protection_info protinfo) noexcept
   {
     int result = PROT_NONE;
 
@@ -114,7 +106,7 @@ namespace alterhook
   void set_relay(std::byte* prelay, const std::byte* detour);
 #endif
 
-  struct ALTERHOOK_HIDDEN injectors
+  struct injectors
   {
   private:
     template <typename T, typename obj>
@@ -199,6 +191,5 @@ namespace alterhook
   __utils_call(utils_concat(__patch, utils_sizeof(__VA_ARGS__)), (__VA_ARGS__))
 } // namespace alterhook
 
-#if !utils_msvc
-  #pragma GCC diagnostic pop
-#endif
+#pragma GCC diagnostic pop
+#pragma GCC visibility pop

@@ -255,6 +255,9 @@ namespace alterhook
       virtual original& operator=(std::nullptr_t null)      = 0;
       virtual original& operator=(const std::byte* address) = 0;
 
+      // not needed but put nevertheless to prevent any compiler warnings
+      virtual ~original() {}
+
       template <typename T>
       bool contains_ref(T& orig);
     };

@@ -1,6 +1,8 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include "../utilities/utils_macros.h"
+
 #if (defined(ALTERHOOK_SHARED) &&                                              \
      (defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)))
   #ifdef ALTERHOOK_EXPORT
@@ -13,14 +15,6 @@
 #else
   #define ALTERHOOK_API
 #endif
-#ifdef __GNUC__
-  #define ALTERHOOK_HIDDEN __attribute__((visibility("hidden")))
-#else
-  #define ALTERHOOK_HIDDEN
-#endif
-
-#define utils_visibility ALTERHOOK_API
-#include "../utilities/utils_macros.h"
 
 #if !utils_arm && !utils_arm64 && !utils_x86 && !utils_x64
   #error unsupported architecture
@@ -302,9 +296,3 @@
   const_##itr chain_c##name() const noexcept { return hook_chain::name(); }
 
 #define __alterhook_decl_itr_func(params) __alterhook_decl_itr_func2 params
-
-#if defined(ALTERHOOK_ALWAYS_USE_RELAY) && utils_x64
-  #define always_use_relay true
-#else
-  #define always_use_relay false
-#endif

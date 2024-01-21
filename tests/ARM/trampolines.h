@@ -4,18 +4,13 @@
 #include <gtest/gtest.h>
 #include "trampolines_general.h"
 
-#if utils_gcc
-  #pragma GCC push_options
-  #pragma GCC optimize("O0")
-#endif
-
 #ifdef TEST_TARGET_ARM
-  #define test_target()         target("arm")
+  #define targetstr             "arm"
   #define test_target_namespace arm
   #define test_group(x)         Arm##x
   #define test_asm_symbol(x)    "ARM" #x
 #else
-  #define test_target()         target("thumb")
+  #define targetstr             "thumb"
   #define test_target_namespace thumb
   #define test_group(x)         Thumb##x
   #define test_asm_symbol(x)    "THUMB" #x
@@ -27,7 +22,7 @@ namespace test_target_namespace
 {
   namespace test1
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(push { lr }
              add r1, pc, #8
@@ -39,7 +34,7 @@ namespace test_target_namespace
 
   namespace test2
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(push { lr }
              cmp r0, r1
@@ -51,7 +46,7 @@ namespace test_target_namespace
 
   namespace test3
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(push { lr }
              ldrb r0, 0f
@@ -65,7 +60,7 @@ namespace test_target_namespace
 
   namespace test4
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(add r0, pc
              push { r1, r2, lr }
@@ -78,7 +73,7 @@ namespace test_target_namespace
 
   namespace test5
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(adr r4, 0f
              ldm r4, { r0, r1, r2, r3 }
@@ -94,7 +89,7 @@ namespace test_target_namespace
 
   namespace test6
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(ldr r0, [r0]
              bx r0)");
@@ -103,7 +98,7 @@ namespace test_target_namespace
 
   namespace test7
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(mov r0, pc
              add r1, pc, #12
@@ -116,7 +111,7 @@ namespace test_target_namespace
 
   namespace test8
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(mov r1, pc
              it AL
@@ -130,7 +125,7 @@ namespace test_target_namespace
 
   namespace test9
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(ittt AL
              moval r0, #5
@@ -144,7 +139,7 @@ namespace test_target_namespace
 
   namespace test10
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(itte EQ
              mvneq r0, r0
@@ -153,7 +148,7 @@ namespace test_target_namespace
              b print_hex)");
     }
 
-    __attribute__((naked, optnone)) void proper_call()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void proper_call()
     {
       asm(R"(push { r4, r5, lr }
              mov r4, r0
@@ -176,7 +171,7 @@ namespace test_target_namespace
 
   namespace test11
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(b 0f
              b print_hex
@@ -187,7 +182,7 @@ namespace test_target_namespace
 
   namespace test12
   {
-    __attribute__((naked, optnone, test_target())) void func()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void func()
     {
       asm(R"(beq 1f
              b 0f
@@ -198,7 +193,7 @@ namespace test_target_namespace
              mov pc, lr)");
     }
 
-    __attribute__((naked, optnone)) void proper_call()
+    [[gnu::naked, gnu::target(targetstr), clang::optnone]] void proper_call()
     {
       asm(R"(push { r0, r1, lr }
              cmp r0, r0
@@ -210,7 +205,3 @@ namespace test_target_namespace
     }
   } // namespace test12
 } // namespace test_target_namespace
-
-#if utils_gcc
-  #pragma GCC pop_options
-#endif

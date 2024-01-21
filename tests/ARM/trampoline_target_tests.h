@@ -139,7 +139,7 @@ TEST(test_group(TrampolineTest), Test12)
   std::cout << "CONTENT:\n" << trampoline.str() << '\n';
 }
 
-#undef test_target
+#undef targetstr
 #undef test_target_namespace
 #undef test_group
 #undef test_asm_symbol

@@ -13,6 +13,7 @@
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wreturn-type"
   #pragma clang diagnostic ignored "-Wunused-parameter"
+  #pragma clang diagnostic ignored "-Wcomma"
 #endif
 
 namespace alterhook

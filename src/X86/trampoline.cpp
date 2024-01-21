@@ -8,24 +8,16 @@
 #include "trampoline.h"
 #include "x86_instructions.h"
 
-#if utils_64bit
-  #define __alterhook_pass_alloc_arg(x) x
-#else
-  #define __alterhook_pass_alloc_arg(x)
-#endif
-
 namespace alterhook
 {
-  void trampoline::deleter::operator()(std::byte* ptrampoline) const noexcept
+  void trampoline::deleter::operator()(std::byte* src) const noexcept
   {
-    trampoline_buffer::deallocate(ptrampoline);
+    trampoline_buffer::deallocate(src);
   }
 
   extern std::shared_mutex hook_lock;
 
-#if !utils_windows
-  #pragma GCC visibility push(hidden)
-#endif
+#pragma GCC visibility push(hidden)
 
   static bool is_pad(const std::byte* target, size_t size) noexcept
   {
@@ -104,14 +96,12 @@ namespace alterhook
   }
 #endif
 
-#if utils_msvc
-  #pragma warning(push)
-  #pragma warning(disable : 4244 4018 4267)
-#else
-  #pragma GCC diagnostic push
-  #pragma GCC diagnostic ignored "-Wsign-compare"
-  #pragma GCC diagnostic ignored "-Wstrict-overflow"
-#endif
+#pragma warning(push)
+#pragma warning(disable : 4244 4018 4267)
+#pragma GCC diagnostic   push
+#pragma GCC diagnostic   ignored "-Wsign-compare"
+#pragma GCC diagnostic   ignored "-Wstrict-overflow"
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
 
   inline namespace init_impl
   {
@@ -217,7 +207,7 @@ namespace alterhook
           {
             const ptrdiff_t relative_address =
                 (target + entry.id) - (ref.src + ref.instruction_size);
-            constexpr std::array<intptr_t, 4> maxes = {
+            constexpr std::array<int64_t, 4> maxes = {
               (std::numeric_limits<int8_t>::max)(),
               (std::numeric_limits<int16_t>::max)(),
               (std::numeric_limits<int32_t>::max)(),
@@ -238,9 +228,7 @@ namespace alterhook
     };
   } // namespace init_impl
 
-#if !utils_windows
-  #pragma GCC visibility pop
-#endif
+#pragma GCC visibility pop
 
   void trampoline::init(std::byte* target)
   {
@@ -250,8 +238,8 @@ namespace alterhook
     if (!tmp_protinfo.execute)
       throw(exceptions::invalid_address(target));
     if (!ptrampoline)
-      ptrampoline = trampoline_ptr(
-          trampoline_buffer::allocate(__alterhook_pass_alloc_arg(target)));
+      ptrampoline =
+          trampoline_ptr(trampoline_buffer::allocate(__origin(target)));
     if (ptarget)
       reset();
 
@@ -348,8 +336,8 @@ namespace alterhook
             }
             else if ((X86_INS_LOOP <= instr.id && instr.id <= X86_INS_LOOPNE) ||
                      instr.id == X86_INS_JRCXZ || instr.id == X86_INS_JECXZ)
-              throw(exceptions::unsupported_instruction_handling(copy_src,
-                                                                 target));
+              throw(exceptions::unsupported_instruction_handling(
+                  target, utils::to_array<24>(copy_src, copy_src + copy_size)));
             else
             {
               uint8_t condition =
@@ -555,8 +543,7 @@ namespace alterhook
   trampoline::trampoline(const trampoline& other)
       : ptarget(other.ptarget),
         ptrampoline(other.ptarget
-                        ? trampoline_buffer::allocate(
-                              __alterhook_pass_alloc_arg(other.ptarget))
+                        ? trampoline_buffer::allocate(__origin(other.ptarget))
                         : nullptr),
         patch_above(other.patch_above), tramp_size(other.tramp_size),
         positions(other.positions)
@@ -604,7 +591,7 @@ namespace alterhook
       // keeping new buffer to a temporary in case trampcpy throws (very
       // unlikely)
       trampoline_ptr newbuff{ trampoline_buffer::allocate(
-          __alterhook_pass_alloc_arg(ptarget)) };
+          __origin(other.ptarget)) };
       trampcpy(newbuff.get(), other.ptrampoline.get(), other.tramp_size);
       ptrampoline = std::move(newbuff);
     }

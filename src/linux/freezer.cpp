@@ -224,8 +224,8 @@ namespace alterhook
     nested_throw(exceptions::thread_process_fail(tramp_addr, target_addr, pos));
   }
 
-  ALTERHOOK_HIDDEN void report_error(std::byte* tramp, std::byte* target,
-                                     uint8_t pos) noexcept
+  [[gcc::visibility("hidden")]] void
+      report_error(std::byte* tramp, std::byte* target, uint8_t pos) noexcept
   {
     auto& [status, data] = thread_freezer::result;
     bool expected        = false;

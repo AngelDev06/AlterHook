@@ -5,8 +5,6 @@
 #include <cassert>
 
 #define utils_assert(expr, msg) assert(((void)msg, expr))
-#define utils_underlying(enumval)                                              \
-  static_cast<std::underlying_type_t<decltype(enumval)>>(enumval)
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
   #define utils_windows true
@@ -61,14 +59,6 @@
       #endif
     #endif
   #endif
-#endif
-
-#if utils_msvc
-  #define utils_pack_begin() __pragma(pack(push, 1))
-  #define utils_pack_end()   __pragma(pack(pop))
-#else
-  #define utils_pack_begin()
-  #define utils_pack_end()
 #endif
 
 #if utils_gcc || utils_clang
@@ -135,10 +125,6 @@
   #else
     #define utils_cpp17 false
   #endif
-#endif
-
-#ifndef utils_visibility
-  #define utils_visibility
 #endif
 
 #define utils_array_size(array) (sizeof(array) / sizeof(array[0]))
@@ -282,8 +268,6 @@
 #define __utils_member_call_cv_ref_noexcept(fn)                                \
   __utils_member_call_cv_ref(fn, ) __utils_member_call_cv_ref(fn, noexcept)
 
-#define utils_align(value, alignment) ((alignment) * ((value) / (alignment)))
-
 // Applies the function-like macro `macro` to each of the remaining elements
 // e.g. utils_map(func, a, b, c) evaluates to `func(a) func(b) func(c)`
 #define utils_map(macro, ...)                                                  \
@@ -384,13 +368,6 @@
 #define utils_print(...)                                                       \
   std::cout << utils_map_separated(__utils_print_helper, <<, __VA_ARGS__)
 
-#define __utils_call(x, y)    x y
-#define __utils_expand_2(...) 0, 0
-
-#define __utils_check_expanded_impl(x, n, ...) n
-#define __utils_check_expanded(...)                                            \
-  __utils_call(__utils_check_expanded_impl, (__VA_ARGS__, false, ))
-
 #define utils_not(x)      __utils_check_expanded(utils_concat(__utils_not_, x))
 #define __utils_not_0     ~, true
 #define __utils_not_false ~, true
@@ -465,123 +442,192 @@
     count
 #endif
 
-#define utils_is_void_type(x)
+#define __utils_use_if_n(arg, n, index) utils_if(utils_equal(n, index))(arg, )
+#define utils_get(n, ...)               utils_map_ud_indexed(__utils_use_if_n, n, __VA_ARGS__)
+#define utils_comma()                   ,
 
-#define __utils_define_arguments0(type, identifier) type identifier
-#define __utils_define_arguments1(pair)             __utils_define_arguments0 pair
-#define __utils_define_arguments(...)                                          \
-  utils_map_list(__utils_define_arguments1, __VA_ARGS__)
+#define __utils_get_attribute_impl(result)                                     \
+  utils_if(utils_is_call_operator(result))(utils_expand,                       \
+                                           utils_del)(() result utils_del)
 
-#define __utils_pass_parameters0(type, identifier) identifier
-#define __utils_pass_parameters1(pair)             __utils_pass_parameters0 pair
-#define __utils_pass_parameters(...)                                           \
-  utils_map_list(__utils_pass_parameters1, __VA_ARGS__)
+#define __utils_get_attribute(x, attrmacro)                                    \
+  __utils_get_attribute_impl(utils_concat(utils_concat(attrmacro, _), x))
 
-#define __utils_define_fields0(type, identifier)                               \
-  type utils_concat(m_, identifier);
-#define __utils_define_fields1(pair) __utils_define_fields0 pair
+// Note: `utils_expand` followed by `(~)` is a stupid hack for msvc traditional
+// preprocessor to stop complaining about an empty space being passed as an
+// argument. Basically if the attribute we are looking for isn't found and
+// therefore the stuff in the middle will be replaced with nothing then
+// `utils_expand` will leave `~` behind as a result. If found then
+// `utils_expand` will be "invoked" with empty parentheses and `(~)` will be
+// erased with `utils_del`
+#define utils_get_attribute(category, attribute_name, ...)                     \
+  utils_expand utils_map_ud(                                                   \
+      __utils_get_attribute,                                                   \
+      utils_concat(utils_concat(utils_concat(__utils_, category), _),          \
+                   attribute_name),                                            \
+      __VA_ARGS__)(~)
+
+#define __utils_exception_attribute_extra_extra(...)         (__VA_ARGS__)
+#define __utils_exception_attribute_reason_reason(str)       (str)
+#define __utils_exception_attribute_base_args_base_args(...) (__VA_ARGS__)
+#define __utils_exception_attribute_fields_fields(...)       (__VA_ARGS__)
+#define __utils_exception_attribute_stdattr_stdattr(...)     (__VA_ARGS__)
+
+#define __utils_add_exception_attribute_impl(attr)                             \
+  utils_if(utils_is_call_operator(attr))(utils_expand,                         \
+                                         utils_del)(utils_expand attr)
+
+#define __utils_add_exception_attribute(...)                                   \
+  __utils_call2(                                                               \
+      __utils_add_exception_attribute_impl,                                    \
+      (utils_get_attribute(exception_attribute, stdattr, __VA_ARGS__)))
+
+#define utils_equal_hidden_hidden ~, true
+
+#define __utils_define_field_impl_2(type, name)                                \
+private:                                                                       \
+  type utils_concat(m_, name);                                                 \
+                                                                               \
+public:                                                                        \
+  type utils_concat(get_, name)() const { return utils_concat(m_, name); }
+
+#define __utils_define_field_impl_3(type, name, attr)                          \
+private:                                                                       \
+  type utils_concat(m_, name);                                                 \
+  utils_if(utils_not(utils_equal(attr, hidden)))(utils_expand, utils_del)(     \
+      public                                                                   \
+      : type utils_concat(get_, name)()                                        \
+          const { return utils_concat(m_, name); })
+
+#define __utils_define_field(tuple)                                            \
+  utils_if(utils_equal(utils_sizeof tuple, 3))(                                \
+      __utils_define_field_impl_3, __utils_define_field_impl_2) tuple
+#define __utils_define_fields_impl2(...)                                       \
+  utils_map(__utils_define_field, __VA_ARGS__)
+#define __utils_define_fields_impl(attr)                                       \
+  utils_if(utils_is_call_operator(attr))(__utils_define_fields_impl2,          \
+                                         utils_del)(utils_expand attr)
 #define __utils_define_fields(...)                                             \
-  utils_map(__utils_define_fields1, __VA_ARGS__)
+  __utils_define_fields_impl(                                                  \
+      utils_get_attribute(exception_attribute, fields, __VA_ARGS__))
 
-#define __utils_init_fields0(type, identifier)                                 \
-  utils_concat(m_, identifier)(identifier)
-#define __utils_init_fields1(pair) __utils_init_fields0 pair
+#define __utils_define_argument_impl_3(type, name, attr) type name
+#define __utils_define_argument_impl_2(type, name)       type name
+#define __utils_define_argument(tuple)                                         \
+  utils_if(utils_equal(utils_sizeof tuple, 3))(                                \
+      __utils_define_argument_impl_3, __utils_define_argument_impl_2) tuple
+#define __utils_define_arguments_impl2(...)                                    \
+  utils_map_list(__utils_define_argument, __VA_ARGS__)
+#define __utils_define_arguments_impl(attr1, attr2)                            \
+  utils_if(utils_is_call_operator(attr1))(__utils_define_arguments_impl2,      \
+                                          utils_del)(                          \
+      utils_expand attr1)utils_if(utils_is_call_operator(attr2))(utils_expand, \
+                                                                 utils_del)(   \
+      utils_if(utils_is_call_operator(attr1))(utils_comma, utils_del)()        \
+          __utils_call3(__utils_define_arguments_impl2, (utils_expand attr2)))
+#define __utils_define_arguments(...)                                          \
+  __utils_call2(                                                               \
+      __utils_define_arguments_impl,                                           \
+      (utils_get_attribute(exception_attribute, base_args, __VA_ARGS__),       \
+       utils_get_attribute(exception_attribute, fields, __VA_ARGS__)))
+
+#define __utils_init_field_impl_3(type, name, attr) utils_concat(m_, name)(name)
+#define __utils_init_field_impl_2(type, name)       utils_concat(m_, name)(name)
+#define __utils_init_field(tuple)                                              \
+  utils_if(utils_equal(utils_sizeof tuple, 3))(                                \
+      __utils_init_field_impl_3, __utils_init_field_impl_2) tuple
+#define __utils_init_fields_impl2(...)                                         \
+  , utils_map_list(__utils_init_field, __VA_ARGS__)
+#define __utils_init_fields_impl(attr)                                         \
+  utils_if(utils_is_call_operator(attr))(__utils_init_fields_impl2,            \
+                                         utils_del)(utils_expand attr)
 #define __utils_init_fields(...)                                               \
-  utils_map_list(__utils_init_fields1, __VA_ARGS__)
+  __utils_call2(                                                               \
+      __utils_init_fields_impl,                                                \
+      (utils_get_attribute(exception_attribute, fields, __VA_ARGS__)))
 
-#define __utils_define_getters0(type, identifier)                              \
-  type utils_concat(get_, identifier)() const                                  \
+#define __utils_pass_argument_impl(type, name) name
+#define __utils_pass_argument(pair)            __utils_pass_argument_impl pair
+#define __utils_pass_arguments_impl2(...)                                      \
+  utils_map_list(__utils_pass_argument, __VA_ARGS__)
+#define __utils_pass_arguments_impl(attr)                                      \
+  utils_if(utils_is_call_operator(attr))(__utils_pass_arguments_impl2,         \
+                                         utils_del)(utils_expand attr)
+#define __utils_pass_arguments(...)                                            \
+  __utils_call2(                                                               \
+      __utils_pass_arguments_impl,                                             \
+      (utils_get_attribute(exception_attribute, base_args, __VA_ARGS__)))
+
+#define __utils_define_constructor(exception_name, base, ...)                  \
+public:                                                                        \
+  exception_name(__utils_define_arguments(__VA_ARGS__))                        \
+      : base(__utils_pass_arguments(__VA_ARGS__))                              \
+            __utils_init_fields(__VA_ARGS__)                                   \
   {                                                                            \
-    return utils_concat(m_, identifier);                                       \
   }
-#define __utils_define_getters1(pair) __utils_define_getters0 pair
-#define __utils_define_getters(...)                                            \
-  utils_map(__utils_define_getters1, __VA_ARGS__)
+
+#define __utils_define_what_impl(attr)                                         \
+  utils_if(utils_is_call_operator(attr))(utils_expand, utils_del)(             \
+      public                                                                   \
+      : const char* what()                                                     \
+          const noexcept override { return utils_expand attr; })
+#define __utils_define_what(...)                                               \
+  __utils_call2(                                                               \
+      __utils_define_what_impl,                                                \
+      (utils_get_attribute(exception_attribute, reason, __VA_ARGS__)))
+
+#define __utils_add_extra_impl(attr)                                           \
+  utils_if(utils_is_call_operator(attr))(utils_expand,                         \
+                                         utils_del)(utils_expand attr)
+#define __utils_add_extra(...)                                                 \
+  __utils_call2(                                                               \
+      __utils_add_extra_impl,                                                  \
+      (utils_get_attribute(exception_attribute, extra, __VA_ARGS__)))
 
 // clang-format off
-/* This generates an exception class using the following properties
+/* This generates an exception class using the following properties:
  * `exception_name`:
- * | The name of the exception, it will be used in the class definition like
- * | `class exception_name` etc.
+ * | The name of the exception (it will therefore be the name of the class
+ * | generated).
  *
  * `base`:
- * | The base class to inherit from. This is not an optional parameter.
- *
- * `fields`:
- * | A list of pairs that specify a field's identifier and type, which
- * | will automatically be defined inside the class. This is passed like
- * | `((int, member1), (long, member2), (double, member3))`
- *
- * `base_args`:
- * | This is again a list of pairs which specifies the arguments the base
- * | constructor will accept and they are also passed the same way fields do
+ * | The base class of the exception (e.g. std::exception). This is not
+ * | optional.
  *
  * `__VA_ARGS__`:
- * | Any extra content that the class will include. For example a function
- * declaration.
+ * | A list of 0 or more of the following attributes:
+ * | - stdattr(attribute): Puts `attribute` right after the class keyword and
+ * |   can therefore be used to trigger implementation defined behavior (e.g.
+ * |   stdattr([[gnu::visibility("default")]]))
+ * | - fields(...): A list of pairs or 3-element tuples that specify the fields
+ * |   of the exception class. They consist of the type of the field, the name
+ * |   and optionally a keyword named hidden. This makes sure to define each
+ * |   field in private scope as well as generate a constructor that initializes
+ * |   those fields with its arguments. If the `hidden` keyword isn't specified
+ * |   then a getter will also be generated that accesses the specific field.
+ * |   Note that the prefix `m_` is added on the field names to prevent
+ * |   shadowing of custom constructor arguments. (e.g. fields((int,
+ * |   member1), (float, member2, hidden))).
+ * | - base_args(...): A list of pairs that specify the arguments that the base
+ * |   class constructor expects. They consist of the type and name of the
+ * |   arguments. This will add them at the beginning of the current exception's
+ * |   constructor and will make sure to forward them to the base class as
+ * |   needed. (e.g. base_args((int, arg1), (float, arg2))).
+ * | - reason(str): Generates an overload of the `what()`
+ * |   method of the `std::exception` class which returns `str`.
+ * | - extra(...): Any extra stuff to be added to the class. They can be method
+ * |   declarations/definitions, static members etc. They are put in public
+ * |   scope by default and right after any code generated from the attributes
+ * |   above. (e.g. extra(void myvfunc() const override;)).
  */
-#define utils_generate_exception(exception_name, base, fields, base_args, ...) \
-  class utils_visibility exception_name : public base                          \
+#define utils_generate_exception(exception_name, base, ...)                    \
+  class __utils_add_exception_attribute(__VA_ARGS__) exception_name : base     \
   {                                                                            \
+    __utils_define_fields(__VA_ARGS__)                                         \
+    __utils_define_constructor(exception_name, base, __VA_ARGS__)              \
+    __utils_define_what(__VA_ARGS__)                                           \
   public:                                                                      \
-    __VA_ARGS__                                                                \
-  private:                                                                     \
-    __utils_define_fields fields                                               \
-  public:                                                                      \
-    exception_name(__utils_define_arguments base_args,                         \
-                   __utils_define_arguments fields)                            \
-        : base(__utils_pass_parameters base_args), __utils_init_fields fields  \
-    {                                                                          \
-    }                                                                          \
-    exception_name(const exception_name& other)            = default;          \
-    exception_name& operator=(const exception_name& other) = default;          \
-    __utils_define_getters fields                                              \
-  };
+    __utils_add_extra(__VA_ARGS__)                                             \
+  }
 
-// Same as `utils_generate_exception` but without the fields param
-#define utils_generate_exception_no_fields(exception_name, base, base_args,    \
-                                           ...)                                \
-  class utils_visibility exception_name : public base                          \
-  {                                                                            \
-  public:                                                                      \
-    __VA_ARGS__                                                                \
-  public:                                                                      \
-    exception_name(__utils_define_arguments base_args)                         \
-        : base(__utils_pass_parameters base_args)                              \
-    {                                                                          \
-    }                                                                          \
-    exception_name(const exception_name& other)            = default;          \
-    exception_name& operator=(const exception_name& other) = default;          \
-  };
-
-// Same as `utils_generate_exception` but without the base_args param
-#define utils_generate_exception_no_base_args(exception_name, base, fields,    \
-                                              ...)                             \
-  class utils_visibility exception_name : public base                          \
-  {                                                                            \
-  public:                                                                      \
-    __VA_ARGS__                                                                \
-  private:                                                                     \
-    __utils_define_fields fields                                               \
-  public:                                                                      \
-    exception_name(__utils_define_arguments fields)                            \
-        : base(), __utils_init_fields fields                                   \
-    {                                                                          \
-    }                                                                          \
-    exception_name(const exception_name& other)            = default;          \
-    exception_name& operator=(const exception_name& other) = default;          \
-    __utils_define_getters fields                                              \
-  };
-
-// Same as `utils_generate_exception` but without fields and base_args params
-#define utils_generate_empty_exception(exception_name, base, ...)              \
-  class utils_visibility exception_name : public base                          \
-  {                                                                            \
-  public:                                                                      \
-    __VA_ARGS__                                                                \
-  public:                                                                      \
-    exception_name() : base() {}                                               \
-    exception_name(const exception_name& other)            = default;          \
-    exception_name& operator=(const exception_name& other) = default;          \
-  };
 // clang-format on

@@ -10,6 +10,7 @@
 #elif utils_clang
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wreturn-type"
+  #pragma clang diagnostic ignored "-Wnon-virtual-dtor"
 #endif
 
 namespace alterhook
@@ -464,7 +465,6 @@ namespace alterhook
               const helpers::orig_buff_t& buffer);
     void set_detour(std::byte* detour);
     void set_original(helpers::orig_buff_t& original);
-    hook(const hook&) = default;
   };
 
   class hook_chain::iterator

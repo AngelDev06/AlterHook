@@ -4,6 +4,8 @@
 #include "utils_macros.h"
 #include <optional>
 #include <limits>
+#include <array>
+#include <iterator>
 #if utils_windows
   #include <intrin.h>
   #pragma intrinsic(_BitScanForward)
@@ -96,6 +98,13 @@ namespace alterhook::utils
     return ((value == args) || ...);
   }
 
+  template <typename T, typename callable = std::less<void>>
+  constexpr bool in_between(T left, T val, T right,
+                            callable pred = callable()) noexcept
+  {
+    return pred(left, val) && pred(val, right);
+  }
+
   template <typename T, typename align_t>
   constexpr T align(T value, align_t alignment) noexcept
   {
@@ -166,5 +175,64 @@ namespace alterhook::utils
     }
     return std::nullopt;
 #endif
+  }
+
+  namespace helpers
+  {
+    template <typename T, size_t N, size_t... indexes>
+    constexpr std::array<std::remove_cv_t<T>, N>
+        to_array_impl(T (&a)[N], std::index_sequence<indexes...>)
+    {
+      return { { a[indexes]... } };
+    }
+
+    template <typename T, size_t N, size_t... indexes>
+    constexpr std::array<std::remove_cv_t<T>, N>
+        to_array_impl(T (&&a)[N], std::index_sequence<indexes...>)
+    {
+      return { { std::move(a[indexes])... } };
+    }
+  } // namespace helpers
+
+  template <typename T, size_t N>
+  constexpr std::array<std::remove_cv_t<T>, N> to_array(T (&a)[N])
+  {
+#if utils_cpp20
+    return std::to_array(a);
+#else
+    return helpers::to_array_impl(a, std::make_index_sequence<N>());
+#endif
+  }
+
+  template <typename T, size_t N>
+  constexpr std::array<std::remove_cv_t<T>, N> to_array(T (&&a)[N])
+  {
+#if utils_cpp20
+    return std::to_array(std::move(a));
+#else
+    return helpers::to_array_impl(std::move(a), std::make_index_sequence<N>());
+#endif
+  }
+
+  template <size_t N, typename iter>
+  auto to_array(iter first, iter last)
+  {
+    typedef typename std::iterator_traits<iter>::value_type iter_value;
+
+    std::array<iter_value, N> result{};
+    std::copy(first, last, result.begin());
+    return result;
+  }
+
+  template <typename value_t>
+  constexpr value_t bitsfill(uint8_t count) noexcept
+  {
+    static_assert(std::is_integral_v<value_t> && std::is_unsigned_v<value_t>,
+                  "bitsfill: value_t is expected to be of integral type");
+    utils_assert(count <= std::numeric_limits<value_t>::digits,
+                 "value of count is too large for the integral type expected");
+    if (!count)
+      return value_t{};
+    return (value_t{ 1 } << count) - value_t{ 1 };
   }
 } // namespace alterhook::utils

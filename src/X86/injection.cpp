@@ -5,10 +5,7 @@
 #include "tools.h"
 #include "x86_instructions.h"
 #include "injection.h"
-
-#if !utils_windows
-  #pragma GCC visibility push(hidden)
-#endif
+#pragma GCC visibility push(hidden)
 
 namespace alterhook
 {
@@ -105,6 +102,4 @@ namespace alterhook
 #endif
 } // namespace alterhook
 
-#if !utils_windows
-  #pragma GCC visibility pop
-#endif
+#pragma GCC visibility pop
