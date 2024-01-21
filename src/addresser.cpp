@@ -5,6 +5,9 @@
 #if utils_windows
   #include "x86_instructions.h"
 #endif
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
 
 // Addresser inspiration from:
 // https://gist.github.com/altalk23/29b97969e9f0624f783b673f6c1cd279
@@ -251,3 +254,5 @@ namespace alterhook
   }
 #endif
 } // namespace alterhook
+
+#pragma clang diagnostic pop

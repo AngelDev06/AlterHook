@@ -1,27 +1,21 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#if !utils_windows
-  #pragma GCC visibility push(hidden)
-#endif
+#pragma GCC visibility push(hidden)
+#pragma pack(push, 1)
 
 namespace alterhook
 {
-  // clang-format off
-  utils_pack_begin()
-
-  struct utils_packed JMP_SHORT
+  struct JMP_SHORT
   {
     static constexpr uint8_t opcode = 0xEB;
-    const uint8_t id = opcode;
-    int8_t offset = 0;
+    const uint8_t            id     = opcode;
+    int8_t                   offset = 0;
 
     constexpr JMP_SHORT(int8_t offset) : offset(offset) {}
   };
 
-  // clang-format on
-
-  struct utils_packed JMP
+  struct JMP
   {
     static constexpr uint8_t opcode = 0xE9;
     const uint8_t            id     = opcode;
@@ -35,7 +29,7 @@ namespace alterhook
     }
   };
 
-  struct utils_packed MOV
+  struct MOV
   {
     static constexpr uint8_t opcode = 0b10111;
     uint8_t                  reg : 3;
@@ -45,9 +39,9 @@ namespace alterhook
     constexpr MOV(uint8_t reg, uint32_t imm) : reg(reg), id(opcode), imm(imm) {}
   };
 
-  struct utils_packed JMP_ABS
+  struct JMP_ABS
   {
-    typedef std::pair<uint8_t, uint8_t> opcode_t;
+    typedef std::array<uint8_t, 2> opcode_t;
 
     static constexpr opcode_t opcode  = { 0xFF, 0x25 };
     const opcode_t            id      = opcode;
@@ -59,7 +53,7 @@ namespace alterhook
     constexpr JMP_ABS() {}
   };
 
-  struct utils_packed CALL
+  struct CALL
   {
     static constexpr uint8_t opcode = 0xE8;
     const uint8_t            id     = opcode;
@@ -68,32 +62,22 @@ namespace alterhook
     constexpr CALL(int32_t offset) : offset(offset) {}
   };
 
-  namespace helpers
+  struct CALL_ABS
   {
-    // very stupid clang thanks
-    struct utils_packed CALL_ABS_OPCODE
-    {
-      uint8_t   opcode = 0xFF;
-      uint8_t   modrm  = 0x15;
-      uint32_t  imm    = 2;
-      JMP_SHORT jmp{ 8 };
-    };
-  } // namespace helpers
+    typedef std::array<uint8_t, 2> opcode_t;
 
-  struct utils_packed CALL_ABS
-  {
-    typedef helpers::CALL_ABS_OPCODE opcode_t;
-
-    static constexpr opcode_t opcode{};
-    const opcode_t            id      = opcode;
+    static constexpr opcode_t opcode = { 0xFF, 0x15 };
+    const opcode_t            id     = opcode;
+    const uint32_t            imm    = 2;
+    const JMP_SHORT           jmp{ 8 };
     uint64_t                  address = 0;
 
     constexpr CALL_ABS(uint64_t address) : address(address) {}
   };
 
-  struct utils_packed JCC
+  struct JCC
   {
-    typedef std::pair<uint8_t, uint8_t> opcode_t;
+    typedef std::array<uint8_t, 2> opcode_t;
 
     static constexpr opcode_t opcode = { 0x0F, 0x80 };
     const opcode_t            id     = opcode;
@@ -108,7 +92,7 @@ namespace alterhook
   };
 
   // not putting JMP_ABS in here to keep this easy to use
-  struct utils_packed JCC_ABS
+  struct JCC_ABS
   {
     typedef std::array<uint8_t, 4> opcode_t;
 
@@ -124,10 +108,7 @@ namespace alterhook
 
     constexpr JCC_ABS(uint64_t address) : address(address) {}
   };
-
-  utils_pack_end()
 } // namespace alterhook
 
-#if !utils_windows
-  #pragma GCC visibility pop
-#endif
+#pragma GCC visibility pop
+#pragma pack(pop)

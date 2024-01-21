@@ -7,7 +7,7 @@
 
 namespace alterhook
 {
-  ALTERHOOK_HIDDEN std::shared_mutex hook_lock{};
+  [[gnu::visibility("hidden")]] std::shared_mutex hook_lock{};
 
   namespace exceptions
   {
@@ -28,11 +28,11 @@ namespace alterhook
     {
       std::stringstream stream;
 #if utils_arm
-      alterhook::disassembler bin{ m_instr, m_thumb, false };
+      alterhook::disassembler bin{ m_instr.data(), m_thumb, false };
 #else
-      alterhook::disassembler bin{ m_instr, false };
+      alterhook::disassembler bin{ m_instr.data(), false };
 #endif
-      auto instr = bin.disasm(utils_array_size(m_instr)).begin();
+      auto instr = bin.disasm(m_instr.size()).begin();
 
       stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
              << reinterpret_cast<uintptr_t>(get_target()) << '\n'

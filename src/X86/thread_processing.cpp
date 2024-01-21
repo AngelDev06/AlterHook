@@ -2,17 +2,14 @@
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
 #include "trampoline.h"
-
-#if !utils_msvc
-  #pragma GCC diagnostic push
-  #pragma GCC diagnostic ignored "-Wrange-loop-construct"
-#endif
+#pragma GCC visibility push(hidden)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wrange-loop-construct"
 
 namespace alterhook
 {
-  ALTERHOOK_HIDDEN uintptr_t process_frozen_threads(const trampoline& tramp,
-                                                    bool      enable_hook,
-                                                    uintptr_t ip) noexcept
+  uintptr_t process_frozen_threads(const trampoline& tramp, bool enable_hook,
+                                   uintptr_t ip) noexcept
   {
     for (const auto [oldpos, newpos] : tramp.positions)
     {
@@ -29,6 +26,5 @@ namespace alterhook
   }
 } // namespace alterhook
 
-#if !utils_msvc
-  #pragma GCC diagnostic pop
-#endif
+#pragma GCC diagnostic pop
+#pragma GCC visibility pop

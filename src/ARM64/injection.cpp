@@ -5,18 +5,17 @@
 #include "exceptions.h"
 #include "injection.h"
 #include "arm64_instructions.h"
+#pragma GCC visibility push(hidden)
 
 namespace alterhook
 {
-  ALTERHOOK_HIDDEN void inject_to_target(std::byte*       target,
-                                         const std::byte* backup_or_detour,
-                                         injector_flags   flags)
+  void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
+                        injector_flags flags)
   {
     utils_assert(target, "inject_to_target: no target address specified");
     utils_assert(backup_or_detour,
                  "inject_to_target: no backup or detour specified");
-    constexpr size_t far_jump_size =
-        sizeof(aarch64::LDR) + sizeof(aarch64::BR) + sizeof(uint64_t);
+    constexpr size_t far_jump_size = sizeof(aarch64::custom::FULL_JMP);
     __define_old_protect(flags);
     const auto [address, size] =
         flags.use_small_jmp ? std::pair(target, sizeof(aarch64::B))
@@ -30,21 +29,32 @@ namespace alterhook
 
     if (flags.enable)
     {
-      if (flags.use_small_jmp)
-        new (target) aarch64::B(backup_or_detour - target);
-      else
+      if (flags.patch_above)
       {
-        std::array<aarch64::INSTRUCTION, far_jump_size> buffer{};
-        const auto [instruction_begin, address_begin, ldr_offset] =
-            flags.patch_above ? std::tuple(2, 0, -8) : std::tuple(0, 2, 8);
-
-        new (&buffer[instruction_begin]) aarch64::LDR(
-            ldr_offset, aarch64::X17, aarch64::register_size::dword);
-        new (&buffer[instruction_begin + 1]) aarch64::BR(aarch64::X17);
-        new (&buffer[address_begin]) auto(backup_or_detour);
-
-        memcpy(address, buffer.data(), size);
+        assert(!(reinterpret_cast<uintptr_t>(address) % 8));
+        std::array<std::byte, far_jump_size> buffer{};
+        new (buffer.data()) auto(backup_or_detour);
+        new (&buffer[sizeof(backup_or_detour)])
+            aarch64::custom::JMP(static_cast<int32_t>(address - target));
+        memcpy(address, buffer.data(), buffer.size());
       }
+      else if (flags.use_small_jmp)
+        new (target)
+            aarch64::B(static_cast<int32_t>(backup_or_detour - target));
+      else if (reinterpret_cast<uintptr_t>(address) % 8)
+      {
+        constexpr int32_t address_pos = sizeof(aarch64::custom::JMP) + 4;
+        std::array<std::byte, far_jump_size + 2> buffer{};
+        new (buffer.data()) aarch64::custom::JMP(address_pos);
+#ifndef NDEBUG
+        new (&buffer[sizeof(aarch64::custom::JMP)]) aarch64::BRK();
+#endif
+        new (&buffer[address_pos]) auto(backup_or_detour);
+        memcpy(address, buffer.data(), buffer.size());
+      }
+      else
+        new (address) aarch64::custom::FULL_JMP(
+            reinterpret_cast<uintptr_t>(backup_or_detour));
     }
     else
       memcpy(address, backup_or_detour, size);
@@ -53,17 +63,23 @@ namespace alterhook
     execflush(address, size);
   }
 
-  ALTERHOOK_HIDDEN void patch_jmp(std::byte* target, const std::byte* detour,
-                                  patcher_flags flags)
+  void patch_jmp(std::byte* target, const std::byte* detour,
+                 patcher_flags flags)
   {
     utils_assert(target, "patch_jmp: no target address specified");
     utils_assert(detour, "patch_jmp: no detour specified");
+    constexpr auto far_jump_address_offset =
+        offsetof(aarch64::custom::FULL_JMP, address);
+    constexpr auto aligned_far_jump_address_offset =
+        sizeof(aarch64::custom::JMP) + 4;
+    __define_old_protect(flags);
     const auto [address, size] =
         flags.use_small_jmp
             ? std::pair(target, sizeof(aarch64::B))
             : std::pair(flags.patch_above ? target - sizeof(uint64_t)
-                                          : target + sizeof(aarch64::LDR) +
-                                                sizeof(aarch64::BR),
+                        : reinterpret_cast<uintptr_t>(target) % 8
+                            ? target + aligned_far_jump_address_offset
+                            : target + far_jump_address_offset,
                         sizeof(uint64_t));
     const auto [prot_addr, prot_size] = __prot_data(address, size);
 
@@ -80,4 +96,12 @@ namespace alterhook
     execunset(prot_addr, prot_size);
     execflush(address, size);
   }
+
+  void set_relay(std::byte* prelay, const std::byte* detour)
+  {
+    std::launder(reinterpret_cast<aarch64::custom::FULL_JMP*>(prelay))
+        ->address = reinterpret_cast<uintptr_t>(detour);
+  }
 } // namespace alterhook
+
+#pragma GCC visibility pop

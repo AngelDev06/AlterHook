@@ -5,7 +5,6 @@
 #include "disassembler.h"
 #include "arm_instructions.h"
 #include "buffer.h"
-#include "linux_thread_handler.h"
 #include "trampoline.h"
 
 #if !utils_msvc
@@ -453,9 +452,9 @@ namespace alterhook
           throw_ambiguous_instruction_set(std::byte*          target,
                                           branch_destination& entry)
       {
-        std::byte       buffer[32]{};
-        uint8_t         pos = 0;
-        std::bitset<32> instruction_sets{};
+        exceptions::byte_array<32> buffer{};
+        uint8_t                    pos = 0;
+        std::bitset<32>            instruction_sets{};
 
         for (auto& reference : entry.references)
         {
@@ -472,7 +471,7 @@ namespace alterhook
         }
 
         throw(exceptions::ambiguous_instruction_set(
-            buffer, pos, instruction_sets, entry.dest, target));
+            target, buffer, pos, instruction_sets, entry.dest));
       }
 
       template <typename T>
@@ -873,12 +872,15 @@ namespace alterhook
           return;
 
         memcpy(ctx.trampoline.end, instr.bytes, instr.size);
+        auto* const it_block =
+            reinterpret_cast<const std::byte*>(ctx.it_context.pinstr);
+        const size_t it_block_size =
+            (ctx.trampoline.end + instr.size) - it_block;
         throw(exceptions::invalid_it_block(
-            reinterpret_cast<std::byte*>(ctx.it_context.pinstr),
-            ctx.it_context.uoriginal_address,
-            (ctx.trampoline.uend + instr.size) -
-                reinterpret_cast<uintptr_t>(ctx.it_context.pinstr),
-            ctx.it_context.remaining, ctx.target.begin));
+            ctx.target.begin,
+            utils::to_array<32>(it_block, it_block + it_block_size),
+            it_block_size, ctx.it_context.original_address,
+            ctx.it_context.remaining));
       }
 
       void move_it_block()
@@ -1147,9 +1149,14 @@ namespace alterhook
             {
               if (operand.encoding.operand_pieces_count == 1 &&
                   operand.encoding.sizes[0] == 1)
+              {
+                const std::byte* src =
+                    reinterpret_cast<const std::byte*>(instr.bytes);
                 throw(exceptions::unsupported_instruction_handling(
-                    reinterpret_cast<const std::byte*>(instr.bytes), ctx.thumb,
-                    reinterpret_cast<std::byte*>(instr.address)));
+                    ctx.target.begin,
+                    utils::to_array<24>(src, src + instr.size), ctx.thumb));
+              }
+
               instruction_info.register_encoding = operand.encoding;
               instruction_info.must_be_patched   = true;
               continue;
@@ -1235,7 +1242,8 @@ namespace alterhook
     if (!tmp_protinfo.execute)
       throw(exceptions::invalid_address(target));
     if (!ptrampoline)
-      ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
+      ptrampoline =
+          trampoline_ptr(trampoline_buffer::allocate(__origin(target)));
     if (ptarget)
       reset();
     trampoline_context ctx{ target, ptrampoline.get() };
@@ -1416,9 +1424,14 @@ namespace alterhook
         else if (!session.instruction_info.is_call)
         {
           if (session.instruction_info.must_be_patched)
+          {
+            auto *src     = reinterpret_cast<const std::byte*>(instr.bytes),
+                 *address = reinterpret_cast<const std::byte*>(instr.address);
             throw(exceptions::pc_relative_handling_fail(
-                reinterpret_cast<std::byte*>(instr.address), ctx.target.begin,
-                ctx.thumb));
+                ctx.target.begin, address,
+                utils::to_array<24>(src, src + instr.size), ctx.thumb));
+          }
+
           session.break_pc_handling();
           if (ctx.branch_list.empty() &&
               !session.instruction_info.is_conditional)
@@ -1566,12 +1579,19 @@ namespace alterhook
       if (((instr.address - ctx.target.ubegin) + instr.size) >= ctx.size_needed)
       {
         if (ctx.it_context.remaining > 1)
+        {
+          memcpy(ctx.trampoline.end, session.copy_source, session.copy_size);
+          auto* const it_block =
+              reinterpret_cast<const std::byte*>(ctx.it_context.pinstr);
+          const size_t it_block_size =
+              (ctx.trampoline.end + session.copy_size) - it_block;
           throw(exceptions::incomplete_it_block(
-              reinterpret_cast<std::byte*>(ctx.it_context.pinstr),
-              ctx.it_context.uoriginal_address,
-              (ctx.trampoline.uend + session.copy_size) -
-                  reinterpret_cast<uintptr_t>(ctx.it_context.pinstr),
-              ctx.it_context.remaining, ctx.target.begin));
+              ctx.target.begin,
+              utils::to_array<32>(it_block, it_block + it_block_size),
+              it_block_size, ctx.it_context.original_address,
+              ctx.it_context.remaining));
+        }
+
         // force setting it to 0 because we don't want to do any handling for
         // the custom instructions that are going to be inserted
         ctx.it_context.remaining = 0;
@@ -1681,7 +1701,9 @@ namespace alterhook
 
   trampoline::trampoline(const trampoline& other)
       : ptarget(other.ptarget),
-        ptrampoline(other.ptarget ? trampoline_buffer::allocate() : nullptr),
+        ptrampoline(other.ptarget
+                        ? trampoline_buffer::allocate(__origin(other.ptarget))
+                        : nullptr),
         instruction_sets(other.instruction_sets),
         patch_above(other.patch_above), tramp_size(other.tramp_size),
         pc_handling(other.pc_handling), old_protect(other.old_protect),
@@ -1720,7 +1742,8 @@ namespace alterhook
     }
 
     if (!ptrampoline)
-      ptrampoline = trampoline_ptr(trampoline_buffer::allocate());
+      ptrampoline =
+          trampoline_ptr(trampoline_buffer::allocate(__origin(other.ptarget)));
     ptarget          = other.ptarget;
     instruction_sets = other.instruction_sets;
     patch_above      = other.patch_above;

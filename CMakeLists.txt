@@ -208,14 +208,13 @@ target_link_libraries(AlterHook PRIVATE capstone)
 
 target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH})
 
-if (MSVC)
-	target_compile_options(AlterHook PRIVATE /W3)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+	target_compile_options(AlterHook PRIVATE /W3 /wd5030 /wd4068)
 else()
 	set(
 		ALTERHOOK_GNU_WARNINGS
 		-Wall
 		-Wextra
-		-pedantic
 		-Wcast-align 
 		-Wcast-qual 
 		-Wctor-dtor-privacy
@@ -232,10 +231,42 @@ else()
 		-Wno-unused
 		-Wno-variadic-macros
 		-Wno-parentheses
-		-fdiagnostics-show-option
+	)
+	set(
+		ALTERHOOK_GCC_WARNINGS
+		$<$<CXX_COMPILER_ID:GNU>:
+			-pedantic
+			-fdiagnostics-show-option
+			-Wno-unknown-pragmas
+		>
+	)
+	set(
+		ALTERHOOK_CLANG_WARNINGS
+		$<$<CXX_COMPILER_ID:Clang>:
+			-Wno-c++98-compat
+			-Wno-reserved-macro-identifier
+			-Wno-c++20-compat
+			-Wno-c++98-compat-pedantic
+			-Wno-unsafe-buffer-usage
+			-Wno-shadow-field-in-constructor
+			-Wno-disabled-macro-expansion
+			-Wno-sign-conversion
+			-Wno-ctad-maybe-unsupported
+			-Wno-exit-time-destructors
+			-Wno-global-constructors
+			-Wno-reserved-identifier
+			-Wno-missing-variable-declarations
+			-Wno-unknown-attributes
+			-Wno-missing-prototypes
+		>
 	)
 
-	target_compile_options(AlterHook PRIVATE ${ALTERHOOK_GNU_WARNINGS})
+	target_compile_options(
+		AlterHook PRIVATE 
+		"${ALTERHOOK_GNU_WARNINGS}"
+		"${ALTERHOOK_GCC_WARNINGS}"
+		"${ALTERHOOK_CLANG_WARNINGS}"
+	)
 endif()
 
 if (ALTERHOOK_BUILD_TESTS)

@@ -6,7 +6,7 @@ namespace alterhook
 {
   class trampoline;
 
-  class ALTERHOOK_HIDDEN thread_freezer
+  class [[gnu::visibility("hidden")]] thread_freezer
   {
   private:
     // when ref count reaches 0, the old signal handler will be reset

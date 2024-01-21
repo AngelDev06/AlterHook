@@ -3,37 +3,65 @@
 #include <pch.h>
 #include "buffer.h"
 #include "exceptions.h"
+#pragma GCC visibility push(hidden)
 
 namespace alterhook
 {
 #if utils_windows
   constexpr size_t memory_block_size = 0x10'00;
 
-  #define vdealloc(block) VirtualFree(block, 0, MEM_RELEASE)
+  static void vdealloc(memory_block* block) noexcept
+  {
+    VirtualFree(block, 0, MEM_RELEASE);
+  }
 #else
-  extern const long memory_block_size;
+  extern const size_t memory_block_size;
 
-  #define vdealloc(block) munmap(block, memory_block_size)
+  static void vdealloc(memory_block* block) noexcept
+  {
+    munmap(block, memory_block_size);
+  }
 #endif
 
-#if utils_64bit
-  std::pair<std::byte*, std::byte*>
-             get_minmax_address(std::byte* origin) noexcept;
-  std::byte* try_valloc(std::byte* origin);
-
-  #define __define_minmax_addresses(origin)                                    \
-    auto [minaddr, maxaddr] = get_minmax_address(origin)
-  #define __range_check(block)                                                 \
-    block&& reinterpret_cast<std::byte*>(block) >                              \
-        minaddr&& reinterpret_cast<std::byte*>(block) < maxaddr
-  #define valloc(origin)   try_valloc(origin)
+#if allocate_nearby
+  std::pair<const std::byte*, const std::byte*>
+                get_minmax_address(std::byte* origin) noexcept;
+  memory_block* try_valloc(std::byte* origin);
 #else
-  std::byte* try_valloc();
-
-  #define __define_minmax_addresses(origin) ((void)0)
-  #define __range_check(block)              block
-  #define valloc(origin)                    try_valloc()
+  memory_block* try_valloc();
 #endif
+
+  memory_block* memory_block::find(__origin(std::byte* origin)) noexcept
+  {
+    memory_block* pblock = nullptr;
+#if allocate_nearby
+    const auto limits   = get_minmax_address(origin);
+    const auto in_range = [=](const memory_block* const itr)
+    {
+      return utils::in_between(
+          limits.first, reinterpret_cast<const std::byte*>(itr), limits.second);
+    };
+#endif
+#if utils_x64
+    const auto is_valid_block = [&](const memory_block* const itr) -> bool
+    { return itr && in_range(itr); };
+#else
+    const auto is_valid_block = [](const memory_block* const itr) -> bool
+    { return itr; };
+#endif
+
+    for (memory_block* itr = this; is_valid_block(itr); itr = itr->next)
+    {
+      if (!itr->free)
+        continue;
+      pblock = itr;
+#if !utils_x64 && allocate_nearby
+      if (in_range(itr))
+#endif
+        break;
+    }
+    return pblock;
+  }
 
   // to enforce thread safety on allocations & deallocations
   static std::mutex buffer_lock;
@@ -90,31 +118,21 @@ namespace alterhook
   {
     ptrdiff_t slot_offset =
         reinterpret_cast<uintptr_t>(pslot) - reinterpret_cast<uintptr_t>(this);
-    return slot_offset && !(slot_offset % memory_slot_size) &&
-           slot_offset < memory_block_size;
+    return slot_offset > 0 && !(slot_offset % memory_slot_size) &&
+           static_cast<size_t>(slot_offset) < memory_block_size;
   }
 #endif
 
   memory_block* trampoline_buffer::buffer = nullptr;
 
-  std::byte* trampoline_buffer::allocate(__origin_address)
+  std::byte* trampoline_buffer::allocate(__origin(std::byte* origin))
   {
     std::scoped_lock lock{ buffer_lock };
-    __define_minmax_addresses(origin);
 
-    memory_block* pblock = nullptr;
-    for (memory_block* itr = buffer; __range_check(itr); itr = itr->next)
-    {
-      if (itr->free)
-      {
-        pblock = itr;
-        break;
-      }
-    }
-
+    memory_block* pblock = buffer ? buffer->find(__origin(origin)) : nullptr;
     if (!pblock)
     {
-      pblock = reinterpret_cast<memory_block*>(valloc(origin));
+      pblock = try_valloc(__origin(origin));
       pblock->init();
     }
 
@@ -127,8 +145,8 @@ namespace alterhook
       return;
     std::scoped_lock lock{ buffer_lock };
 
-    for (memory_block *target = reinterpret_cast<memory_block*>(utils_align(
-                          reinterpret_cast<uintptr_t>(src), memory_block_size)),
+    for (memory_block *target = utils::align(static_cast<memory_block*>(src),
+                                             memory_block_size),
                       *prev = nullptr, *pblock = buffer;
          pblock; prev = pblock, pblock = pblock->next)
     {
@@ -155,3 +173,5 @@ namespace alterhook
     }
   }
 } // namespace alterhook
+
+#pragma GCC visibility pop

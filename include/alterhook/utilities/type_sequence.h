@@ -5,6 +5,33 @@
 
 namespace alterhook::utils
 {
+  namespace helpers
+  {
+    template <size_t i, typename... types>
+    struct type_at_impl
+    {
+    };
+
+    template <size_t i, typename first, typename... rest>
+    struct type_at_impl<i, first, rest...> : type_at_impl<i - 1, rest...>
+    {
+    };
+
+    template <typename first, typename... rest>
+    struct type_at_impl<0, first, rest...>
+    {
+      typedef first type;
+    };
+
+    template <size_t i, typename T, typename... types>
+    inline constexpr size_t find_impl = ~size_t{};
+    template <size_t i, typename T, typename next, typename... types>
+    inline constexpr size_t find_impl<i, T, next, types...> =
+        find_impl<i + 1, T, types...>;
+    template <size_t i, typename T, typename... types>
+    inline constexpr size_t find_impl<i, T, T, types...> = i;
+  } // namespace helpers
+
   template <typename... types>
   struct type_sequence
   {
@@ -19,46 +46,36 @@ namespace alterhook::utils
 
     template <typename T>
     using push_back = type_sequence<types..., T>;
+
+    template <size_t i>
+    using at = typename helpers::type_at_impl<i, types...>::type;
+
+    template <typename T>
+    static constexpr bool has = (std::is_same_v<T, types> || ...);
+
+    template <typename T>
+    static constexpr size_t find = helpers::find_impl<0, T, types...>;
   };
 
   template <size_t i, typename... types>
-  struct type_at;
-
-  template <size_t i, typename first, typename... rest>
-  struct type_at<i, first, rest...> : type_at<i - 1, rest...>
-  {
-  };
-
-  template <typename first, typename... rest>
-  struct type_at<0, first, rest...>
-  {
-    typedef first type;
-  };
-
-  template <size_t i>
-  struct type_at<i>
+  struct type_at : helpers::type_at_impl<i, types...>
   {
   };
 
   template <size_t i, typename first, typename... rest>
   struct type_at<i, type_sequence<first, rest...>>
-      : type_at<i - 1, type_sequence<rest...>>
-  {
-  };
-
-  template <typename first, typename... rest>
-  struct type_at<0, type_sequence<first, rest...>>
-  {
-    typedef first type;
-  };
-
-  template <size_t i>
-  struct type_at<i, type_sequence<>>
+      : helpers::type_at_impl<i, first, rest...>
   {
   };
 
   template <size_t i, typename... types>
   using type_at_t = typename type_at<i, types...>::type;
+
+  template <typename T, typename... types>
+  inline constexpr size_t find_type = helpers::find_impl<0, T, types...>;
+  template <typename T, typename... types>
+  inline constexpr size_t find_type<T, type_sequence<types...>> =
+      helpers::find_impl<0, T, types...>;
 
   template <typename T>
   struct pack_to_type_sequence;
@@ -141,4 +158,4 @@ namespace alterhook::utils
 
   template <typename... types>
   using make_type_triplets_t = typename make_type_triplets<types...>::type;
-} // namespace utils
+} // namespace alterhook::utils

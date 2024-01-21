@@ -1,9 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#if !utils_windows
-  #pragma GCC visibility push(hidden)
-#endif
+#pragma GCC visibility push(hidden)
 
 namespace alterhook
 {
@@ -108,6 +106,10 @@ namespace alterhook
 #endif
 
     weak_iterator follow_instruction(const cs_insn& instr, size_t size);
+
+    void set_source(const std::byte* new_src) noexcept { src = new_src; }
+
+    void set_address(uintptr_t new_address) noexcept { address = new_address; }
 
   private:
     const std::byte* src     = nullptr;
@@ -234,6 +236,4 @@ namespace alterhook
 #endif
 } // namespace alterhook
 
-#if !utils_windows
-  #pragma GCC visibility pop
-#endif
+#pragma GCC visibility pop

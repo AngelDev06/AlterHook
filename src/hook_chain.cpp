@@ -3,6 +3,11 @@
 #include <pch.h>
 #include "hook_chain.h"
 #include "injection.h"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+#pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wstring-conversion"
+#pragma clang diagnostic ignored "-Wcomma"
 
 namespace alterhook
 {
@@ -2264,3 +2269,5 @@ namespace alterhook
     return std::ref(empty_hook);
   }
 } // namespace alterhook
+
+#pragma clang diagnostic pop

@@ -211,109 +211,119 @@
 #define utils_increment_99  100
 #define utils_increment_100 101
 
+#define __utils_call(x, y)                     x y
+#define __utils_call2(x, y)                    x y
+#define __utils_call3(x, y)                    x y
+#define __utils_check_expanded_impl(x, n, ...) n
+#define __utils_check_expanded(...)                                            \
+  __utils_call(__utils_check_expanded_impl, (__VA_ARGS__, false, ))
+
 #define utils_equal(x, y)                                                      \
-  utils_concat(utils_concat(utils_concat(utils_equal_, x), _), y)
-#define utils_equal_0_0     true
-#define utils_equal_1_1     true
-#define utils_equal_2_2     true
-#define utils_equal_3_3     true
-#define utils_equal_4_4     true
-#define utils_equal_5_5     true
-#define utils_equal_6_6     true
-#define utils_equal_7_7     true
-#define utils_equal_8_8     true
-#define utils_equal_9_9     true
-#define utils_equal_10_10   true
-#define utils_equal_11_11   true
-#define utils_equal_12_12   true
-#define utils_equal_13_13   true
-#define utils_equal_14_14   true
-#define utils_equal_15_15   true
-#define utils_equal_16_16   true
-#define utils_equal_17_17   true
-#define utils_equal_18_18   true
-#define utils_equal_19_19   true
-#define utils_equal_20_20   true
-#define utils_equal_21_21   true
-#define utils_equal_22_22   true
-#define utils_equal_23_23   true
-#define utils_equal_24_24   true
-#define utils_equal_25_25   true
-#define utils_equal_26_26   true
-#define utils_equal_27_27   true
-#define utils_equal_28_28   true
-#define utils_equal_29_29   true
-#define utils_equal_30_30   true
-#define utils_equal_31_31   true
-#define utils_equal_32_32   true
-#define utils_equal_33_33   true
-#define utils_equal_34_34   true
-#define utils_equal_35_35   true
-#define utils_equal_36_36   true
-#define utils_equal_37_37   true
-#define utils_equal_38_38   true
-#define utils_equal_39_39   true
-#define utils_equal_40_40   true
-#define utils_equal_41_41   true
-#define utils_equal_42_42   true
-#define utils_equal_43_43   true
-#define utils_equal_44_44   true
-#define utils_equal_45_45   true
-#define utils_equal_46_46   true
-#define utils_equal_47_47   true
-#define utils_equal_48_48   true
-#define utils_equal_49_49   true
-#define utils_equal_50_50   true
-#define utils_equal_51_51   true
-#define utils_equal_52_52   true
-#define utils_equal_53_53   true
-#define utils_equal_54_54   true
-#define utils_equal_55_55   true
-#define utils_equal_56_56   true
-#define utils_equal_57_57   true
-#define utils_equal_58_58   true
-#define utils_equal_59_59   true
-#define utils_equal_60_60   true
-#define utils_equal_61_61   true
-#define utils_equal_62_62   true
-#define utils_equal_63_63   true
-#define utils_equal_64_64   true
-#define utils_equal_65_65   true
-#define utils_equal_66_66   true
-#define utils_equal_67_67   true
-#define utils_equal_68_68   true
-#define utils_equal_69_69   true
-#define utils_equal_70_70   true
-#define utils_equal_71_71   true
-#define utils_equal_72_72   true
-#define utils_equal_73_73   true
-#define utils_equal_74_74   true
-#define utils_equal_75_75   true
-#define utils_equal_76_76   true
-#define utils_equal_77_77   true
-#define utils_equal_78_78   true
-#define utils_equal_79_79   true
-#define utils_equal_80_80   true
-#define utils_equal_81_81   true
-#define utils_equal_82_82   true
-#define utils_equal_83_83   true
-#define utils_equal_84_84   true
-#define utils_equal_85_85   true
-#define utils_equal_86_86   true
-#define utils_equal_87_87   true
-#define utils_equal_88_88   true
-#define utils_equal_89_89   true
-#define utils_equal_90_90   true
-#define utils_equal_91_91   true
-#define utils_equal_92_92   true
-#define utils_equal_93_93   true
-#define utils_equal_94_94   true
-#define utils_equal_95_95   true
-#define utils_equal_96_96   true
-#define utils_equal_97_97   true
-#define utils_equal_98_98   true
-#define utils_equal_99_99   true
-#define utils_equal_100_100 true
+  __utils_check_expanded(                                                      \
+      utils_concat(utils_concat(utils_concat(utils_equal_, x), _), y))
+#define utils_equal_true_true   ~, true
+#define utils_equal_false_false ~, true
+#define utils_equal_0_0         ~, true
+#define utils_equal_1_1         ~, true
+#define utils_equal_2_2         ~, true
+#define utils_equal_3_3         ~, true
+#define utils_equal_4_4         ~, true
+#define utils_equal_5_5         ~, true
+#define utils_equal_6_6         ~, true
+#define utils_equal_7_7         ~, true
+#define utils_equal_8_8         ~, true
+#define utils_equal_9_9         ~, true
+#define utils_equal_10_10       ~, true
+#define utils_equal_11_11       ~, true
+#define utils_equal_12_12       ~, true
+#define utils_equal_13_13       ~, true
+#define utils_equal_14_14       ~, true
+#define utils_equal_15_15       ~, true
+#define utils_equal_16_16       ~, true
+#define utils_equal_17_17       ~, true
+#define utils_equal_18_18       ~, true
+#define utils_equal_19_19       ~, true
+#define utils_equal_20_20       ~, true
+#define utils_equal_21_21       ~, true
+#define utils_equal_22_22       ~, true
+#define utils_equal_23_23       ~, true
+#define utils_equal_24_24       ~, true
+#define utils_equal_25_25       ~, true
+#define utils_equal_26_26       ~, true
+#define utils_equal_27_27       ~, true
+#define utils_equal_28_28       ~, true
+#define utils_equal_29_29       ~, true
+#define utils_equal_30_30       ~, true
+#define utils_equal_31_31       ~, true
+#define utils_equal_32_32       ~, true
+#define utils_equal_33_33       ~, true
+#define utils_equal_34_34       ~, true
+#define utils_equal_35_35       ~, true
+#define utils_equal_36_36       ~, true
+#define utils_equal_37_37       ~, true
+#define utils_equal_38_38       ~, true
+#define utils_equal_39_39       ~, true
+#define utils_equal_40_40       ~, true
+#define utils_equal_41_41       ~, true
+#define utils_equal_42_42       ~, true
+#define utils_equal_43_43       ~, true
+#define utils_equal_44_44       ~, true
+#define utils_equal_45_45       ~, true
+#define utils_equal_46_46       ~, true
+#define utils_equal_47_47       ~, true
+#define utils_equal_48_48       ~, true
+#define utils_equal_49_49       ~, true
+#define utils_equal_50_50       ~, true
+#define utils_equal_51_51       ~, true
+#define utils_equal_52_52       ~, true
+#define utils_equal_53_53       ~, true
+#define utils_equal_54_54       ~, true
+#define utils_equal_55_55       ~, true
+#define utils_equal_56_56       ~, true
+#define utils_equal_57_57       ~, true
+#define utils_equal_58_58       ~, true
+#define utils_equal_59_59       ~, true
+#define utils_equal_60_60       ~, true
+#define utils_equal_61_61       ~, true
+#define utils_equal_62_62       ~, true
+#define utils_equal_63_63       ~, true
+#define utils_equal_64_64       ~, true
+#define utils_equal_65_65       ~, true
+#define utils_equal_66_66       ~, true
+#define utils_equal_67_67       ~, true
+#define utils_equal_68_68       ~, true
+#define utils_equal_69_69       ~, true
+#define utils_equal_70_70       ~, true
+#define utils_equal_71_71       ~, true
+#define utils_equal_72_72       ~, true
+#define utils_equal_73_73       ~, true
+#define utils_equal_74_74       ~, true
+#define utils_equal_75_75       ~, true
+#define utils_equal_76_76       ~, true
+#define utils_equal_77_77       ~, true
+#define utils_equal_78_78       ~, true
+#define utils_equal_79_79       ~, true
+#define utils_equal_80_80       ~, true
+#define utils_equal_81_81       ~, true
+#define utils_equal_82_82       ~, true
+#define utils_equal_83_83       ~, true
+#define utils_equal_84_84       ~, true
+#define utils_equal_85_85       ~, true
+#define utils_equal_86_86       ~, true
+#define utils_equal_87_87       ~, true
+#define utils_equal_88_88       ~, true
+#define utils_equal_89_89       ~, true
+#define utils_equal_90_90       ~, true
+#define utils_equal_91_91       ~, true
+#define utils_equal_92_92       ~, true
+#define utils_equal_93_93       ~, true
+#define utils_equal_94_94       ~, true
+#define utils_equal_95_95       ~, true
+#define utils_equal_96_96       ~, true
+#define utils_equal_97_97       ~, true
+#define utils_equal_98_98       ~, true
+#define utils_equal_99_99       ~, true
+#define utils_equal_100_100     ~, true
 
 // All of the following come from: https://github.com/swansontec/map-macro
 // Which is an implementation of a "recursive" macro allowing a macro
@@ -321,6 +331,8 @@
 #define __utils_map_out
 #define __utils_map_end(...)
 #define __utils_empty()
+#define utils_del(...)
+#define utils_replace(x) x utils_del
 // This is needed for msvc
 #define utils_defer(id) id __utils_empty()
 
