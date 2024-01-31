@@ -52,7 +52,7 @@ namespace alterhook
         continue;
       }
 
-      if (pc < src || tramp.pc_handling.first && pc > pushloc)
+      if (pc < src || (tramp.pc_handling.first && pc > pushloc))
       {
         report_error(tramp.ptrampoline.get(), tramp.ptarget,
                      static_cast<uint8_t>(pc - tramp_buffer));

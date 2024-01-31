@@ -8,8 +8,9 @@ namespace alterhook
   protection_info get_protection(const void* address)
   {
     protection_info info{};
-    std::ifstream maps{ "/proc/self/maps" };
-    utils_assert(maps.is_open(), "get_protection: couldn't open `/proc/self/maps`");
+    std::ifstream   maps{ "/proc/self/maps" };
+    utils_assert(maps.is_open(),
+                 "get_protection: couldn't open `/proc/self/maps`");
 
     do
     {
@@ -24,7 +25,6 @@ namespace alterhook
           reinterpret_cast<uintptr_t>(address) < end_address)
       {
         char perms[5]{};
-        int  result = PROT_NONE;
         maps >> perms;
 
         if (perms[0] == 'r')

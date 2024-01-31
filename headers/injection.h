@@ -1,11 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#if !utils_windows
-  #include "linux_thread_handler.h"
-#else
-  #include "windows_thread_handler.h"
-#endif
+#include "thread_handler.h"
 #pragma GCC visibility push(hidden)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"

@@ -233,7 +233,7 @@ namespace alterhook
     struct nested : std::nested_exception,
                     utils::remove_cvref_t<T>
     {
-      typedef utils::remove_cvref_t<T> base;
+      [[maybe_unused]] typedef utils::remove_cvref_t<T> base;
 
       nested(const std::nested_exception& other, T&& current)
           : std::nested_exception(other), base(std::forward<T>(current))

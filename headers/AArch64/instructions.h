@@ -14,7 +14,7 @@ namespace alterhook::aarch64
     W15 = 15, W16 = 16, W17 = 17, W18 = 18, W19 = 19,
     W20 = 20, W21 = 21, W22 = 22, W23 = 23, W24 = 24,
     W25 = 25, W26 = 26, W27 = 27, W28 = 28, W29 = 29,
-    W30 = 30,
+    W30 = 30, SP = 31,
     X0  = W0,  X1  = W1,  X2  = W2,  X3  = W3,
     X4  = W4,  X5  = W5,  X6  = W6,  X7  = W7,  X8  = W8,
     X9  = W9,  X10 = W10, X11 = W11, X12 = W12, X13 = W13,
@@ -61,10 +61,10 @@ namespace alterhook::aarch64
 
   namespace helpers
   {
-    template <size_t last_index, typename operand_t, size_t... indexes>
-    static void patch_operand_impl(const cs_operand_encoding& encoding,
-                                   uint32_t& instr, operand_t value,
-                                   std::index_sequence<indexes...>) noexcept
+    template <typename operand_t, size_t... indexes>
+    static uint32_t patch_operand_impl(const cs_operand_encoding& encoding,
+                                       uint32_t instr, operand_t value,
+                                       std::index_sequence<indexes...>) noexcept
     {
       const auto *sizes_begin = encoding.sizes,
                  *sizes_end   = encoding.sizes + encoding.operand_pieces_count;
@@ -72,13 +72,6 @@ namespace alterhook::aarch64
           std::accumulate(sizes_begin, sizes_end, uint8_t{});
       uint8_t current_size = 0;
 
-      const auto do_patch = [&](const size_t i, const uint32_t op_part)
-      {
-        const uint8_t  op_index  = encoding.indexes[i];
-        const uint32_t mask      = (1u << encoding.sizes[i]) - 1;
-        instr                   &= ~(mask << op_index);
-        instr                   |= op_part << op_index;
-      };
       const auto process = [&](const size_t i) -> bool
       {
         if (encoding.operand_pieces_count < (i + 1))
@@ -87,30 +80,64 @@ namespace alterhook::aarch64
         const uint32_t mask  = (1u << encoding.sizes[i]) - 1;
         const uint32_t op_part =
             (value >> (operand_size - current_size)) & mask;
-
-        do_patch(i, op_part);
+        instr &= ~(mask << encoding.indexes[i]);
+        instr |= (op_part << encoding.indexes[i]);
         return true;
       };
 
-      if ((!process(indexes) || ...) ||
-          encoding.operand_pieces_count != (last_index + 1))
-        return;
+      (!process(indexes) || ...);
+      return instr;
+    }
 
-      const uint32_t mask    = (1u << encoding.sizes[last_index]) - 1;
-      const uint32_t op_part = value & mask;
-      do_patch(last_index, op_part);
+    template <typename operand_t, size_t... indexes>
+    static operand_t
+        fetch_operand_impl(const cs_operand_encoding& encoding, uint32_t instr,
+                           std::index_sequence<indexes...>) noexcept
+    {
+      const auto *sizes_begin = encoding.sizes,
+                 *sizes_end   = encoding.sizes + encoding.operand_pieces_count;
+      const uint8_t operand_size =
+          std::accumulate(sizes_begin, sizes_end, uint8_t{});
+      uint8_t                         current_size = 0;
+      std::make_unsigned_t<operand_t> result{};
+
+      const auto process = [&](const size_t i) -> bool
+      {
+        if (encoding.operand_pieces_count < (i + 1))
+          return false;
+        current_size         += encoding.sizes[i];
+        const uint32_t mask   = (1u << encoding.sizes[i]) - 1;
+        const auto     value  = static_cast<std::make_unsigned_t<operand_t>>(
+            (instr >> encoding.indexes[i]) & mask);
+        result |= (value << (operand_size - current_size));
+        return true;
+      };
+
+      (!process(indexes) || ...);
+      return static_cast<operand_t>(result);
     }
   } // namespace helpers
 
   template <size_t max_pieces, typename operand_t>
-  static auto patch_operand(const cs_operand_encoding& encoding, uint32_t instr,
-                            operand_t value) noexcept
-      -> std::enable_if_t<
-          std::is_integral_v<operand_t> || std::is_enum_v<operand_t>, uint32_t>
+  static uint32_t patch_operand(const cs_operand_encoding& encoding,
+                                uint32_t instr, operand_t value) noexcept
   {
-    helpers::patch_operand_impl<max_pieces - 1>(
-        encoding, instr, value, std::make_index_sequence<max_pieces - 1>());
-    return instr;
+    static_assert(
+        std::is_integral_v<operand_t> || std::is_enum_v<operand_t>,
+        "patch_operand: value is expected to be of integral or enum type");
+    return helpers::patch_operand_impl(encoding, instr, value,
+                                       std::make_index_sequence<max_pieces>());
+  }
+
+  template <size_t max_pieces, typename operand_t>
+  static operand_t fetch_operand(const cs_operand_encoding& encoding,
+                                 uint32_t                   instr) noexcept
+  {
+    static_assert(
+        std::is_integral_v<operand_t> || std::is_enum_v<operand_t>,
+        "fetch_operand: value is expected to be of integral or enum type");
+    return helpers::fetch_operand_impl<operand_t>(
+        encoding, instr, std::make_index_sequence<max_pieces>());
   }
 
   constexpr std::array offset_encodings = {
@@ -124,7 +151,8 @@ namespace alterhook::aarch64
     cs_operand_encoding{ 1, { 10 },    { 12 }   },
     cs_operand_encoding{ 1, { 10 },    { 12 }   },
     cs_operand_encoding{ 1, { 10 },    { 12 }   },
-    cs_operand_encoding{ 1, { 10 },    { 12 }   }
+    cs_operand_encoding{ 1, { 10 },    { 12 }   },
+    cs_operand_encoding{ 1, { 12 },    { 9 }    }
   };
 
   constexpr std::array register_encodings = {
@@ -157,7 +185,8 @@ namespace alterhook::aarch64
     uimm12_10_pad2,
     uimm12_10_pad3,
     uimm12_10_pad1,
-    uimm12_10_pad4
+    uimm12_10_pad4,
+    imm9_12
   };
 
   enum class register_type
@@ -194,6 +223,14 @@ namespace alterhook::aarch64
         true;
 
     template <typename T, typename offset_t, typename = void>
+    inline constexpr bool has_custom_decode_offset = false;
+    template <typename T, typename offset_t>
+    inline constexpr bool has_custom_decode_offset<
+        T, offset_t,
+        std::void_t<decltype(T::decode_offset(std::declval<offset_t>()))>> =
+        true;
+
+    template <typename T, typename offset_t, typename = void>
     inline constexpr bool has_custom_offset_fits = false;
     template <typename T, typename offset_t>
     inline constexpr bool has_custom_offset_fits<
@@ -216,22 +253,21 @@ namespace alterhook::aarch64
     {
       typedef utils::type_sequence<int32_t, int32_t, int16_t, int32_t, int32_t,
                                    uint16_t, uint16_t, uint16_t, uint16_t,
-                                   uint16_t>
-                                  offset_types;
-      static constexpr std::array offset_pads = {
-        2, 2, 2, 0, 12, 0, 2, 3, 1, 4
-      };
-      static constexpr std::array offset_max_values = {
-        0x3'FF'FF'FF, 0x7'FF'FF, 0x3F'FF, 0x1F'FF'FF, 0x1F'FF'FF, 0xFF'FF,
-        0xFFF,        0xFFF,     0xFFF,   0xFFF,      0xFFF
-      };
-      static constexpr offset_type offset_format = offset_format_t::value;
+                                   uint16_t, uint16_t, int16_t>
+                                   offset_types;
+      static constexpr std::array  offset_pads      = { 2, 2, 2, 0, 12, 0,
+                                                        0, 2, 3, 1, 4,  0 };
+      static constexpr std::array  offset_bitcounts = { 26, 19, 14, 21, 21, 16,
+                                                        12, 12, 12, 12, 12, 9 };
+      static constexpr offset_type offset_format    = offset_format_t::value;
       static constexpr cs_operand_encoding offset_encoding =
           offset_encodings[utils::to_underlying(offset_format)];
-      static constexpr size_t offset_pad =
+      static constexpr uint32_t offset_pad =
           offset_pads[utils::to_underlying(offset_format)];
-      static constexpr size_t offset_max =
-          offset_max_values[utils::to_underlying(offset_format)];
+      static constexpr uint32_t offset_bitcount =
+          offset_bitcounts[utils::to_underlying(offset_format)];
+      static constexpr uint32_t offset_max =
+          utils::bitsfill<uint32_t>(offset_bitcount);
       typedef offset_types::template at<utils::to_underlying(offset_format)>
           offset_t;
       typedef std::conditional_t<std::is_signed_v<offset_t>, int32_t, uint32_t>
@@ -243,6 +279,25 @@ namespace alterhook::aarch64
           return customcls::convert_offset(offset);
         else
           return (offset >> offset_pad);
+      }
+
+      static offset_t decode_offset(offset_t offset)
+      {
+        if constexpr (has_custom_decode_offset<customcls, offset_t>)
+          return customcls::decode_offset(offset);
+        else
+        {
+          static_assert(
+              !has_custom_convert_offset<customcls, offset_t>,
+              "custom offset converter provided but no custom decoder");
+          if constexpr (std::is_signed_v<offset_t>)
+            return static_cast<offset_t>(
+                static_cast<std::make_unsigned_t<offset_t>>(
+                    utils::sign_extend<offset_bitcount>(offset))
+                << offset_pad);
+          else
+            return offset << offset_pad;
+        }
       }
 
       static bool offset_fits(offset_fits_t offset) noexcept
@@ -290,6 +345,9 @@ namespace alterhook::aarch64
                                          offset_type::uimm12_10_pad3))
           utils_assert(offset_fits(offset),
                        "offset too large to fit in 12 bits");
+        else if constexpr (offset_format == offset_type::imm9_12)
+          utils_assert(offset_fits(offset),
+                       "offset too large to fit in 9 bits");
         else
           static_assert(utils::always_false<base>, "offset type not covered");
       }
@@ -304,10 +362,16 @@ namespace alterhook::aarch64
       {
       }
 
-      void set_offset(offset_t offset)
+      void set_offset(offset_t offset) noexcept
       {
         assert_offset(offset);
         base::instr = patch_operand<2>(offset_encoding, base::instr, offset);
+      }
+
+      offset_t get_offset() const noexcept
+      {
+        return decode_offset(
+            fetch_operand<2, offset_t>(offset_encoding, base::instr));
       }
     };
 
@@ -470,8 +534,17 @@ namespace alterhook::aarch64
     {
       static uint32_t convert_offset(int32_t offset) noexcept
       {
-        offset >>= pad;
-        return ((offset & 0b11) << 19) | (offset >> 2);
+        uint32_t result   = offset;
+        result          >>= pad;
+        return ((result & 0b11) << 19) | (result >> 2);
+      }
+
+      static int32_t decode_offset(int32_t offset) noexcept
+      {
+        uint32_t result = offset;
+        result          = ((result >> 19) & 0b11) | ((result & 0x7'FF'FF) << 2);
+        result <<= pad;
+        return utils::sign_extend<21>(result);
       }
     };
   } // namespace templates
@@ -633,6 +706,40 @@ namespace alterhook::aarch64
         : base(opcode, offset, reg, bitpos)
     {
     }
+  };
+
+  struct LDR_post
+      : utils::properties<
+            utils::property<
+                templates::resizable_register_operand,
+                utils::val<resizable_register_type::reg5_0_size1_30>>,
+            utils::property<templates::register_operand,
+                            utils::val<register_type::reg5_5>>,
+            utils::property<templates::offset_operand,
+                            utils::val<offset_type::imm9_12>>>
+  {
+    static constexpr uint32_t opcode = 0xB8'40'04'00;
+
+    template <typename T>
+    LDR_post(T destreg = T(), reg_t basereg = X0, offset_t offset = 0)
+        : base(opcode, offset, basereg, destreg)
+    {
+    }
+
+    template <typename T>
+    void set_destination_register(T reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    void set_base_register(reg_t reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    void set_register(register_t) noexcept = delete;
+    template <typename T>
+    void set_register(T) noexcept = delete;
   };
 
   struct LDRu32 : utils::properties<
@@ -803,6 +910,40 @@ namespace alterhook::aarch64
     }
   };
 
+  struct STR_pre
+      : utils::properties<
+            utils::property<
+                templates::resizable_register_operand,
+                utils::val<resizable_register_type::reg5_0_size1_30>>,
+            utils::property<templates::register_operand,
+                            utils::val<register_type::reg5_5>>,
+            utils::property<templates::offset_operand,
+                            utils::val<offset_type::imm9_12>>>
+  {
+    static constexpr uint32_t opcode = 0xB8'00'0C'00;
+
+    template <typename T = xregisters>
+    STR_pre(T srcreg = T(), register_t basereg = X0, offset_t offset = 0)
+        : base(opcode, offset, basereg, srcreg)
+    {
+    }
+
+    template <typename T>
+    void set_source_register(T reg) noexcept
+    {
+      property_at<0>::set_register(reg);
+    }
+
+    void set_base_register(register_t reg) noexcept
+    {
+      property_at<1>::set_register(reg);
+    }
+
+    void set_register(register_t) noexcept = delete;
+    template <typename T>
+    void set_register(T) noexcept = delete;
+  };
+
   struct ADR : utils::properties<
                    utils::property<templates::register_operand,
                                    utils::val<register_type::reg5_0>>,
@@ -875,12 +1016,32 @@ namespace alterhook::aarch64
     template <typename T>
     struct LDR_LIKE_ABS
     {
-      const LDR_LITERAL fetch_ldr;
-      const T           ldr;
+    private:
+      typedef typename LDR_LITERAL::offset_t fetch_offset_t;
 
+      LDR_LITERAL fetch_ldr;
+      T           ldr;
+
+    public:
       LDR_LIKE_ABS(reg_t reg = X0, reg_t tmp_reg = X0, int32_t offset = 0)
           : fetch_ldr(offset, tmp_reg), ldr(reg, tmp_reg)
       {
+      }
+
+      void set_register(aarch64::xregisters reg)
+      {
+        fetch_ldr.set_register(reg);
+        ldr.set_base_register(static_cast<reg_t>(reg));
+      }
+
+      fetch_offset_t get_fetch_offset() const noexcept
+      {
+        return fetch_ldr.get_offset();
+      }
+
+      void set_fetch_offset(fetch_offset_t offset) noexcept
+      {
+        fetch_ldr.set_offset(offset);
       }
     };
 
@@ -889,6 +1050,46 @@ namespace alterhook::aarch64
     using LDRV32_ABS  = LDR_LIKE_ABS<LDRVu32>;
     using LDRV64_ABS  = LDR_LIKE_ABS<LDRVu64>;
     using LDRV128_ABS = LDR_LIKE_ABS<LDRVu128>;
+
+    // note: there are no actual push/pop instructions in the aarch64
+    // architecture, reason being that the stack pointer needs to be 16 bytes
+    // aligned and considering that a regular register requires maximum 8
+    // bytes, a push instruction would waste an additional of 8 bytes
+    // each time it's used leading to memory fragmentation. I have decided to
+    // provide them nevertheless for use in PC handling where they are used only
+    // once and always in pairs before the trampoline ends. The way the
+    // following implementations of push/pop work is by using a pre-indexed str
+    // that subtracts 16 from SP and a post-indexed ldr that adds 16 to SP
+    // respectively.
+    // source:
+    // https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/using-the-stack-in-aarch64-implementing-push-and-pop
+    struct PUSH : private STR_pre
+    {
+      template <typename T = xregisters>
+      PUSH(T reg = T()) : STR_pre(reg, SP, -16)
+      {
+      }
+
+      template <typename T>
+      void set_register(T reg) noexcept
+      {
+        STR_pre::set_source_register(reg);
+      }
+    };
+
+    struct POP : private LDR_post
+    {
+      template <typename T = xregisters>
+      POP(T reg = T()) : LDR_post(reg, SP, 16)
+      {
+      }
+
+      template <typename T>
+      void set_register(T reg) noexcept
+      {
+        LDR_post::set_destination_register(reg);
+      }
+    };
   } // namespace custom
 } // namespace alterhook::aarch64
 

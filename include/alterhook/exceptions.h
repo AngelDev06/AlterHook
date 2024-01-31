@@ -86,12 +86,6 @@ namespace alterhook::exceptions
     } // namespace it_block
 
     utils_generate_exception(
-        unused_register_not_found, trampoline_exception, stdattr(ALTERHOOK_API),
-        base_args((const std::byte*, target)),
-        reason("Couldn't find a register suitable for handling "
-               "PC relative instructions"));
-
-    utils_generate_exception(
         pc_relative_handling_fail, trampoline_exception, stdattr(ALTERHOOK_API),
         fields((const std::byte*, instruction_address),
                (byte_array<24>, buffer, hidden), (bool, thumb, hidden)),
@@ -108,6 +102,14 @@ namespace alterhook::exceptions
         reason("More than one branch instruction lead to the same destination "
                "but with different instruction sets"),
         extra(std::string info() const override;));
+#endif
+
+#if utils_arm || utils_arm64
+    utils_generate_exception(
+        unused_register_not_found, trampoline_exception, stdattr(ALTERHOOK_API),
+        base_args((const std::byte*, target)),
+        reason("Couldn't find a register suitable for handling "
+               "PC relative instructions"));
 #endif
 
     utils_generate_exception(bad_target, trampoline_exception,

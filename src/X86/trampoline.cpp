@@ -6,7 +6,7 @@
 #include "buffer.h"
 #include "tools.h"
 #include "trampoline.h"
-#include "x86_instructions.h"
+#include "instructions.h"
 
 namespace alterhook
 {

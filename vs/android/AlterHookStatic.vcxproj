@@ -35,22 +35,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\addresser.cpp" />
-    <ClCompile Include="..\..\src\ARM\injection.cpp" />
-    <ClCompile Include="..\..\src\ARM\trampoline.cpp" />
-    <ClCompile Include="..\..\src\buffer.cpp" />
-    <ClCompile Include="..\..\src\hook.cpp" />
-    <ClCompile Include="..\..\src\hook_chain.cpp" />
-    <ClCompile Include="..\..\src\linux\allocation.cpp" />
-    <ClCompile Include="..\..\src\linux\other.cpp" />
-    <ClCompile Include="..\..\src\misc.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\..\headers\arm_instructions.h" />
+    <ClInclude Include="..\..\headers\ARM\instructions.h" />
     <ClInclude Include="..\..\headers\buffer.h" />
     <ClInclude Include="..\..\headers\disassembler.h" />
     <ClInclude Include="..\..\headers\injection.h" />
-    <ClInclude Include="..\..\headers\linux_thread_handler.h" />
+    <ClInclude Include="..\..\headers\linux\thread_handler.h" />
+    <ClInclude Include="..\..\include\alterhook.h" />
     <ClInclude Include="..\..\include\alterhook\addresser.h" />
     <ClInclude Include="..\..\include\alterhook\detail\constants.h" />
     <ClInclude Include="..\..\include\alterhook\detail\macros.h" />
@@ -75,6 +65,21 @@
     <ProjectReference Include="..\..\capstone\vs\capstone_android_static\capstone.vcxproj">
       <Project>{7530b11f-8be5-47c3-a022-3c26b95566b4}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\addresser.cpp" />
+    <ClCompile Include="..\..\src\ARM\exceptions.cpp" />
+    <ClCompile Include="..\..\src\ARM\injection.cpp" />
+    <ClCompile Include="..\..\src\ARM\thread_processing.cpp" />
+    <ClCompile Include="..\..\src\ARM\trampoline.cpp" />
+    <ClCompile Include="..\..\src\buffer.cpp" />
+    <ClCompile Include="..\..\src\hook.cpp" />
+    <ClCompile Include="..\..\src\hook_chain.cpp" />
+    <ClCompile Include="..\..\src\linux\allocation.cpp" />
+    <ClCompile Include="..\..\src\linux\exceptions.cpp" />
+    <ClCompile Include="..\..\src\linux\freezer.cpp" />
+    <ClCompile Include="..\..\src\linux\other.cpp" />
+    <ClCompile Include="..\..\src\misc.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{41b79183-2f82-4be4-96d0-e2e786524325}</ProjectGuid>
@@ -174,7 +179,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -184,7 +189,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -194,7 +199,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -204,7 +209,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -214,7 +219,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -224,7 +229,7 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
@@ -234,17 +239,18 @@
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
+      <ObjectFileName>$(IntDir)%(RelativeDir)%(filename).o</ObjectFileName>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\pre-compiled headers\linux\pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\linux;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\linux;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\ARM;$(ProjectDir)..\..\headers\linux;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CppLanguageStandard>c++1z</CppLanguageStandard>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ExceptionHandling>Enabled</ExceptionHandling>
