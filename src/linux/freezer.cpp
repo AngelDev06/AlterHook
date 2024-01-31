@@ -17,7 +17,9 @@ namespace alterhook
 {
   static uintptr_t getip(void* sigcontext) noexcept
   {
-#if utils_arm
+#if utils_aarch64
+    return static_cast<ucontext_t*>(sigcontext)->uc_mcontext.pc;
+#elif utils_arm
     return static_cast<ucontext_t*>(sigcontext)->uc_mcontext.arm_pc;
 #elif utils_x64
     return static_cast<ucontext_t*>(sigcontext)->uc_mcontext.gregs[REG_RIP];
@@ -28,7 +30,9 @@ namespace alterhook
 
   static void setip(void* sigcontext, uintptr_t ip) noexcept
   {
-#if utils_arm
+#if utils_aarch64
+    static_cast<ucontext_t*>(sigcontext)->uc_mcontext.pc = ip;
+#elif utils_arm
     static_cast<ucontext_t*>(sigcontext)->uc_mcontext.arm_pc = ip;
 #elif utils_x64
     static_cast<ucontext_t*>(sigcontext)->uc_mcontext.gregs[REG_RIP] = ip;

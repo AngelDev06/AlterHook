@@ -33,7 +33,7 @@
       }
     },
     {
-      "name": "android-arm64-base",
+      "name": "android-aarch64-base",
       "hidden": true,
       "inherits": "android-base",
       "cacheVariables": {
@@ -85,34 +85,34 @@
       }
     },
     {
-      "name": "android-arm64-debug",
-      "displayName": "Android ARM64 Debug",
-      "inherits": "android-arm64-base",
+      "name": "android-aarch64-debug",
+      "displayName": "Android AArch64 Debug",
+      "inherits": "android-aarch64-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
-      "name": "android-arm64-release",
-      "displayName": "Android ARM64 Release",
-      "inherits": "android-arm64-base",
+      "name": "android-aarch64-release",
+      "displayName": "Android AArch64 Release",
+      "inherits": "android-aarch64-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "android-arm64-debug-so",
-      "displayName": "Android ARM64 Debug SO",
-      "inherits": "android-arm64-base",
+      "name": "android-aarch64-debug-so",
+      "displayName": "Android AArch64 Debug SO",
+      "inherits": "android-aarch64-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "ALTERHOOK_SHARED": "ON"
       }
     },
     {
-      "name": "android-arm64-release-so",
-      "displayName": "Android ARM64 Release SO",
-      "inherits": "android-arm64-base",
+      "name": "android-aarch64-release-so",
+      "displayName": "Android AArch64 Release SO",
+      "inherits": "android-aarch64-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "ALTERHOOK_SHARED": "ON"

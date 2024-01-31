@@ -50,8 +50,8 @@
       }
     },
     {
-      "name": "x64-debug",
-      "displayName": "x64 Debug",
+      "name": "windows-msvc-x64-debug",
+      "displayName": "Windows MSVC x64 Debug",
       "inherits": "windows-msvc-base",
       "architecture": {
         "value": "x64",
@@ -62,16 +62,16 @@
       }
     },
     {
-      "name": "x64-release",
-      "displayName": "x64 Release",
-      "inherits": "x64-debug",
+      "name": "windows-msvc-x64-release",
+      "displayName": "Windows MSVC x64 Release",
+      "inherits": "windows-msvc-x64-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "x86-debug",
-      "displayName": "x86 Debug",
+      "name": "windows-msvc-x86-debug",
+      "displayName": "Windows MSVC x86 Debug",
       "inherits": "windows-msvc-base",
       "architecture": {
         "value": "x86",
@@ -82,16 +82,16 @@
       }
     },
     {
-      "name": "x86-release",
-      "displayName": "x86 Release",
-      "inherits": "x86-debug",
+      "name": "windows-msvc-x86-release",
+      "displayName": "Windows MSVC x86 Release",
+      "inherits": "windows-msvc-x86-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "clang-x64-debug",
-      "displayName": "Clang x64 Debug",
+      "name": "windows-clang-x64-debug",
+      "displayName": "Windows Clang x64 Debug",
       "inherits": "windows-clang-base",
       "architecture": {
         "value": "x64",
@@ -107,16 +107,16 @@
       }
     },
     {
-      "name": "clang-x64-release",
-      "displayName": "Clang x64 Release",
-      "inherits": "clang-x64-debug",
+      "name": "windows-clang-x64-release",
+      "displayName": "Windows Clang x64 Release",
+      "inherits": "windows-clang-x64-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "clang-x86-debug",
-      "displayName": "Clang x86 Debug",
+      "name": "windows-clang-x86-debug",
+      "displayName": "Windows Clang x86 Debug",
       "inherits": "windows-clang-base",
       "architecture": {
         "value": "x86",
@@ -139,59 +139,59 @@
       }
     },
     {
-      "name": "clang-x86-release",
-      "displayName": "Clang x86 Release",
-      "inherits": "clang-x86-debug",
+      "name": "windows-clang-x86-release",
+      "displayName": "Windows Clang x86 Release",
+      "inherits": "windows-clang-x86-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "x64-debug-dll",
-      "displayName": "x64 Debug DLL",
-      "inherits": [ "x64-debug", "windows-dll" ]
+      "name": "windows-msvc-x64-debug-dll",
+      "displayName": "Windows MSVC x64 Debug DLL",
+      "inherits": [ "windows-msvc-x64-debug", "windows-dll" ]
     },
     {
-      "name": "x64-release-dll",
-      "displayName": "x64 Release DLL",
-      "inherits": [ "x64-release", "windows-dll" ]
+      "name": "windows-msvc-x64-release-dll",
+      "displayName": "Windows MSVC x64 Release DLL",
+      "inherits": [ "windows-msvc-x64-release", "windows-dll" ]
     },
     {
-      "name": "x86-debug-dll",
-      "displayName": "x86 Debug DLL",
-      "inherits": [ "x86-debug", "windows-dll" ]
+      "name": "windows-msvc-x86-debug-dll",
+      "displayName": "Windows MSVC x86 Debug DLL",
+      "inherits": [ "windows-msvc-x86-debug", "windows-dll" ]
     },
     {
-      "name": "x86-release-dll",
-      "displayName": "x86 Release DLL",
-      "inherits": [ "x86-release", "windows-dll" ]
+      "name": "windows-msvc-x86-release-dll",
+      "displayName": "Windows MSVC x86 Release DLL",
+      "inherits": [ "windows-msvc-x86-release", "windows-dll" ]
     },
     {
-      "name": "clang-x64-debug-dll",
-      "displayName": "Clang x64 Debug DLL",
-      "inherits": [ "clang-x64-debug", "windows-dll" ]
+      "name": "windows-clang-x64-debug-dll",
+      "displayName": "Windows Clang x64 Debug DLL",
+      "inherits": [ "windows-clang-x64-debug", "windows-dll" ]
     },
     {
-      "name": "clang-x64-release-dll",
-      "displayName": "Clang x64 Release DLL",
-      "inherits": [ "clang-x64-release", "windows-dll" ]
+      "name": "windows-clang-x64-release-dll",
+      "displayName": "Windows Clang x64 Release DLL",
+      "inherits": [ "windows-clang-x64-release", "windows-dll" ]
     },
     {
-      "name": "clang-x86-debug-dll",
-      "displayName": "Clang x86 Debug DLL",
-      "inherits": [ "clang-x86-debug", "windows-dll" ]
+      "name": "windows-clang-x86-debug-dll",
+      "displayName": "Windows Clang x86 Debug DLL",
+      "inherits": [ "windows-clang-x86-debug", "windows-dll" ]
     },
     {
-      "name": "clang-x86-release-dll",
-      "displayName": "Clang x86 Release DLL",
-      "inherits": [ "clang-x86-release", "windows-dll" ]
+      "name": "windows-clang-x86-release-dll",
+      "displayName": "Windows Clang x86 Release DLL",
+      "inherits": [ "windows-clang-x86-release", "windows-dll" ]
     }
   ],
   "testPresets": [
     {
       "name": "test-windows-dll",
       "displayName": "Windows DLL test",
-      "configurePreset": "x64-debug-dll",
+      "configurePreset": "windows-msvc-x64-debug-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
@@ -201,7 +201,7 @@
     {
       "name": "test-clang-windows-dll",
       "displayName": "Windows Clang DLL test",
-      "configurePreset": "clang-x64-debug-dll",
+      "configurePreset": "windows-clang-x64-debug-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
@@ -211,7 +211,7 @@
     {
       "name": "test-x86-windows-dll",
       "displayName": "Windows x86 DLL test",
-      "configurePreset": "x86-debug-dll",
+      "configurePreset": "windows-msvc-x86-debug-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
@@ -221,7 +221,7 @@
     {
       "name": "test-clang-x86-windows-dll",
       "displayName": "Windows Clang x86 DLL test",
-      "configurePreset": "clang-x86-debug-dll",
+      "configurePreset": "windows-clang-x86-debug-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",

@@ -104,7 +104,7 @@ namespace alterhook::exceptions
         extra(std::string info() const override;));
 #endif
 
-#if utils_arm || utils_arm64
+#if utils_arm || utils_aarch64
     utils_generate_exception(
         unused_register_not_found, trampoline_exception, stdattr(ALTERHOOK_API),
         base_args((const std::byte*, target)),

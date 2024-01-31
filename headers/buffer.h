@@ -15,7 +15,7 @@ namespace alterhook
   #define __origin(...) __VA_ARGS__
   #if utils_arm
   constexpr size_t max_memory_range = 33'554'428;
-  #elif utils_arm64
+  #elif utils_aarch64
   constexpr size_t max_memory_range = 134'217'728;
   #else
   constexpr size_t max_memory_range = 0x40'00'00'00;

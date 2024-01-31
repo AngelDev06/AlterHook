@@ -19,7 +19,7 @@ namespace alterhook
 
 #if utils_x86 || utils_x64
     static constexpr cs_arch architecture = CS_ARCH_X86;
-#elif utils_arm64
+#elif utils_aarch64
     static constexpr cs_arch architecture = CS_ARCH_AARCH64;
 #elif utils_arm
     static constexpr cs_arch architecture = CS_ARCH_ARM;
@@ -31,7 +31,7 @@ namespace alterhook
       return CS_MODE_64;
 #elif utils_x86
       return CS_MODE_32;
-#elif utils_arm64
+#elif utils_aarch64
       return CS_MODE_ARM;
 #elif utils_arm
       return thumb ? CS_MODE_THUMB : CS_MODE_ARM;
