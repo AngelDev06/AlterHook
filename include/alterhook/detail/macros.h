@@ -16,7 +16,7 @@
   #define ALTERHOOK_API
 #endif
 
-#if !utils_arm && !utils_arm64 && !utils_x86 && !utils_x64
+#if !utils_arm && !utils_aarch64 && !utils_x86 && !utils_x64
   #error unsupported architecture
 #endif
 
