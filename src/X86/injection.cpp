@@ -3,7 +3,7 @@
 #include <pch.h>
 #include "exceptions.h"
 #include "tools.h"
-#include "x86_instructions.h"
+#include "instructions.h"
 #include "injection.h"
 #pragma GCC visibility push(hidden)
 

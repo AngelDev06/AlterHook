@@ -60,9 +60,9 @@ namespace alterhook
     }
 
   #if !utils_x64
-    if (result = static_cast<memory_block*>(mmap(nullptr, memory_block_size,
-                                                 executable_memory,
-                                                 mmap_random_config, 0, 0)))
+    if ((result = static_cast<memory_block*>(mmap(nullptr, memory_block_size,
+                                                  executable_memory,
+                                                  mmap_random_config, 0, 0))))
       return result;
   #endif
     throw(exceptions::mmap_exception(errno, region, memory_block_size,

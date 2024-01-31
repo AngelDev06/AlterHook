@@ -11,32 +11,38 @@ namespace alterhook
   #define __usethumb(...)
 #endif
 
-#if utils_x86 || utils_x64
-  constexpr cs_arch disasm_arch = CS_ARCH_X86;
-  #if utils_x64
-    #define disasm_mode(unused) CS_MODE_64
-  #else
-    #define disasm_mode(unused) CS_MODE_32
-  #endif
-#elif utils_arm64
-  constexpr cs_arch disasm_arch = CS_ARCH_ARM64;
-  #define disasm_mode(unused) CS_MODE_ARM
-#else
-  constexpr cs_arch disasm_arch = CS_ARCH_ARM;
-  #define disasm_mode(thumb) (thumb ? CS_MODE_THUMB : CS_MODE_ARM)
-#endif
-
   class disassembler
   {
   public:
     class weak_iterator;
     class iterator;
 
+#if utils_x86 || utils_x64
+    static constexpr cs_arch architecture = CS_ARCH_X86;
+#elif utils_arm64
+    static constexpr cs_arch architecture = CS_ARCH_AARCH64;
+#elif utils_arm
+    static constexpr cs_arch architecture = CS_ARCH_ARM;
+#endif
+
+    constexpr cs_mode mode() const noexcept
+    {
+#if utils_x64
+      return CS_MODE_64;
+#elif utils_x86
+      return CS_MODE_32;
+#elif utils_arm64
+      return CS_MODE_ARM;
+#elif utils_arm
+      return thumb ? CS_MODE_THUMB : CS_MODE_ARM;
+#endif
+    }
+
     disassembler(const std::byte*  src,
                  uintptr_t address __usethumb(, bool thumb), bool detail = true)
         : src(src), address(address) __usethumb(, thumb(thumb))
     {
-      if (cs_err error = cs_open(disasm_arch, disasm_mode(thumb), &handle))
+      if (cs_err error = cs_open(architecture, mode(), &handle))
         throw(exceptions::disassembler_init_fail(src, error));
       if (!detail)
         return;

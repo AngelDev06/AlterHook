@@ -12,138 +12,162 @@
     <Filter Include="Include">
       <UniqueIdentifier>{bed57ba1-19d6-449c-9711-9f766c5bce94}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Include\utilities">
-      <UniqueIdentifier>{72104cf6-b00e-4520-9446-a03536395047}</UniqueIdentifier>
-    </Filter>
     <Filter Include="PCH">
       <UniqueIdentifier>{85d85424-09d8-4fec-8f34-f79d99f6fc42}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Include\detail">
+    <Filter Include="Header Files\General">
+      <UniqueIdentifier>{e38af0f4-a7c2-4099-b93f-de96778b331a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Arch">
+      <UniqueIdentifier>{42db15c8-baf3-4912-a090-03c8ad169485}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\OS">
+      <UniqueIdentifier>{2dfad50a-ddd8-4934-b76b-3fe4ff15c3e5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\General">
+      <UniqueIdentifier>{212864c7-6c3c-4020-a4a7-6d7cf908942d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Arch">
+      <UniqueIdentifier>{e025a0f3-e0af-492b-aa82-fb59da9e4d91}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\OS">
+      <UniqueIdentifier>{b4f47cea-35f5-49ef-be54-17ad9654d428}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Include\Detail">
       <UniqueIdentifier>{29a7589e-1799-4671-9f68-fde0f60c5469}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Include\Utilities">
+      <UniqueIdentifier>{72104cf6-b00e-4520-9446-a03536395047}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Include\General">
+      <UniqueIdentifier>{cbd1a7de-4565-4dd1-a3f8-bb32a7b970d6}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\addresser.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\buffer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\hook.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\hook_chain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\misc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\X86\trampoline.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\windows\other.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\pre-compiled headers\windows\pch.cpp">
       <Filter>PCH</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\windows\allocation.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="..\..\src\addresser.cpp">
+      <Filter>Source Files\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\buffer.cpp">
+      <Filter>Source Files\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\hook.cpp">
+      <Filter>Source Files\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\hook_chain.cpp">
+      <Filter>Source Files\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\misc.cpp">
+      <Filter>Source Files\General</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\X86\injection.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\windows\exceptions.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\windows\freezer.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Arch</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\X86\thread_processing.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Arch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\X86\trampoline.cpp">
+      <Filter>Source Files\Arch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\allocation.cpp">
+      <Filter>Source Files\OS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\exceptions.cpp">
+      <Filter>Source Files\OS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\freezer.cpp">
+      <Filter>Source Files\OS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\other.cpp">
+      <Filter>Source Files\OS</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\headers\buffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\headers\disassembler.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\headers\injection.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\headers\windows_thread_handler.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\headers\x86_instructions.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\calling_conventions.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\concepts.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\function_traits.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\other.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\static_vector.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\type_sequence.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\utils.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\utils_macros.h">
-      <Filter>Include\utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\addresser.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\exceptions.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\hook.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\hook_chain.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\hook_map.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\modifier.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\tools.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\alterhook\trampoline.h">
-      <Filter>Include</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\pre-compiled headers\windows\pch.h">
       <Filter>PCH</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\detail\constants.h">
-      <Filter>Include\detail</Filter>
+      <Filter>Include\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\detail\macros.h">
-      <Filter>Include\detail</Filter>
+      <Filter>Include\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\boilerplate.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\data_processing.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\alterhook\utilities\properties.h">
-      <Filter>Include\utilities</Filter>
+      <Filter>Include\Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\headers\buffer.h">
+      <Filter>Header Files\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\headers\disassembler.h">
+      <Filter>Header Files\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\headers\injection.h">
+      <Filter>Header Files\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\headers\X86\instructions.h">
+      <Filter>Header Files\Arch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\headers\windows\thread_handler.h">
+      <Filter>Header Files\OS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\addresser.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\exceptions.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\hook.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\hook_chain.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\hook_map.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\modifier.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\tools.h">
+      <Filter>Include\General</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\alterhook\trampoline.h">
+      <Filter>Include\General</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -4,7 +4,7 @@
 #include "trampoline.h"
 #include "exceptions.h"
 #include "injection.h"
-#include "arm64_instructions.h"
+#include "instructions.h"
 #pragma GCC visibility push(hidden)
 
 namespace alterhook

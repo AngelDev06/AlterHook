@@ -2,7 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
 #include "exceptions.h"
-#include "linux_thread_handler.h"
+#include "thread_handler.h"
 #include "tools.h"
 
 #if utils_arm
@@ -224,7 +224,7 @@ namespace alterhook
     nested_throw(exceptions::thread_process_fail(tramp_addr, target_addr, pos));
   }
 
-  [[gcc::visibility("hidden")]] void
+  [[gnu::visibility("hidden")]] void
       report_error(std::byte* tramp, std::byte* target, uint8_t pos) noexcept
   {
     auto& [status, data] = thread_freezer::result;

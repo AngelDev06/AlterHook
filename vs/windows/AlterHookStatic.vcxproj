@@ -27,8 +27,9 @@
     <ClInclude Include="..\..\headers\buffer.h" />
     <ClInclude Include="..\..\headers\disassembler.h" />
     <ClInclude Include="..\..\headers\injection.h" />
-    <ClInclude Include="..\..\headers\windows_thread_handler.h" />
-    <ClInclude Include="..\..\headers\x86_instructions.h" />
+    <ClInclude Include="..\..\headers\windows\thread_handler.h" />
+    <ClInclude Include="..\..\headers\X86\instructions.h" />
+    <ClInclude Include="..\..\include\alterhook.h" />
     <ClInclude Include="..\..\include\alterhook\addresser.h" />
     <ClInclude Include="..\..\include\alterhook\detail\constants.h" />
     <ClInclude Include="..\..\include\alterhook\detail\macros.h" />
@@ -153,7 +154,8 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\windows;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\windows;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\X86;$(ProjectDir)..\..\headers\windows</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4068;5030</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -172,7 +174,8 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\windows;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\windows;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\X86;$(ProjectDir)..\..\headers\windows</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4068;5030</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -191,7 +194,8 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\windows;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\windows;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\X86;$(ProjectDir)..\..\headers\windows</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4068;5030</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -210,7 +214,8 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)\..\..\pre-compiled headers\windows;$(ProjectDir)\..\..\headers;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\include\alterhook;$(ProjectDir)..\..\capstone\include;$(ProjectDir)..\..\pre-compiled headers\windows;$(ProjectDir)..\..\headers;$(ProjectDir)..\..\headers\X86;$(ProjectDir)..\..\headers\windows</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4068;5030</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>

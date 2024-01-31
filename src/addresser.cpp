@@ -3,7 +3,7 @@
 #include <pch.h>
 #include "addresser.h"
 #if utils_windows
-  #include "x86_instructions.h"
+  #include "instructions.h"
 #endif
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcovered-switch-default"

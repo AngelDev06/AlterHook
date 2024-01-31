@@ -30,6 +30,9 @@ namespace alterhook::utils
         find_impl<i + 1, T, types...>;
     template <size_t i, typename T, typename... types>
     inline constexpr size_t find_impl<i, T, T, types...> = i;
+
+    template <typename first, typename... rest>
+    struct merge_impl;
   } // namespace helpers
 
   template <typename... types>
@@ -47,6 +50,10 @@ namespace alterhook::utils
     template <typename T>
     using push_back = type_sequence<types..., T>;
 
+    template <typename... sequences>
+    using merge = typename helpers::merge_impl<type_sequence<types...>,
+                                               sequences...>::type;
+
     template <size_t i>
     using at = typename helpers::type_at_impl<i, types...>::type;
 
@@ -56,6 +63,22 @@ namespace alterhook::utils
     template <typename T>
     static constexpr size_t find = helpers::find_impl<0, T, types...>;
   };
+
+  namespace helpers
+  {
+    template <typename... left_types, typename... right_types, typename... rest>
+    struct merge_impl<type_sequence<left_types...>,
+                      type_sequence<right_types...>, rest...>
+        : merge_impl<type_sequence<left_types..., right_types...>, rest...>
+    {
+    };
+
+    template <typename... types>
+    struct merge_impl<type_sequence<types...>>
+    {
+      typedef type_sequence<types...> type;
+    };
+  } // namespace helpers
 
   template <size_t i, typename... types>
   struct type_at : helpers::type_at_impl<i, types...>
@@ -76,6 +99,10 @@ namespace alterhook::utils
   template <typename T, typename... types>
   inline constexpr size_t find_type<T, type_sequence<types...>> =
       helpers::find_impl<0, T, types...>;
+
+  template <typename first, typename... rest>
+  using merge_type_sequences =
+      typename helpers::merge_impl<first, rest...>::type;
 
   template <typename T>
   struct pack_to_type_sequence;

@@ -235,4 +235,25 @@ namespace alterhook::utils
       return value_t{};
     return (value_t{ 1 } << count) - value_t{ 1 };
   }
+
+  template <size_t bitcount, typename value_t>
+  constexpr auto sign_extend(value_t value) noexcept
+  {
+    static_assert(std::is_integral_v<value_t>,
+                  "sign_extend: value is expected to be of integral type");
+    static_assert(std::numeric_limits<value_t>::digits > bitcount,
+                  "sign_extend: bitcount is too large for the value specified");
+
+    if constexpr (std::numeric_limits<value_t>::digits == bitcount)
+      return static_cast<std::make_signed_t<value_t>>(value);
+    else
+    {
+      struct extender
+      {
+        std::make_signed_t<value_t> result : bitcount;
+      };
+
+      return extender{ value }.result;
+    }
+  }
 } // namespace alterhook::utils

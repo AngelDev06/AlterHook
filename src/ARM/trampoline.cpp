@@ -3,7 +3,7 @@
 #include <pch.h>
 #include "exceptions.h"
 #include "disassembler.h"
-#include "arm_instructions.h"
+#include "instructions.h"
 #include "buffer.h"
 #include "trampoline.h"
 
@@ -117,12 +117,6 @@ namespace alterhook
       if (!result)
         return std::nullopt;
       return result->mem;
-    }
-
-    static std::byte* pop_thumb_bit(std::byte* address) noexcept
-    {
-      return reinterpret_cast<std::byte*>(reinterpret_cast<uintptr_t>(address) &
-                                          ~1u);
     }
 
     static bool reads_from_register(const cs_insn& instr, arm_reg reg) noexcept

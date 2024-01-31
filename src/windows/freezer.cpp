@@ -2,7 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #include <pch.h>
 #include "exceptions.h"
-#include "windows_thread_handler.h"
+#include "thread_handler.h"
 #include "tools.h"
 
 namespace alterhook
