@@ -2,9 +2,9 @@ name: CMake
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "aarch64-support" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "aarch64-support" ]
 
 jobs:
   build:
