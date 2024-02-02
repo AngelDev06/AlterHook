@@ -38,9 +38,17 @@
       }
     },
     {
-      "name": "linux-x64-debug",
-      "displayName": "Linux x64 Debug",
-      "inherits": "linux-gcc-base",
+      "name": "linux-clang-base",
+      "hidden": true,
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "linux-x64-base",
+      "hidden": true,
       "architecture": {
         "value": "x64",
         "strategy": "external"
@@ -50,35 +58,24 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
-          "intelliSenseMode": "linux-gcc-x86"
+          "intelliSenseMode": "linux-gcc-x64"
         }
       }
     },
     {
-      "name": "linux-x64-release",
-      "displayName": "Linux x64 Release",
-      "inherits": "linux-x64-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "linux-x86-debug",
-      "displayName": "Linux x86 Debug",
-      "inherits": "linux-gcc-base",
+      "name": "linux-x86-base",
+      "hidden": true,
       "architecture": {
         "value": "x86",
         "strategy": "external"
       },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      },
       "environment": {
-        "CC": "gcc",
         "CFLAGS": "-m32",
-        "CXX": "g++",
         "CXXFLAGS": "-m32",
         "LDFLAGS": "-m32"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -87,54 +84,96 @@
       }
     },
     {
-      "name": "linux-x86-release",
-      "displayName": "Linux x86 Release",
-      "inherits": "linux-x86-debug",
+      "name": "linux-gcc-x64-debug",
+      "displayName": "Linux GCC x64 Debug",
+      "inherits": [ "linux-gcc-base", "linux-x64-base" ]
+    },
+    {
+      "name": "linux-gcc-x64-debug-so",
+      "displayName": "Linux GCC x64 Debug SO",
+      "inherits": [ "linux-gcc-x64-debug", "linux-so" ]
+    },
+    {
+      "name": "linux-gcc-x64-release",
+      "displayName": "Linux GCC x64 Release",
+      "inherits": "linux-gcc-x64-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "linux-x64-debug-so",
-      "displayName": "Linux x64 Debug SO",
-      "inherits": [ "linux-x64-debug", "linux-so" ]
+      "name": "linux-gcc-x64-release-so",
+      "displayName": "Linux GCC x64 Release SO",
+      "inherits": [ "linux-gcc-x64-release", "linux-so" ]
     },
     {
-      "name": "linux-x64-release-so",
-      "displayName": "Linux x64 Release SO",
-      "inherits": [ "linux-x64-release", "linux-so" ]
+      "name": "linux-gcc-x86-debug",
+      "displayName": "Linux GCC x86 Debug",
+      "inherits": [ "linux-gcc-base", "linux-x86-base" ]
     },
     {
-      "name": "linux-x86-debug-so",
-      "displayName": "Linux x86 Debug SO",
-      "inherits": [ "linux-x86-debug", "linux-so" ]
+      "name": "linux-gcc-x86-debug-so",
+      "displayName": "Linux GCC x86 Debug SO",
+      "inherits": [ "linux-gcc-x86-debug", "linux-so" ]
     },
     {
-      "name": "linux-x86-release-so",
-      "displayName": "Linux x86 Release SO",
-      "inherits": [ "linux-x86-release", "linux-so" ]
-    }
-  ],
-  "testPresets": [
-    {
-      "name": "test-linux-x64-so",
-      "displayName": "Linux x64 SO test",
-      "configurePreset": "linux-x64-debug-so",
-      "output": { "outputOnFailure": true },
-      "execution": {
-        "noTestsAction": "error",
-        "stopOnFailure": true
+      "name": "linux-gcc-x86-release",
+      "displayName": "Linux GCC x86 Release",
+      "inherits": "linux-gcc-x86-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "test-linux-x86-so",
-      "displayName": "Linux x86 SO test",
-      "configurePreset": "linux-x86-debug-so",
-      "output": { "outputOnFailure": true },
-      "execution": {
-        "noTestsAction": "error",
-        "stopOnFailure": true
+      "name": "linux-gcc-x86-release-so",
+      "displayName": "Linux GCC x86 Release SO",
+      "inherits": [ "linux-gcc-x86-release", "linux-so" ]
+    },
+    {
+      "name": "linux-clang-x64-debug",
+      "displayName": "Linux Clang x64 Debug",
+      "inherits": [ "linux-clang-base", "linux-x64-base" ]
+    },
+    {
+      "name": "linux-clang-x64-debug-so",
+      "displayName": "Linux Clang x64 Debug SO",
+      "inherits": [ "linux-clang-x64-debug", "linux-so" ]
+    },
+    {
+      "name": "linux-clang-x64-release",
+      "displayName": "Linux Clang x64 Release",
+      "inherits": "linux-clang-x64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "linux-clang-x64-release-so",
+      "displayName": "Linux Clang x64 Release SO",
+      "inherits": [ "linux-clang-x64-release", "linux-so" ]
+    },
+    {
+      "name": "linux-clang-x86-debug",
+      "displayName": "Linux Clang x86 Debug",
+      "inherits": [ "linux-clang-base", "linux-x86-base" ]
+    },
+    {
+      "name": "linux-clang-x86-debug-so",
+      "displayName": "Linux Clang x86 Debug SO",
+      "inherits": [ "linux-clang-x86-debug", "linux-so" ]
+    },
+    {
+      "name": "linux-clang-x86-release",
+      "displayName": "Linux Clang x86 Release",
+      "inherits": "linux-clang-x86-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-clang-x86-release-so",
+      "displayName": "Linux Clang x86 Release SO",
+      "inherits": [ "linux-clang-x86-release", "linux-so" ]
     }
   ]
 }
