@@ -52,8 +52,32 @@ jobs:
         echo "cmake-preset=${{ matrix.os_name }}-${{ matrix.compiler }}-${{ matrix.arch }}-${{ matrix.build_type }}${{ matrix.shared_suffix }}" >> "$GITHUB_OUTPUT"
 
     - if: ${{ matrix.os_name == 'windows' }}
-      name: Get Ninja
-      uses: seanmiddleditch/gha-setup-ninja@v4
+      name: Use VS shell
+      uses: egor-tensin/vs-shell@v2
+      with:
+        arch: ${{ matrix.arch }}
+    
+    - if: ${{ matrix.os_name == 'linux' && matrix.compiler == 'clang' }}
+      name: Fetch supported Clang version
+      run: |
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main"
+        sudo apt update
+        sudo apt install clang-19 lld-19 libc++-19-dev libc++abi-19-dev libclang-rt-19-dev libclang-common-19-dev libclang-cpp19
+        sudo apt install gcc-multilib g++-multilib
+        sudo update-alternatives --install $(which clang) clang $(which clang-19) 100
+        sudo update-alternatives --install $(which clang++) clang++ $(which clang++-19) 100
+        sudo update-alternatives --set clang $(which clang-19)
+        sudo update-alternatives --set clang++ $(which clang++-19)
+    
+    - if: ${{ matrix.os_name == 'linux' && matrix.compiler == 'gcc' }}
+      name: Fetch supported GCC version
+      run: |
+        sudo apt install gcc-12 g++-12 gcc-12-multilib g++-12-multilib
+        sudo update-alternatives --install $(which gcc) gcc $(which gcc-12) 100
+        sudo update-alternatives --install $(which g++) g++ $(which g++-12) 100
+        sudo update-alternatives --set gcc $(which gcc-12)
+        sudo update-alternatives --set g++ $(which g++-12)
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
@@ -65,4 +89,5 @@ jobs:
 
     - if: ${{ matrix.os_name != 'android' }}
       name: Test
-      run: ctest "out/build/${{ steps.strings.outputs.cmake-preset }}"
+      working-directory: out/build/${{ steps.strings.outputs.cmake-preset }}
+      run: ctest
