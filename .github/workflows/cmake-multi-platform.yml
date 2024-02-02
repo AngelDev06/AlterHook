@@ -1,0 +1,64 @@
+name: CMake
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
+      fail-fast: false
+  
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        compiler: [msvc, clang, gcc]
+        arch: [x86, x64, arm]
+        build_type: [debug, release]
+        include:
+          - os: windows-latest
+            os_name: windows
+            shared_suffix: -dll
+          - os: ubuntu-latest
+            os_name: linux
+            shared_suffix: -so
+          - os: ubuntu-latest
+            os_name: android
+            shared_suffix: -so
+            compiler: clang
+            arch: arm
+        exclude:
+          - os: windows-latest
+            arch: arm
+          - os: windows-latest
+            compiler: gcc
+          - os: ubuntu-latest
+            compiler: gcc
+            arch: arm
+          - os: ubuntu-latest
+            compiler: msvc
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set cmake preset
+      id: strings
+      shell: bash
+      run: |
+        echo "cmake-preset=${{ matrix.os_name }}-${{ matrix.compiler }}-${{ matrix.arch }}-${{ matrix.build_type }}${{ matrix.shared_suffix }}" >> "$GITHUB_OUTPUT"
+
+    - name: Configure CMake
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake --preset ${{ steps.strings.outputs.cmake-preset }}
+
+    - name: Build
+      run: cmake --build "out/build/${{ steps.strings.outputs.cmake-preset }}"
+
+    - if: ${{ matrix.os_name != "android" }}
+      name: Test
+      run: ctest "out/build/${{ steps.strings.outputs.cmake-preset }}"
