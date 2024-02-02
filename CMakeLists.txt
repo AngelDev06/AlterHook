@@ -254,13 +254,13 @@ else()
 		-Wno-unused
 		-Wno-variadic-macros
 		-Wno-parentheses
+		-Wno-unknown-pragmas
 	)
 	set(
 		ALTERHOOK_GCC_WARNINGS
 		$<$<CXX_COMPILER_ID:GNU>:
 			-pedantic
 			-fdiagnostics-show-option
-			-Wno-unknown-pragmas
 		>
 	)
 	set(

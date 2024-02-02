@@ -10,7 +10,7 @@
 namespace alterhook
 {
   template <typename T>
-  static size_t get_jump_size(T&& flags) noexcept
+  static size_t get_jump_size([[maybe_unused]] T&& flags) noexcept
   {
 #if !always_use_relay && utils_x64
     if (flags.use_small_jmp)
