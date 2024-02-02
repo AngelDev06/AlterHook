@@ -51,6 +51,10 @@ jobs:
       run: |
         echo "cmake-preset=${{ matrix.os_name }}-${{ matrix.compiler }}-${{ matrix.arch }}-${{ matrix.build_type }}${{ matrix.shared_suffix }}" >> "$GITHUB_OUTPUT"
 
+    - if: ${{ matrix.os_name == 'windows' }}
+      name: Get Ninja
+      uses: seanmiddleditch/gha-setup-ninja@v4
+
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
