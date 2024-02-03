@@ -7,7 +7,8 @@ on:
     branches: [ "main", "aarch64-support" ]
 
 jobs:
-  build:
+  build-and-test:
+    name: Build and Test (Windows/Linux)
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -17,28 +18,18 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         compiler: [msvc, clang, gcc]
-        arch: [x86, x64, arm]
+        arch: [x86, x64]
         build_type: [debug, release]
         include:
           - os: windows-latest
             os_name: windows
-            shared_suffix: -dll
+            shared_suffix: dll
           - os: ubuntu-latest
             os_name: linux
-            shared_suffix: -so
-          - os: ubuntu-latest
-            os_name: android
-            shared_suffix: -so
-            compiler: clang
-            arch: arm
+            shared_suffix: so
         exclude:
           - os: windows-latest
-            arch: arm
-          - os: windows-latest
             compiler: gcc
-          - os: ubuntu-latest
-            compiler: gcc
-            arch: arm
           - os: ubuntu-latest
             compiler: msvc
 
@@ -49,7 +40,8 @@ jobs:
       id: strings
       shell: bash
       run: |
-        echo "cmake-preset=${{ matrix.os_name }}-${{ matrix.compiler }}-${{ matrix.arch }}-${{ matrix.build_type }}${{ matrix.shared_suffix }}" >> "$GITHUB_OUTPUT"
+        preset="${{ matrix.os_name }}-${{ matrix.compiler }}-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.shared_suffix }}"
+        echo "cmake-preset=$preset" >> "$GITHUB_OUTPUT"
 
     - if: ${{ matrix.os_name == 'windows' }}
       name: Use VS shell
@@ -57,37 +49,56 @@ jobs:
       with:
         arch: ${{ matrix.arch }}
     
-    - if: ${{ matrix.os_name == 'linux' && matrix.compiler == 'clang' }}
-      name: Fetch supported Clang version
-      run: |
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main"
-        sudo apt update
-        sudo apt install clang-19 lld-19 libc++-19-dev libc++abi-19-dev libclang-rt-19-dev libclang-common-19-dev libclang-cpp19
-        sudo apt install gcc-multilib g++-multilib
-        sudo update-alternatives --install $(which clang) clang $(which clang-19) 100
-        sudo update-alternatives --install $(which clang++) clang++ $(which clang++-19) 100
-        sudo update-alternatives --set clang $(which clang-19)
-        sudo update-alternatives --set clang++ $(which clang++-19)
-    
-    - if: ${{ matrix.os_name == 'linux' && matrix.compiler == 'gcc' }}
-      name: Fetch supported GCC version
-      run: |
-        sudo apt install gcc-12 g++-12 gcc-12-multilib g++-12-multilib
-        sudo update-alternatives --install $(which gcc) gcc $(which gcc-12) 100
-        sudo update-alternatives --install $(which g++) g++ $(which g++-12) 100
-        sudo update-alternatives --set gcc $(which gcc-12)
-        sudo update-alternatives --set g++ $(which g++-12)
+    - if: ${{ matrix.os_name == 'linux' }}
+      name: Get supported ${{ matrix.compiler }} version
+      run: sudo ./scripts/install_compiler.sh ${{ matrix.compiler }} ${{ matrix.arch }}
 
     - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake --preset ${{ steps.strings.outputs.cmake-preset }}
 
     - name: Build
       run: cmake --build "out/build/${{ steps.strings.outputs.cmake-preset }}"
 
-    - if: ${{ matrix.os_name != 'android' }}
-      name: Test
+    - name: Test
       working-directory: out/build/${{ steps.strings.outputs.cmake-preset }}
       run: ctest
+  
+  android-build:
+    name: Build and Test (Android)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      
+      matrix:
+        compiler: [clang]
+        arch: [arm]
+        build_type: [debug, release]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set cmake preset
+      id: strings
+      shell: bash
+      run: |
+        echo "cmake-preset=android-${{ matrix.arch }}-${{ matrix.build_type }}-so" >> "$GITHUB_OUTPUT"
+
+    - name: Setup NDK
+      id: ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r26b
+    
+    - name: Setup Ninja
+      uses: ashutoshvarma/setup-ninja@master
+    
+    - name: Set NDK_ROOT
+      shell: bash
+      run: echo "NDK_ROOT=${{ steps.ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+    
+    - name: Configure CMake
+      run: cmake --preset ${{ steps.strings.outputs.cmake-preset }}
+    
+    - name: Build
+      run: cmake --build "out/build/${{ steps.strings.outputs.cmake-preset }}"
