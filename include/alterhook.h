@@ -1,6 +1,11 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+/**
+ * @namespace alterhook
+ * @brief The main namespace for the entire api of the library. Everything this
+ * library offers is scoped under this namespace (except macros of course).
+ */
 
 // detail
 #include "alterhook/detail/macros.h"

@@ -20,11 +20,13 @@ TEST(test_group(TrampolineTest), Test2)
   volatile auto         func =
       reinterpret_cast<void (*)(size_t, size_t)>(target_prefix test2::func);
 
+  //! [trampoline::invoke example]
   func(3, 3);
   trampoline.invoke<void(size_t, size_t)>(3, 3);
 
   func(3, 4);
   trampoline.invoke<void(size_t, size_t)>(3, 4);
+  //! [trampoline::invoke example]
   std::cout << "CONTENT:\n" << trampoline.str() << '\n';
 }
 
@@ -103,12 +105,14 @@ TEST(test_group(TrampolineTest), Test9)
 TEST(test_group(TrampolineTest), Test10)
 {
   alterhook::trampoline trampoline{ target_prefix test10::func };
+  //! [trampoline::get_callback example]
   volatile auto trg      = target_prefix test10::func;
   volatile auto callback = trampoline.get_callback<void()>();
   volatile auto func     = reinterpret_cast<void (*)(void (*)(), void (*)())>(
       target_prefix test10::proper_call);
 
   func(trg, callback);
+  //! [trampoline::get_callback example]
   std::cout << "CONTENT:\n" << trampoline.str() << '\n';
 }
 

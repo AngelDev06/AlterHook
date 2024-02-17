@@ -547,6 +547,58 @@ namespace alterhook::aarch64
         return utils::sign_extend<21>(result);
       }
     };
+
+    typedef decltype(cs_insn::id) insn_id_t;
+
+#define __gen_property_arg_type_overload_impl(clsname, argname)                \
+  template <typename... types>                                                 \
+  struct property_arg_type<clsname<types...>>                                  \
+  {                                                                            \
+    typedef typename clsname<types...>::argname type;                          \
+  }
+#define __gen_property_arg_type_overload(pair)                                 \
+  __gen_property_arg_type_overload_impl pair
+#define __gen_property_arg_type_overloads(...)                                 \
+  utils_map_separated(__gen_property_arg_type_overload, ;, __VA_ARGS__)
+
+    template <typename T>
+    struct property_arg_type;
+
+    // exception
+    template <typename... types>
+    struct property_arg_type<resizable_register_operand<types...>>
+    {
+      typedef void type;
+    };
+
+    __gen_property_arg_type_overloads((customized_offset_operand, offset_t),
+                                      (condition_operand, condition_t),
+                                      (register_operand, register_t),
+                                      (bitpos_operand, bitpos_t));
+
+    template <typename T>
+    using property_arg_type_t = typename property_arg_type<T>::type;
+
+    template <insn_id_t idval, uint32_t opcodeval, typename indexseq,
+              typename typeseq>
+    struct basic_instruction_impl;
+
+    template <insn_id_t idval, uint32_t opcodeval, size_t... indexes,
+              typename... properties>
+    struct basic_instruction_impl<idval, opcodeval,
+                                  std::index_sequence<indexes...>,
+                                  utils::type_sequence<properties...>>
+        : utils::properties<properties...>
+    {
+      typedef typename utils::properties<properties...>::base base;
+      template <size_t N>
+      using property_at = typename base::template property_at<N>;
+
+      static constexpr uint32_t  opcode = opcodeval;
+      static constexpr insn_id_t id     = idval;
+
+      
+    };
   } // namespace templates
 
   struct ADD : utils::properties<

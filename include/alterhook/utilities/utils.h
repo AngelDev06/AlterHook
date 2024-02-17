@@ -1,6 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+/**
+ * @namespace alterhook::utils
+ * @brief Consists of utilities that the main library is need of
+ */
 #include "utils_macros.h"
 #if !utils_cpp17
   #error unsupported c++ version (at least c++17 is needed)
@@ -13,3 +17,4 @@
 #include "concepts.h"
 #include "properties.h"
 #include "data_processing.h"
+#include "type_name.h"

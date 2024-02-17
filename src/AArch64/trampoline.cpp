@@ -482,7 +482,6 @@ namespace alterhook
             copy_size(instr.size), utarget_instruction_address(instr.address)
       {
         ctx.target.end += instr.size;
-        aarch64.set_reg_accesses(instr);
         ctx.branch_list.set_destination(target_instruction_address,
                                         ctx.trampoline.end);
       }
@@ -523,7 +522,8 @@ namespace alterhook
       {
         prepare_buffer();
         new (&buffer[copy_size]) auto(instr);
-        ctx.tbm_list.emplace_back(std::forward<T>(instr));
+        ctx.tbm_list.emplace_back(
+            reinterpret_cast<instr_ptr_t<T>>(ctx.trampoline.end + copy_size));
         copy_size += sizeof(utils::remove_cvref_t<T>);
       }
 
@@ -588,11 +588,20 @@ namespace alterhook
     {
       auto session = ctx.create_session(aarch64, instr);
 
-      if (aarch64.modifies_reg(instr, AArch64_REG_SP) &&
+      if (aarch64.modifies_register(instr, AArch64_REG_SP) &&
           ctx.pc_handling_context.active)
       {
         session.add_instruction(aarch64::custom::POP());
         session.add_instruction(instr);
+        utils_assert(aarch64.is_branch(instr),
+                     "An instruction that modifies both the SP and the PC was "
+                     "unexpected");
+      }
+      else if (aarch64.is_relative_branch(instr))
+      {
+        assert(aarch64.get_immediate(instr.detail->aarch64).has_value());
+        const auto imm = aarch64.get_immediate(instr.detail->aarch64).value();
+        const ptrdiff_t relative_address = imm - ctx.trampoline.uend;
       }
     }
   }

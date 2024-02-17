@@ -17,12 +17,40 @@ namespace alterhook
     class weak_iterator;
     class iterator;
 
+    struct registers
+    {
+      std::array<uint16_t, MAX_IMPL_R_REGS> read{};
+      std::array<uint16_t, MAX_IMPL_W_REGS> write{};
+      uint8_t                               read_count  = 0;
+      uint8_t                               write_count = 0;
+
+      bool reads(uint16_t reg) const
+      {
+        const auto read_begin = read.begin(),
+                   read_end   = read.begin() + read_count;
+        return std::find(read_begin, read_end, reg) != read_end;
+      }
+
+      bool modifies(uint16_t reg) const
+      {
+        const auto write_begin = write.begin(),
+                   write_end   = write.begin() + write_count;
+        return std::find(write_begin, write_end, reg) != write_end;
+      }
+    };
+
 #if utils_x86 || utils_x64
     static constexpr cs_arch architecture = CS_ARCH_X86;
+    typedef cs_x86           arch_t;
+    typedef cs_x86_op        operand_t;
 #elif utils_aarch64
     static constexpr cs_arch architecture = CS_ARCH_AARCH64;
+    typedef cs_aarch64       arch_t;
+    typedef cs_aarch64_op    operand_t;
 #elif utils_arm
     static constexpr cs_arch architecture = CS_ARCH_ARM;
+    typedef cs_arm           arch_t;
+    typedef cs_arm_op        operand_t;
 #endif
 
     constexpr cs_mode mode() const noexcept
@@ -76,28 +104,51 @@ namespace alterhook
       cs_option(handle, CS_OPT_MODE, thumb ? CS_MODE_THUMB : CS_MODE_ARM);
     }
 #endif
-    void set_reg_accesses(const cs_insn& instr) const
+
+    registers get_all_registers(const cs_insn& instr) const noexcept
     {
-      instr.detail->regs_read_count  = 0;
-      instr.detail->regs_write_count = 0;
-      cs_regs_access(handle, &instr, instr.detail->regs_read,
-                     &instr.detail->regs_read_count, instr.detail->regs_write,
-                     &instr.detail->regs_write_count);
+      registers result{};
+      cs_regs_access(handle, &instr, result.read.data(), &result.read_count,
+                     result.write.data(), &result.write_count);
+      return result;
     }
 
-    bool modifies_reg(const cs_insn& instr, uint32_t reg) const
+    bool modifies_register(const cs_insn& instr, uint16_t reg) const
     {
-      return cs_reg_write(handle, &instr, reg);
+      return get_all_registers(instr).modifies(reg);
     }
 
-    bool reads_reg(const cs_insn& instr, uint32_t reg) const
+    bool reads_register(const cs_insn& instr, uint16_t reg) const
     {
-      return cs_reg_read(handle, &instr, reg);
+      return get_all_registers(instr).reads(reg);
     }
 
     bool has_group(const cs_insn& instr, uint8_t group) const
     {
       return memchr(instr.detail->groups, group, instr.detail->groups_count);
+    }
+
+    bool is_branch(const cs_insn& instr) const noexcept
+    {
+      return has_group(instr, CS_GRP_JUMP) || has_group(instr, CS_GRP_CALL);
+    }
+
+    bool is_relative_branch(const cs_insn& instr) const noexcept
+    {
+      return has_group(instr, CS_GRP_BRANCH_RELATIVE);
+    }
+
+    std::optional<int64_t> get_immediate(const arch_t& instr) const noexcept
+    {
+      const auto *operands_begin = instr.operands,
+                 *operands_end   = instr.operands + instr.op_count;
+      const auto result          = std::find_if(
+          operands_begin, operands_end,
+          [](const operand_t& operand)
+          { return static_cast<cs_op_type>(operand.type) == CS_OP_IMM; });
+      if (result != operands_end)
+        return result->imm;
+      return std::nullopt;
     }
 
     iterator begin() const noexcept;

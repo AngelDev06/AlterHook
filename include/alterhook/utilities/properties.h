@@ -2,9 +2,24 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "type_sequence.h"
+#include "other.h"
 
 namespace alterhook::utils
 {
+  namespace helpers
+  {
+    template <typename... types>
+    struct unwrap_properties;
+    template <typename first, typename... types>
+    using unwrap_properties_t =
+        typename unwrap_properties<first, types...>::type;
+    template <size_t N, typename... types>
+    struct unwrap_n_properties;
+    template <size_t N, typename first, typename... types>
+    using unwrap_n_properties_t =
+        typename unwrap_n_properties<N, first, types...>::type;
+  } // namespace helpers
+
   template <auto arg>
   struct val
   {
@@ -14,6 +29,20 @@ namespace alterhook::utils
   template <template <typename...> typename propcls, typename... args>
   struct property
   {
+    template <template <typename...> typename other>
+    static constexpr bool uses = is_same_template_v<propcls, other>;
+  };
+
+  template <typename first, typename... types>
+  struct properties : helpers::unwrap_properties_t<first, types...>
+  {
+    typedef helpers::unwrap_properties_t<first, types...> propbase;
+    typedef properties                                    base;
+
+    template <size_t N>
+    using property_at = helpers::unwrap_n_properties_t<N, first, types...>;
+
+    using propbase::propbase;
   };
 
   namespace helpers
@@ -34,19 +63,12 @@ namespace alterhook::utils
       typedef base type;
     };
 
-    template <typename... types>
-    struct unwrap_properties;
-
     template <template <typename...> typename propcls, typename... args,
               typename... rest>
     struct unwrap_properties<property<propcls, args...>, rest...>
         : unwrap_properties_impl<propcls<args...>, rest...>
     {
     };
-
-    template <typename first, typename... types>
-    using unwrap_properties_t =
-        typename unwrap_properties<first, types...>::type;
 
     template <size_t N, typename base, typename... types>
     struct unwrap_n_properties_impl;
@@ -73,9 +95,6 @@ namespace alterhook::utils
       typedef base type;
     };
 
-    template <size_t N, typename... types>
-    struct unwrap_n_properties;
-
     template <size_t N, template <typename...> typename propcls,
               typename... args, typename... rest>
     struct unwrap_n_properties<N, property<propcls, args...>, rest...>
@@ -84,21 +103,5 @@ namespace alterhook::utils
       static_assert(N <= sizeof...(rest),
                     "property at index specified is out of range");
     };
-
-    template <size_t N, typename first, typename... types>
-    using unwrap_n_properties_t =
-        typename unwrap_n_properties<N, first, types...>::type;
   } // namespace helpers
-
-  template <typename first, typename... types>
-  struct properties : helpers::unwrap_properties_t<first, types...>
-  {
-    typedef helpers::unwrap_properties_t<first, types...> propbase;
-    typedef properties                                    base;
-
-    template <size_t N>
-    using property_at = helpers::unwrap_n_properties_t<N, first, types...>;
-
-    using propbase::propbase;
-  };
 } // namespace alterhook::utils

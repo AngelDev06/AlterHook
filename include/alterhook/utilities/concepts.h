@@ -87,6 +87,24 @@ namespace alterhook::utils
 
 #if utils_cpp20
   template <typename T>
+  concept tuple_like =
+      requires { std::tuple_size<T>::value; } &&
+      (std::tuple_size_v<std::remove_cvref_t<T>> == 0 ||
+       requires(const T& obj) {
+         typename std::tuple_element_t<
+             std::tuple_size_v<std::remove_cvref_t<T>> - 1,
+             std::remove_cvref_t<T>>;
+         std::get<std::tuple_size_v<std::remove_cvref_t<T>> - 1>(obj);
+       });
+
+  template <typename T, size_t N>
+  concept fixed_tuple_like =
+      tuple_like<T> && std::tuple_size_v<std::remove_cvref_t<T>> == N;
+
+  template <typename T>
+  concept pair_like = fixed_tuple_like<T, 2>;
+
+  template <typename T>
   concept forward_iterable = requires(T& instance, const T& cinstance) {
     typename T::iterator;
     typename T::const_iterator;
@@ -598,6 +616,33 @@ namespace alterhook::utils
         T, std::void_t<decltype(std::declval<T>() != std::declval<T>())>> =
         std::is_same_v<decltype(std::declval<T>() != std::declval<T>()), bool>;
 
+    template <typename T, size_t size, typename = void>
+    inline constexpr bool tuple_like_impl2 = false;
+    template <typename T, size_t size>
+    inline constexpr bool tuple_like_impl2<
+        T, size,
+        std::void_t<std::tuple_element_t<size - 1, T>,
+                    decltype(std::get<size - 1>(std::declval<T>()))>> = true;
+    template <typename T>
+    inline constexpr bool tuple_like_impl2<T, 0, void> = true;
+
+    template <typename T, typename = void>
+    inline constexpr bool tuple_like_impl = false;
+    template <typename T>
+    inline constexpr bool tuple_like_impl<
+        T, std::enable_if_t<std::is_integral_v<
+               std::remove_cv_t<decltype(std::tuple_size<T>::value)>>>> =
+        tuple_like_impl2<T, std::tuple_size_v<T>>;
+
+    template <typename T, size_t N, typename = void>
+    inline constexpr bool fixed_tuple_like_impl = false;
+    template <typename T, size_t N>
+    inline constexpr bool fixed_tuple_like_impl<
+        T, N,
+        std::enable_if_t<std::is_integral_v<
+            std::remove_cv_t<decltype(std::tuple_size<T>::value)>>>> =
+        tuple_like_impl2<T, std::tuple_size_v<T>> && std::tuple_size_v<T> == N;
+
     /*
      * IMPLEMENTATION
      */
@@ -797,6 +842,17 @@ namespace alterhook::utils
   } // namespace helpers
 
   template <typename T>
+  inline constexpr bool tuple_like =
+      helpers::tuple_like_impl<remove_cvref_t<T>>;
+
+  template <typename T, size_t N>
+  inline constexpr bool fixed_tuple_like =
+      helpers::fixed_tuple_like_impl<remove_cvref_t<T>, N>;
+
+  template <typename T>
+  inline constexpr bool pair_like = fixed_tuple_like<T, 2>;
+
+  template <typename T>
   inline constexpr bool allocator_type = helpers::allocator_type_impl<T>;
 
   template <typename T, typename k>
@@ -819,98 +875,147 @@ namespace alterhook::utils
   inline constexpr bool closed_addressing = helpers::closed_addressing_impl<T>;
 #endif
 
+  template <typename... types>
+  utils_concept tuple_like_types = (tuple_like<types> && ...);
+
+  template <typename... types>
+  utils_concept pair_like_types = (pair_like<types> && ...);
+
+  template <size_t N, typename... types>
+  utils_concept fixed_tuple_like_types = (fixed_tuple_like<types, N> && ...);
+
   namespace helpers
   {
     template <typename seq>
-    inline constexpr bool dtr_storage_pairs_helper = false;
+    inline constexpr bool detours_and_originals_impl = false;
 
-    template <typename first_elem, typename second_elem, typename... rest_pairs>
-    inline constexpr bool dtr_storage_pairs_helper<
-        type_sequence<std::pair<first_elem, second_elem>, rest_pairs...>> =
-        (callable_type<first_elem> &&
-         function_type<remove_cvref_t<second_elem>> &&
-         std::is_lvalue_reference_v<
-             second_elem>)&&dtr_storage_pairs_helper<type_sequence<rest_pairs...>>;
+    template <typename tuple, typename... rest>
+    inline constexpr bool
+        detours_and_originals_impl<type_sequence<tuple, rest...>> =
+            callable_type<std::tuple_element_t<0, tuple>> &&
+            function_type<std::tuple_element_t<1, tuple>> &&
+            std::is_lvalue_reference_v<std::tuple_element_t<1, tuple>> &&
+            detours_and_originals_impl<type_sequence<rest...>>;
 
-    template <typename first_elem, typename second_elem, typename... rest_pairs>
-    inline constexpr bool dtr_storage_pairs_helper<
-        type_sequence<std::tuple<first_elem, second_elem>, rest_pairs...>> =
-        dtr_storage_pairs_helper<
-            type_sequence<std::pair<first_elem, second_elem>, rest_pairs...>>;
+    template <typename first, typename second, typename... rest>
+    inline constexpr bool detours_and_originals_impl<
+        type_sequence<type_sequence<first, second>, rest...>> =
+        callable_type<first> && function_type<second> &&
+        std::is_lvalue_reference_v<second> &&
+        detours_and_originals_impl<type_sequence<rest...>>;
 
     template <>
-    inline constexpr bool dtr_storage_pairs_helper<type_sequence<>> = true;
+    inline constexpr bool detours_and_originals_impl<type_sequence<>> = true;
 
     template <typename key, typename seq>
-    inline constexpr bool key_dtr_storage_triplet_helper = false;
+    inline constexpr bool keys_detours_and_originals_impl = false;
 
-    template <typename key, typename first_key, typename first_elem,
-              typename second_elem, typename... rest_triplets>
-    inline constexpr bool key_dtr_storage_triplet_helper<
-        key, type_sequence<std::tuple<first_key, first_elem, second_elem>,
-                           rest_triplets...>> =
-        std::is_convertible_v<first_key, key> && callable_type<first_elem> &&
-        function_type<remove_cvref_t<second_elem>> &&
-        std::is_lvalue_reference_v<second_elem> &&
-        key_dtr_storage_triplet_helper<key, type_sequence<rest_triplets...>>;
+    template <typename key, typename tuple, typename... rest>
+    inline constexpr bool
+        keys_detours_and_originals_impl<key, type_sequence<tuple, rest...>> =
+            std::is_convertible_v<std::tuple_element_t<0, tuple>, key> &&
+            callable_type<std::tuple_element_t<1, tuple>> &&
+            function_type<std::tuple_element_t<2, tuple>> &&
+            std::is_lvalue_reference_v<std::tuple_element_t<2, tuple>> &&
+            keys_detours_and_originals_impl<key, type_sequence<rest...>>;
+
+    template <typename key, typename first, typename second, typename third,
+              typename... rest>
+    inline constexpr bool keys_detours_and_originals_impl<
+        key, type_sequence<type_sequence<first, second, third>, rest...>> =
+        std::is_convertible_v<first, key> && callable_type<second> &&
+        function_type<third> && std::is_lvalue_reference_v<third> &&
+        keys_detours_and_originals_impl<key, type_sequence<rest...>>;
 
     template <typename key>
-    inline constexpr bool key_dtr_storage_triplet_helper<key, type_sequence<>> =
-        true;
+    inline constexpr bool
+        keys_detours_and_originals_impl<key, type_sequence<>> = true;
+
+#if !utils_cpp20
+    template <typename seq, typename = void>
+    inline constexpr bool detours_and_originals_impl2 = false;
+    template <typename... types>
+    inline constexpr bool detours_and_originals_impl2<
+        type_sequence<types...>, std::enable_if_t<(sizeof...(types) % 2) == 0 &&
+                                                  !pair_like_types<types...>>> =
+        detours_and_originals_impl<make_type_pairs_t<types...>>;
+
+    template <typename seq, typename = void>
+    inline constexpr bool keys_detours_and_originals_impl2 = false;
+    template <typename first, typename... rest>
+    inline constexpr bool keys_detours_and_originals_impl2<
+        type_sequence<first, rest...>,
+        std::enable_if_t<((sizeof...(rest) + 1) % 3) == 0 &&
+                         !fixed_tuple_like_types<3, first, rest...>>> =
+        keys_detours_and_originals_impl<first,
+                                        make_type_triplets_t<first, rest...>>;
+
+    template <typename seq, typename = void>
+    inline constexpr bool detour_and_original_pairs_impl = false;
+    template <typename... types>
+    inline constexpr bool detour_and_original_pairs_impl<
+        type_sequence<types...>, std::enable_if_t<pair_like_types<types...>>> =
+        detours_and_originals_impl<type_sequence<remove_cvref_t<types>...>>;
+
+    template <typename seq, typename = void>
+    inline constexpr bool key_detour_and_original_triplets_impl = false;
+    template <typename first, typename... rest>
+    inline constexpr bool key_detour_and_original_triplets_impl<
+        type_sequence<first, rest...>,
+        std::enable_if_t<fixed_tuple_like_types<3, first, rest...>>> =
+        keys_detours_and_originals_impl<
+            std::tuple_element_t<0, remove_cvref_t<first>>,
+            type_sequence<remove_cvref_t<first>, remove_cvref_t<rest>...>>;
+#endif
   } // namespace helpers
 
 #if !utils_cpp20
-  namespace helpers
-  {
-    template <bool, typename... types>
-    inline constexpr bool dtr_storage_pairs_helper2 = false;
+  template <typename detour, typename original, typename... rest>
+  inline constexpr bool detours_and_originals =
+      helpers::detours_and_originals_impl2<
+          type_sequence<detour, original, rest...>>;
 
-    template <typename... types>
-    inline constexpr bool dtr_storage_pairs_helper2<true, types...> =
-        dtr_storage_pairs_helper<make_type_pairs_t<types...>>;
+  template <typename key, typename detour, typename original, typename... rest>
+  inline constexpr bool keys_detours_and_originals =
+      helpers::keys_detours_and_originals_impl2<
+          type_sequence<key, detour, original, rest...>>;
 
-    template <bool, typename key, typename... types>
-    inline constexpr bool key_dtr_storage_pairs_helper2 = false;
-
-    template <typename key, typename... types>
-    inline constexpr bool key_dtr_storage_pairs_helper2<true, key, types...> =
-        key_dtr_storage_triplet_helper<key, make_type_triplets_t<types...>>;
-  } // namespace helpers
-
-  template <typename... types>
-  inline constexpr bool detour_and_storage_pairs =
-      helpers::dtr_storage_pairs_helper2<
-          !stl_tuples_or_pairs<types...> || sizeof...(types) == 0, types...>;
-
-  template <typename key, typename... types>
-  inline constexpr bool key_detour_and_storage_triplets =
-      helpers::key_dtr_storage_pairs_helper2<
-          !(stl_tuple<types> && ...) || sizeof...(types) == 0, key, types...>;
+  template <typename pair, typename... rest>
+  inline constexpr bool detour_and_original_pairs =
+      helpers::detour_and_original_pairs_impl<type_sequence<pair, rest...>>;
+  template <typename tuple, typename... rest>
+  inline constexpr bool key_detour_and_original_triplets =
+      helpers::key_detour_and_original_triplets_impl<
+          type_sequence<tuple, rest...>>;
 #else
-  template <typename... types>
-  concept detour_and_storage_pairs =
-      !stl_tuples_or_pairs<types...> &&
-      helpers::dtr_storage_pairs_helper<make_type_pairs_t<types...>>;
+  template <typename detour, typename original, typename... rest>
+  concept detours_and_originals =
+      !pair_like_types<detour, original, rest...> &&
+      (sizeof...(rest) % 2) == 0 &&
+      helpers::detours_and_originals_impl<
+          make_type_pairs_t<detour, original, rest...>>;
 
-  template <typename key, typename... types>
-  concept key_detour_and_storage_triplets =
-      !(stl_tuple<types> && ...) &&
-      helpers::key_dtr_storage_triplet_helper<key,
-                                              make_type_triplets_t<types...>>;
+  template <typename key, typename detour, typename original, typename... rest>
+  concept keys_detours_and_originals =
+      !tuple_like_types<key, detour, original, rest...> &&
+      (sizeof...(rest) % 3) == 0 &&
+      helpers::keys_detours_and_originals_impl<
+          key, make_type_triplets_t<key, detour, original, rest...>>;
+
+  template <typename pair, typename... rest>
+  concept detour_and_original_pairs =
+      pair_like_types<pair, rest...> &&
+      helpers::detours_and_originals_impl<
+          type_sequence<remove_cvref_t<pair>, remove_cvref_t<rest>...>>;
+
+  template <typename tuple, typename... rest>
+  concept key_detour_and_original_triplets =
+      fixed_tuple_like_types<3, tuple, rest...> &&
+      helpers::keys_detours_and_originals_impl<
+          std::tuple_element_t<0, remove_cvref_t<tuple>>,
+          type_sequence<remove_cvref_t<tuple>, remove_cvref_t<rest>...>>;
 #endif
-
-  template <typename... types>
-  utils_concept detour_and_storage_stl_pairs =
-      stl_tuples_or_pairs<types...> &&
-      helpers::dtr_storage_pairs_helper<
-          type_sequence<remove_cvref_t<types>...>>;
-
-  template <typename key, typename... types>
-  utils_concept key_detour_and_storage_stl_triplets =
-      (stl_tuple<types> && ...) &&
-      helpers::key_dtr_storage_triplet_helper<
-          key, type_sequence<remove_cvref_t<types>...>>;
-} // namespace utils
+} // namespace alterhook::utils
 
 #if utils_msvc
   #pragma warning(pop)

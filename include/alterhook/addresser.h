@@ -7,22 +7,47 @@
 #include "detail/macros.h"
 #include "utilities/utils.h"
 
-#if utils_cpp20
-  #define __alterhook_must_be_memfuncptr_nd(x) utils::member_function_type x
-  #define __alterhook_must_be_memfuncptr(x)    utils::member_function_type x
-#else
-  #define __alterhook_must_be_memfuncptr_nd(x)                                 \
-    typename x, std::enable_if_t<utils::member_function_type<x>, size_t>
-  #define __alterhook_must_be_memfuncptr(x)                                    \
-    __alterhook_must_be_memfuncptr_nd(x) = 0
-#endif
-
 namespace alterhook
 {
+  /**
+   * @brief A utility that can optionally be implemented by the user and should
+   * define `operator()` that returns `T*`
+   * @tparam T the class type for which this utility can be implemented
+   *
+   * This is overall intended to make it possible for the user to customize how
+   * a pointer to a valid instance is obtained. The reason this is needed is
+   * because when trying to get the real address from a virtual method pointer
+   * the library needs to have access to the vtable of the class. To do that it
+   * by default heap allocates a "fake" instance that is move constructed from a
+   * zero filled byte buffer of the same size. This may or may not be a good
+   * solution and therefore if the latter is the case the user can:
+   * - define a template specialization of `instanceptrof` (either full or
+   *   partial)
+   * - implement `operator()` and make it return `T*`
+   * - make sure the pointer returned from `operator()` points to a valid
+   *   instance and that its storage duration is NOT automatic as it's cached
+   *   for later use.
+   *
+   * @par Example
+   * @code{.cpp}
+   * template <>
+   * struct instanceptrof<MyClass>
+   * {
+   *   MyClass* operator()() { return new MyClass; }
+   * };
+   * @endcode
+   *
+   * @warning Failure to meet the third requirement will result in undefined
+   * behavior but failure on the other two will make the library fallback to the
+   * default implementation. Also the pointer returned should NOT point to an
+   * instance of different underlying type than the one expected as the vtable
+   * pointer will be incorrect.
+   */
   template <typename T>
   struct instanceptrof;
 
 #if utils_cpp20
+  /// tells whether `instanceptrof<T>{}()` is a valid expression that returns T*
   template <typename T>
   concept has_instanceptrof = requires {
     {
@@ -44,20 +69,60 @@ namespace alterhook
   inline constexpr bool has_instanceptrof = helpers::has_instanceptrofsfinae<T>;
 #endif
 
+  /// @brief a class consisting of utilities to extract properties from member
+  /// function pointers
   class ALTERHOOK_API addresser
   {
   public:
-    // THE API
-    template <__alterhook_must_be_memfuncptr(T)>
+    /**
+     * @brief Takes a member function pointer and returns whether it points to a
+     * virtual function.
+     * @param memfuncptr the member function pointer to check
+     * @returns true if it points to a virtual function, false otherwise
+     * @attention This is not implemented for clang on windows due to ABI issues
+     */
+    template <typename T,
+              typename = std::enable_if_t<std::is_member_function_pointer_v<T>>>
     static bool is_virtual(T memfuncptr);
 
-    template <__alterhook_must_be_memfuncptr(T)>
+    /**
+     * @brief Takes any member function pointer and returns the address of the
+     * underlying function.
+     * @param memfuncptr the member function pointer to obtain the address from
+     * @returns the address of the underlying function as `uintptr_t`
+     * @attention Because @ref alterhook::addresser::is_virtual is not
+     * implemented for clang on windows, this will fail at compile time as it
+     * needs to know whether `memfuncptr` points to a virtual method or not.
+     */
+    template <typename T,
+              typename = std::enable_if_t<std::is_member_function_pointer_v<T>>>
     static uintptr_t address_of(T memfuncptr);
 
-    template <__alterhook_must_be_memfuncptr(T)>
+    /**
+     * @brief Takes a virtual member function pointer and returns the address of
+     * the underlying function.
+     * @param memfuncptr the virtual member function pointer to obtain the
+     * address from
+     * @returns the address of the underlying function as `uintptr_t`
+     * @note This involves looking up the function in the vtable and therefore
+     * it needs to heap allocate a "fake" instance that is move constructed from
+     * a zero filled byte buffer of the same size. If this process is damaging
+     * for performance or can cause side effects, consider using
+     * @ref alterhook::instanceptrof
+     */
+    template <typename T,
+              typename = std::enable_if_t<std::is_member_function_pointer_v<T>>>
     static uintptr_t address_of_virtual(T memfuncptr);
 
-    template <__alterhook_must_be_memfuncptr(T)>
+    /**
+     * @brief Takes a regular member function pointer and returns the address of
+     * the underlying function.
+     * @param memfuncptr the regular member function pointer to obtain the
+     * address from
+     * @returns the address of the underlying function as `uintptr_t`
+     */
+    template <typename T,
+              typename = std::enable_if_t<std::is_member_function_pointer_v<T>>>
     static uintptr_t address_of_regular(T memfuncptr);
 
   private:
@@ -104,7 +169,7 @@ namespace alterhook
   /*
    * TEMPLATE DEFINITIONS (ignore them)
    */
-  template <__alterhook_must_be_memfuncptr_nd(T)>
+  template <typename T, typename>
   bool addresser::is_virtual(T memfuncptr)
   {
 #if utils_clang && utils_windows
@@ -116,7 +181,7 @@ namespace alterhook
     return is_virtual_impl(reinterpret_cast<void*>(&memfuncptr));
   }
 
-  template <__alterhook_must_be_memfuncptr_nd(T)>
+  template <typename T, typename>
   uintptr_t addresser::address_of(T memfuncptr)
   {
     if (is_virtual(memfuncptr))
@@ -124,7 +189,7 @@ namespace alterhook
     return address_of_regular(memfuncptr);
   }
 
-  template <__alterhook_must_be_memfuncptr_nd(T)>
+  template <typename T, typename>
   uintptr_t addresser::address_of_virtual(T memfuncptr)
   {
     typedef utils::fn_class_t<T> cls;
@@ -142,7 +207,7 @@ namespace alterhook
     return follow_thunk_function(address);
   }
 
-  template <__alterhook_must_be_memfuncptr_nd(T)>
+  template <typename T, typename>
   uintptr_t addresser::address_of_regular(T memfuncptr)
   {
     return follow_thunk_function(*reinterpret_cast<uintptr_t*>(&memfuncptr));
