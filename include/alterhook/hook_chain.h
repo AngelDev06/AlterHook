@@ -42,33 +42,40 @@ namespace alterhook
     typedef const hook&                             const_reference;
 
     // constructors/destructors/assignment operators
-    template <__alterhook_are_detour_and_original_pairs(dtr, orig, types)>
-    hook_chain(std::byte* target, dtr&& detour, orig& original, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_pairs<types...>);
+    template <typename dtr, typename orig, typename... types,
+              typename = std::enable_if_t<
+                  utils::detours_and_originals<dtr, orig&, types...>>>
+    hook_chain(std::byte* target, dtr&& detour, orig& original,
+               types&&... rest);
 
-    template <__alterhook_are_target_detour_and_original_pairs(trg, dtr, orig,
-                                                               types)>
-    hook_chain(trg&& target, dtr&& detour, orig& original, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_pairs<types...>);
+    template <typename trg, typename dtr, typename orig, typename... types,
+              typename = std::enable_if_t<
+                  utils::callable_type<trg> &&
+                  utils::detours_and_originals<dtr, orig&, types...>>>
+    hook_chain(trg&& target, dtr&& detour, orig& original, types&&... rest);
 
-    template <__alterhook_are_detour_and_original_stl_pairs(pair, types)>
-    hook_chain(std::byte* target, pair&& first, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>);
+    template <typename pair, typename... types,
+              typename = std::enable_if_t<
+                  utils::detour_and_original_pairs<pair, types...>>>
+    hook_chain(std::byte* target, pair&& first, types&&... rest);
 
-    template <__alterhook_are_target_detour_and_original_stl_pairs(trg, pair,
-                                                                   types)>
-    hook_chain(trg&& target, pair&& first, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>);
+    template <typename trg, typename pair, typename... types,
+              typename = std::enable_if_t<
+                  utils::callable_type<trg> &&
+                  utils::detour_and_original_pairs<pair, types...>>>
+    hook_chain(trg&& target, pair&& first, types&&... rest);
 
     hook_chain(std::byte* target);
 
-    template <__alterhook_is_target(trg)>
+    template <typename trg,
+              typename = std::enable_if_t<utils::callable_type<trg>>>
     hook_chain(trg&& target)
         : hook_chain(get_target_address(std::forward<trg>(target)))
     {
     }
 
-    template <__alterhook_is_original(orig)>
+    template <typename orig,
+              typename = std::enable_if_t<utils::function_type<orig>>>
     hook_chain(const alterhook::hook& other, orig& original);
     hook_chain(alterhook::hook&& other);
 
@@ -107,26 +114,38 @@ namespace alterhook
     iterator      erase(iterator position);
     iterator      erase(iterator first, iterator last);
 
-    template <__alterhook_are_detour_and_original_pairs(dtr, orig, types)>
-    void append(transfer to, dtr&& detour, orig& original, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_pairs<types...>);
-    template <__alterhook_are_detour_and_original_pairs(dtr, orig, types)>
-    void append(dtr&& detour, orig& original, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_pairs<types...>);
-    template <__alterhook_are_detour_and_original_stl_pairs(pair, types)>
-    void append(transfer to, pair&& first, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>);
-    template <__alterhook_are_detour_and_original_stl_pairs(pair, types)>
-    void append(pair&& first, types&&... rest)
-        __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>);
-    template <__alterhook_is_detour_and_original(dtr, orig)>
+    template <typename dtr, typename orig, typename... types,
+              typename = std::enable_if_t<
+                  utils::detours_and_originals<dtr, orig&, types...>>>
+    void append(transfer to, dtr&& detour, orig& original, types&&... rest);
+    template <typename dtr, typename orig, typename... types,
+              typename = std::enable_if_t<
+                  utils::detours_and_originals<dtr, orig&, types...>>>
+    void append(dtr&& detour, orig& original, types&&... rest);
+    template <typename pair, typename... types,
+              typename = std::enable_if_t<
+                  utils::detour_and_original_pairs<pair, types...>>>
+    void append(transfer to, pair&& first, types&&... rest);
+    template <typename pair, typename... types,
+              typename = std::enable_if_t<
+                  utils::detour_and_original_pairs<pair, types...>>>
+    void append(pair&& first, types&&... rest);
+    template <
+        typename dtr, typename orig,
+        typename = std::enable_if_t<utils::detours_and_originals<dtr, orig&>>>
     void push_back(dtr&& detour, orig& original, bool enable_hook = true);
-    template <__alterhook_is_detour_and_original(dtr, orig)>
+    template <
+        typename dtr, typename orig,
+        typename = std::enable_if_t<utils::detours_and_originals<dtr, orig&>>>
     void push_front(dtr&& detour, orig& original, bool enable_hook = true);
-    template <__alterhook_is_detour_and_original(dtr, orig)>
+    template <
+        typename dtr, typename orig,
+        typename = std::enable_if_t<utils::detours_and_originals<dtr, orig&>>>
     hook& insert(list_iterator position, dtr&& detour, orig& original,
                  include trg);
-    template <__alterhook_is_detour_and_original(dtr, orig)>
+    template <
+        typename dtr, typename orig,
+        typename = std::enable_if_t<utils::detours_and_originals<dtr, orig&>>>
     hook& insert(iterator position, dtr&& detour, orig& original);
     void  swap(list_iterator left, hook_chain& other, list_iterator right);
 
@@ -245,7 +264,8 @@ namespace alterhook
     // setters
     void set_target(std::byte* target);
 
-    template <__alterhook_is_target(trg)>
+    template <typename trg,
+              typename = std::enable_if_t<utils::callable_type<trg>>>
     void set_target(trg&& target)
     {
       set_target(get_target_address(std::forward<trg>(target)));
@@ -425,13 +445,15 @@ namespace alterhook
 
     explicit operator bool() const noexcept { return enabled; }
 
-    template <__alterhook_is_detour(dtr)>
+    template <typename dtr,
+              typename = std::enable_if_t<utils::callable_type<dtr>>>
     void set_detour(dtr&& detour)
     {
       set_detour(get_target_address(std::forward<dtr>(detour)));
     }
 
-    template <__alterhook_is_original(orig)>
+    template <typename orig,
+              typename = std::enable_if_t<utils::function_type<orig>>>
     void set_original(orig& original);
 
     bool operator==(const hook& other) const noexcept;
@@ -452,10 +474,12 @@ namespace alterhook
     bool                 enabled   = false;
     bool                 has_other = false;
 
-    template <__alterhook_is_original(orig)>
+    template <typename orig,
+              typename = std::enable_if_t<utils::function_type<orig>>>
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
               const std::byte* original, orig& origref, bool should_enable);
-    template <__alterhook_is_original(orig)>
+    template <typename orig,
+              typename = std::enable_if_t<utils::function_type<orig>>>
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
               orig& origref);
     void init(hook_chain& chain, list_iterator curr, const std::byte* detour,
@@ -563,10 +587,9 @@ namespace alterhook
   /*
    * TEMPLATE DEFINITIONS
    */
-  template <__alterhook_are_detour_and_original_pairs_impl(dtr, orig, types)>
+  template <typename dtr, typename orig, typename... types, typename>
   hook_chain::hook_chain(std::byte* target, dtr&& detour, orig& original,
                          types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_pairs<types...>)
       : trampoline(target)
   {
     init_chain(utils::make_index_sequence_with_step<sizeof...(types) + 2, 2>(),
@@ -575,11 +598,10 @@ namespace alterhook
                                      std::forward<types>(rest)...));
   }
 
-  template <__alterhook_are_target_detour_and_original_pairs_impl(trg, dtr,
-                                                                  orig, types)>
+  template <typename trg, typename dtr, typename orig, typename... types,
+            typename>
   hook_chain::hook_chain(trg&& target, dtr&& detour, orig& original,
                          types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_pairs<types...>)
       : hook_chain(get_target_address(std::forward<trg>(target)),
                    std::forward<dtr>(detour), original,
                    std::forward<types>(rest)...)
@@ -588,9 +610,8 @@ namespace alterhook
         helpers::extract_detour_sequence_t<dtr, orig, types...>());
   }
 
-  template <__alterhook_are_detour_and_original_stl_pairs_impl(pair, types)>
+  template <typename pair, typename... types, typename>
   hook_chain::hook_chain(std::byte* target, pair&& first, types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>)
       : trampoline(target)
   {
     init_chain(
@@ -612,10 +633,8 @@ namespace alterhook
                     std::get<1>(rest))...)));
   }
 
-  template <__alterhook_are_target_detour_and_original_stl_pairs_impl(trg, pair,
-                                                                      types)>
+  template <typename trg, typename pair, typename... types, typename>
   hook_chain::hook_chain(trg&& target, pair&& first, types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>)
       : hook_chain(get_target_address(std::forward<trg>(target)),
                    std::forward<pair>(first), std::forward<types>(rest)...)
   {
@@ -623,7 +642,7 @@ namespace alterhook
         helpers::extract_detour_sequence_from_tuples_t<pair, types...>());
   }
 
-  template <__alterhook_is_original_impl(orig)>
+  template <typename orig, typename>
   hook_chain::hook_chain(const alterhook::hook& other, orig& original)
       : trampoline(other)
   {
@@ -791,7 +810,7 @@ namespace alterhook
     otherback.other     = itr;
   }
 
-  template <__alterhook_is_original_impl(orig)>
+  template <typename orig, typename>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour,
                               const std::byte* original, orig& origref,
@@ -807,7 +826,7 @@ namespace alterhook
     origref   = function_cast<orig>(original);
   }
 
-  template <__alterhook_is_original_impl(orig)>
+  template <typename orig, typename>
   void hook_chain::hook::init(hook_chain& chain, list_iterator curr,
                               const std::byte* detour, orig& origref)
   {
@@ -819,7 +838,7 @@ namespace alterhook
     origref  = nullptr;
   }
 
-  template <__alterhook_is_original_impl(orig)>
+  template <typename orig, typename>
   void hook_chain::hook::set_original(orig& original)
   {
     if (origwrap->contains_ref(original))
@@ -829,7 +848,7 @@ namespace alterhook
     set_original(tmp);
   }
 
-  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
+  template <typename dtr, typename orig, typename>
   hook_chain::hook& hook_chain::insert(list_iterator position, dtr&& detour,
                                        orig& original, include trg)
   {
@@ -842,7 +861,7 @@ namespace alterhook
                        buffer, trg);
   }
 
-  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
+  template <typename dtr, typename orig, typename>
   hook_chain::hook& hook_chain::insert(iterator position, dtr&& detour,
                                        orig& original)
   {
@@ -851,10 +870,9 @@ namespace alterhook
                   position.enabled ? include::enabled : include::disabled);
   }
 
-  template <__alterhook_are_detour_and_original_pairs_impl(dtr, orig, types)>
+  template <typename dtr, typename orig, typename... types, typename>
   void hook_chain::append(transfer to, dtr&& detour, orig& original,
                           types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_pairs<types...>)
   {
     if constexpr (sizeof...(rest) == 0)
       push_back(std::forward<dtr>(detour), original, static_cast<bool>(to));
@@ -866,17 +884,15 @@ namespace alterhook
                                 std::forward<types>(rest)...));
   }
 
-  template <__alterhook_are_detour_and_original_pairs_impl(dtr, orig, types)>
+  template <typename dtr, typename orig, typename... types, typename>
   void hook_chain::append(dtr&& detour, orig& original, types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_pairs<types...>)
   {
     append(transfer::enabled, std::forward<dtr>(detour), original,
            std::forward<types>(rest)...);
   }
 
-  template <__alterhook_are_detour_and_original_stl_pairs_impl(pair, types)>
+  template <typename pair, typename... types, typename>
   void hook_chain::append(transfer to, pair&& first, types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>)
   {
     if constexpr (sizeof...(rest) == 0)
       push_back(
@@ -905,15 +921,14 @@ namespace alterhook
                       std::get<1>(rest))...)));
   }
 
-  template <__alterhook_are_detour_and_original_stl_pairs_impl(pair, types)>
+  template <typename pair, typename... types, typename>
   void hook_chain::append(pair&& first, types&&... rest)
-      __alterhook_requires(utils::detour_and_storage_stl_pairs<types...>)
   {
     append(transfer::enabled, std::forward<pair>(first),
            std::forward<types>(rest)...);
   }
 
-  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
+  template <typename dtr, typename orig, typename>
   void hook_chain::push_back(dtr&& detour, orig& original, bool enable_hook)
   {
     helpers::orig_buff_t buffer{};
@@ -922,7 +937,7 @@ namespace alterhook
                    enable_hook);
   }
 
-  template <__alterhook_is_detour_and_original_impl(dtr, orig)>
+  template <typename dtr, typename orig, typename>
   void hook_chain::push_front(dtr&& detour, orig& original, bool enable_hook)
   {
     helpers::orig_buff_t buffer{};

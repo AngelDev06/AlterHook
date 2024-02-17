@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "utils_macros.h"
+#include <tuple>
 #include <optional>
 #include <limits>
 #include <array>
@@ -90,12 +91,6 @@ namespace alterhook::utils
     static_assert(std::is_enum_v<T>,
                   "to_underlying: value is expected to be of enum type");
     return static_cast<std::underlying_type_t<T>>(value);
-  }
-
-  template <typename T, typename... types>
-  constexpr bool any_of(T&& value, types&&... args) noexcept
-  {
-    return ((value == args) || ...);
   }
 
   template <typename T, typename callable = std::less<void>>

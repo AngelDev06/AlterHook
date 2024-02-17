@@ -68,7 +68,7 @@ namespace alterhook
       case ARM_REG_SP: return 13;
       case ARM_REG_LR: return 14;
       case ARM_REG_PC: return 15;
-      default: return {};
+      default: return std::nullopt;
       }
     }
 
@@ -117,22 +117,6 @@ namespace alterhook
       if (!result)
         return std::nullopt;
       return result->mem;
-    }
-
-    static bool reads_from_register(const cs_insn& instr, arm_reg reg) noexcept
-    {
-      const auto *readlist_begin = instr.detail->regs_read,
-                 *readlist_end =
-                     instr.detail->regs_read + instr.detail->regs_read_count;
-      return std::find(readlist_begin, readlist_end, reg) != readlist_end;
-    }
-
-    static bool writes_to_register(const cs_insn& instr, arm_reg reg) noexcept
-    {
-      const auto *writelist_begin = instr.detail->regs_write,
-                 *writelist_end =
-                     instr.detail->regs_write + instr.detail->regs_write_count;
-      return std::find(writelist_begin, writelist_end, reg) != writelist_end;
     }
 
     template <arm_insn_group group>
@@ -498,7 +482,7 @@ namespace alterhook
       struct session;
       typedef typename to_be_modified::original_push_t original_push_t;
       typedef std::optional<original_push_t>           optional_original_push_t;
-      typedef std::pair<bool, uint8_t>                 pc_handling_begin_t;
+      typedef std::optional<uint8_t>                   pc_handling_begin_t;
       typedef utils::static_vector<std::pair<uint8_t, uint8_t>, 8> positions_t;
       typedef utils::static_vector<to_be_modified, 16>             tbm_list_t;
       typedef std::bitset<memory_slot_size> buffer_bitset_t;
@@ -510,14 +494,14 @@ namespace alterhook
       std::bitset<8>           instruction_sets{};
       std::bitset<16>          registers_found{};
       buffer_bitset_t          bytes_used{};
-      uint8_t                  last_unused_pos = 0;
-      uint8_t                  available_size  = memory_slot_size;
-      uintptr_t                pc_val          = 0;
-      pc_handling_begin_t      pc_handling_begin{};
+      uint8_t                  last_unused_pos   = 0;
+      uint8_t                  available_size    = memory_slot_size;
+      uintptr_t                pc_val            = 0;
+      pc_handling_begin_t      pc_handling_begin = std::nullopt;
       positions_t              positions{};
       tbm_list_t               tbm_list{};
       branch_destination_list  branch_list{};
-      optional_original_push_t original_push{};
+      optional_original_push_t original_push = std::nullopt;
 
       struct
       {
@@ -680,6 +664,7 @@ namespace alterhook
     {
       static constexpr size_t                    buffer_size = 32;
       typedef std::array<std::byte, buffer_size> buffer_t;
+      typedef typename disassembler::registers   registers_t;
 
       template <typename T>
       class reference
@@ -732,6 +717,7 @@ namespace alterhook
 
       disassembler&       arm;
       trampoline_context& ctx;
+      registers_t         registers{};
       buffer_t            buffer{};
       const std::byte*    copy_source = nullptr;
       uint8_t             copy_size   = 0;
@@ -765,12 +751,11 @@ namespace alterhook
       } instruction_info{};
 
       session(disassembler& arm, trampoline_context& ctx, const cs_insn& instr)
-          : arm(arm), ctx(ctx),
+          : arm(arm), ctx(ctx), registers(arm.get_all_registers(instr)),
             copy_source(reinterpret_cast<const std::byte*>(instr.bytes)),
             copy_size(instr.size), utarget_instruction_address(instr.address)
       {
         ctx.target.end += instr.size;
-        arm.set_reg_accesses(instr);
         ctx.branch_list.set_new_location(instr.address - ctx.target.ubegin,
                                          ctx.trampoline.end);
         inspect(instr);
@@ -982,7 +967,7 @@ namespace alterhook
         if (inspect_branch_instruction(instr))
           return;
         if (ctx.thumb)
-          inspect_thumb_branch(instr);
+          inspect_thumb_branch();
         else
           inspect_arm_branch(instr);
       }
@@ -1009,10 +994,10 @@ namespace alterhook
 
       void inspect_arm_branch(const cs_insn& instr)
       {
-        if (!writes_to_register(instr, ARM_REG_PC))
+        if (!registers.modifies(ARM_REG_PC))
           return;
         instruction_info.is_branch = true;
-        if (!reads_from_register(instr, ARM_REG_PC))
+        if (!registers.reads(ARM_REG_PC))
           return;
 
         typedef std::bitset<64> opcode_t;
@@ -1091,7 +1076,7 @@ namespace alterhook
           }
         }
         else
-          instruction_info.is_call = writes_to_register(instr, ARM_REG_LR);
+          instruction_info.is_call = registers.modifies(ARM_REG_LR);
 
         if (instruction_info.ubranch_destination & 1)
         {
@@ -1100,12 +1085,12 @@ namespace alterhook
         }
       }
 
-      void inspect_thumb_branch(const cs_insn& instr)
+      void inspect_thumb_branch()
       {
-        if (!writes_to_register(instr, ARM_REG_PC))
+        if (!registers.modifies(ARM_REG_PC))
           return;
         instruction_info.is_branch = true;
-        if (writes_to_register(instr, ARM_REG_LR))
+        if (registers.modifies(ARM_REG_LR))
           instruction_info.is_call = true;
       }
 
@@ -1477,11 +1462,9 @@ namespace alterhook
 
         if (!ctx.pc_handling)
         {
-          if (!ctx.pc_handling_begin.first)
-            ctx.pc_handling_begin = {
-              true,
-              static_cast<uint8_t>(ctx.trampoline.end - ctx.trampoline.begin)
-            };
+          if (!ctx.pc_handling_begin.has_value())
+            ctx.pc_handling_begin =
+                static_cast<uint8_t>(ctx.trampoline.end - ctx.trampoline.begin);
 
           if (ctx.thumb)
             session.add_instruction(thumb::PUSH(r7))
@@ -1719,8 +1702,7 @@ namespace alterhook
         instruction_sets(other.instruction_sets),
         patch_above(std::exchange(other.patch_above, false)),
         tramp_size(std::exchange(other.tramp_size, 0)),
-        pc_handling(
-            std::exchange(other.pc_handling, std::pair(false, uint8_t{}))),
+        pc_handling(std::exchange(other.pc_handling, std::nullopt)),
         old_protect(other.old_protect), positions(std::move(other.positions))
   {
   }
@@ -1772,9 +1754,9 @@ namespace alterhook
     instruction_sets = other.instruction_sets;
     patch_above      = std::exchange(other.patch_above, false);
     tramp_size       = std::exchange(other.tramp_size, 0);
-    pc_handling = std::exchange(other.pc_handling, std::pair(false, uint8_t{}));
-    positions   = other.positions;
-    old_protect = other.old_protect;
+    pc_handling      = std::exchange(other.pc_handling, std::nullopt);
+    positions        = other.positions;
+    old_protect      = other.old_protect;
     other.positions.clear();
     return *this;
   }
@@ -1818,7 +1800,7 @@ namespace alterhook
     prelay      = nullptr;
     patch_above = false;
     tramp_size  = 0;
-    pc_handling = { false, 0 };
+    pc_handling = std::nullopt;
     old_protect = {};
     positions.clear();
     instruction_sets.reset();

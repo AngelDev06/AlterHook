@@ -61,7 +61,7 @@ foreach (
 	"calling_conventions" "concepts" "function_traits" 
 	"other" "static_vector" "type_sequence" "utils"
 	"utils_macros" "properties" "data_processing"
-	"boilerplate"
+	"boilerplate" "type_name"
 )
 	list(APPEND ALTERHOOK_UTILITIES_HEADERS "include/alterhook/utilities/${HEADER}.h")
 endforeach()

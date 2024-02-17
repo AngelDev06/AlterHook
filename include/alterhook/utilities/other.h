@@ -11,6 +11,15 @@
 
 namespace alterhook::utils
 {
+  template <typename T, typename... types>
+  constexpr bool any_of(T&& value, types&&... args) noexcept
+  {
+    return ((value == args) || ...);
+  }
+
+  template <typename T>
+  using nop_t = T;
+
   template <typename T>
   inline constexpr bool is_cv_v = false;
   template <typename T>
@@ -37,6 +46,12 @@ namespace alterhook::utils
   template <typename T1, typename T2>
   inline constexpr bool
       same_cv_qualification_v<const volatile T1, const volatile T2> = true;
+
+  template <template <typename...> typename left,
+            template <typename...> typename right>
+  inline constexpr bool is_same_template_v = false;
+  template <template <typename...> typename cls>
+  inline constexpr bool is_same_template_v<cls, cls> = true;
 
   template <typename T1, typename T2>
   struct same_cv_qualification
@@ -108,31 +123,6 @@ namespace alterhook::utils
   template <typename T>
   using remove_cvref_t = std::remove_cvref_t<T>;
 #endif
-
-  namespace helpers
-  {
-    template <typename pair>
-    inline constexpr bool is_pair_impl = false;
-
-    template <typename F, typename S>
-    inline constexpr bool is_pair_impl<std::pair<F, S>> = true;
-
-    template <typename tuple>
-    inline constexpr bool is_tuple_impl = false;
-
-    template <typename... types>
-    inline constexpr bool is_tuple_impl<std::tuple<types...>> = true;
-  } // namespace helpers
-
-  template <typename pair>
-  utils_concept stl_pair = helpers::is_pair_impl<remove_cvref_t<pair>>;
-
-  template <typename tuple>
-  utils_concept stl_tuple = helpers::is_tuple_impl<remove_cvref_t<tuple>>;
-
-  template <typename... types>
-  utils_concept stl_tuples_or_pairs = ((stl_tuple<remove_cvref_t<types>> ||
-                                        stl_pair<remove_cvref_t<types>>)&&...);
 
   template <typename fn, typename ret, typename... args>
   utils_concept invocable_r = std::is_invocable_r_v<ret, fn, args...>;

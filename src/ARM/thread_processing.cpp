@@ -23,11 +23,13 @@ namespace alterhook
       {
         if (pc != (target + oldpos))
           continue;
+        const uintptr_t dest = tramp_buffer + newpos;
 
-        const uintptr_t dest    = tramp_buffer + newpos;
-        const uintptr_t pushloc = tramp_buffer + tramp.pc_handling.second;
+        if (!tramp.pc_handling.has_value())
+          return dest;
+        const uintptr_t pushloc = tramp_buffer + tramp.pc_handling.value();
 
-        if (tramp.pc_handling.first && dest > pushloc)
+        if (dest > pushloc)
         {
           report_error(tramp.ptrampoline.get(), tramp.ptarget, oldpos);
           return 0;
@@ -43,8 +45,7 @@ namespace alterhook
     for (const auto [oldpos, newpos] : tramp.positions)
     {
       const uintptr_t dest = target + oldpos, src = tramp_buffer + newpos,
-                      prevsrc = tramp_buffer + prevpos,
-                      pushloc = tramp_buffer + tramp.pc_handling.second;
+                      prevsrc = tramp_buffer + prevpos;
 
       if (prevsrc > pc || pc > src)
       {
@@ -52,7 +53,11 @@ namespace alterhook
         continue;
       }
 
-      if (pc < src || (tramp.pc_handling.first && pc > pushloc))
+      if (!tramp.pc_handling.has_value())
+        return dest;
+      const uintptr_t pushloc = tramp_buffer + tramp.pc_handling.value();
+
+      if (pc < src || pc > pushloc)
       {
         report_error(tramp.ptrampoline.get(), tramp.ptarget,
                      static_cast<uint8_t>(pc - tramp_buffer));

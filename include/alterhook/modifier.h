@@ -109,9 +109,11 @@ namespace alterhook
     ALTERHOOK_API static hook_manager& get();
     handle                             operator[](std::byte* target);
     const_handle                       operator[](std::byte* target) const;
-    template <__alterhook_is_target(trg)>
+    template <typename trg,
+              typename = std::enable_if_t<utils::callable_type<trg>>>
     handle operator[](trg&& target);
-    template <__alterhook_is_target(trg)>
+    template <typename trg,
+              typename = std::enable_if_t<utils::callable_type<trg>>>
     const_handle operator[](trg&& target) const;
     template <typename K, typename dtr, typename orig, typename... types>
     void insert(std::byte* target, K&& key, dtr&& detour, orig& original,
@@ -162,13 +164,13 @@ namespace alterhook
     return const_handle(&entry);
   }
 
-  template <__alterhook_is_target_impl(trg)>
+  template <typename trg, typename>
   typename hook_manager::handle hook_manager::operator[](trg&& target)
   {
     return operator[](get_target_address(std::forward<trg>(target)));
   }
 
-  template <__alterhook_is_target_impl(trg)>
+  template <typename trg, typename>
   typename hook_manager::const_handle
       hook_manager::operator[](trg&& target) const
   {

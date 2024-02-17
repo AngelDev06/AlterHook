@@ -5,3 +5,5 @@ testEnvironments.json
 bin/
 build/
 out/
+docs/html
+docs/latex

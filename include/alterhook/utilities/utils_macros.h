@@ -382,16 +382,24 @@
 #define __utils_if_true(first, ...)  first
 
 #define utils_and(first_condition, second_condition)                           \
-  __utils_check_expanded(utils_concat(                                         \
-      utils_concat(utils_concat(__utils_and_, utils_bool(first_condition)),    \
-                   _),                                                         \
-      utils_bool(second_condition)))
+  __utils_check_expanded(__utils_call(                                         \
+      utils_concat,                                                            \
+      (__utils_call(                                                           \
+           utils_concat,                                                       \
+           (__utils_call(utils_concat,                                         \
+                         (__utils_and_, utils_bool(first_condition))),         \
+            _)),                                                               \
+       utils_bool(second_condition))))
 #define __utils_and_true_true ~, true
 
 #define utils_or(first_condition, second_condition)                            \
-  __utils_check_expanded(utils_concat(                                         \
-      utils_concat(utils_concat(__utils_or_, utils_bool(first_condition)), _), \
-      utils_bool(second_condition)))
+  __utils_check_expanded(__utils_call(                                         \
+      utils_concat,                                                            \
+      (__utils_call(utils_concat,                                              \
+                    (__utils_call(utils_concat,                                \
+                                  (__utils_or_, utils_bool(first_condition))), \
+                     _)),                                                      \
+       utils_bool(second_condition))))
 #define __utils_or_true_false ~, true
 #define __utils_or_false_true ~, true
 #define __utils_or_true_true  ~, true
@@ -443,7 +451,6 @@
 #endif
 
 #define __utils_use_if_n(arg, n, index) utils_if(utils_equal(n, index))(arg, )
-#define utils_get(n, ...)               utils_map_ud_indexed(__utils_use_if_n, n, __VA_ARGS__)
 #define utils_comma()                   ,
 
 #define __utils_get_attribute_impl(result)                                     \
@@ -477,54 +484,92 @@
   utils_if(utils_is_call_operator(attr))(utils_expand,                         \
                                          utils_del)(utils_expand attr)
 
-#define __utils_add_exception_attribute(...)                                   \
-  __utils_call2(                                                               \
-      __utils_add_exception_attribute_impl,                                    \
-      (utils_get_attribute(exception_attribute, stdattr, __VA_ARGS__)))
+#ifndef RUNNING_DOXYGEN
+  #define __utils_add_exception_attribute(...)                                 \
+    __utils_call2(                                                             \
+        __utils_add_exception_attribute_impl,                                  \
+        (utils_get_attribute(exception_attribute, stdattr, __VA_ARGS__)))
+#else
+  #define __utils_add_exception_attribute(...)
+#endif
 
 #define utils_equal_hidden_hidden ~, true
 
-#define __utils_define_field_impl_2(type, name)                                \
-private:                                                                       \
-  type utils_concat(m_, name);                                                 \
+#ifndef RUNNING_DOXYGEN
+  #define __utils_define_field_impl_2(type, name)                              \
+  private:                                                                     \
+    type utils_concat(m_, name);                                               \
                                                                                \
-public:                                                                        \
-  type utils_concat(get_, name)() const { return utils_concat(m_, name); }
+  public:                                                                      \
+    type utils_concat(get_, name)() const { return utils_concat(m_, name); }
 
-#define __utils_define_field_impl_3(type, name, attr)                          \
-private:                                                                       \
-  type utils_concat(m_, name);                                                 \
-  utils_if(utils_not(utils_equal(attr, hidden)))(utils_expand, utils_del)(     \
-      public                                                                   \
-      : type utils_concat(get_, name)()                                        \
-          const { return utils_concat(m_, name); })
+  #define __utils_define_field_impl_3(type, name, attr)                        \
+  private:                                                                     \
+    type utils_concat(m_, name);                                               \
+    utils_if(utils_not(utils_equal(attr, hidden)))(utils_expand, utils_del)(   \
+        public                                                                 \
+        : type utils_concat(get_, name)()                                      \
+            const noexcept { return utils_concat(m_, name); })
 
-#define __utils_define_field(tuple)                                            \
-  utils_if(utils_equal(utils_sizeof tuple, 3))(                                \
-      __utils_define_field_impl_3, __utils_define_field_impl_2) tuple
-#define __utils_define_fields_impl2(...)                                       \
-  utils_map(__utils_define_field, __VA_ARGS__)
-#define __utils_define_fields_impl(attr)                                       \
-  utils_if(utils_is_call_operator(attr))(__utils_define_fields_impl2,          \
-                                         utils_del)(utils_expand attr)
-#define __utils_define_fields(...)                                             \
-  __utils_define_fields_impl(                                                  \
-      utils_get_attribute(exception_attribute, fields, __VA_ARGS__))
+  #define __utils_define_field(tuple)                                          \
+    utils_if(utils_equal(utils_sizeof tuple, 3))(                              \
+        __utils_define_field_impl_3, __utils_define_field_impl_2) tuple
+  #define __utils_define_fields_impl2(...)                                     \
+    utils_map(__utils_define_field, __VA_ARGS__)
+  #define __utils_define_fields_impl(attr)                                     \
+    utils_if(utils_is_call_operator(attr))(__utils_define_fields_impl2,        \
+                                           utils_del)(utils_expand attr)
 
-#define __utils_define_argument_impl_3(type, name, attr) type name
-#define __utils_define_argument_impl_2(type, name)       type name
-#define __utils_define_argument(tuple)                                         \
-  utils_if(utils_equal(utils_sizeof tuple, 3))(                                \
-      __utils_define_argument_impl_3, __utils_define_argument_impl_2) tuple
+  #define __utils_define_fields(...)                                           \
+    __utils_define_fields_impl(                                                \
+        utils_get_attribute(exception_attribute, fields, __VA_ARGS__))
+#else
+  #define __utils_expand_fields_fields(...) (__VA_ARGS__)
+  #define __utils_field_check_impl_true(type, name)                            \
+  public:                                                                      \
+    type get_##name() const noexcept;
+  #define __utils_field_check_impl_false(...)
+  #define __utils_field_check(field)                                           \
+    __utils_call(utils_concat(__utils_field_check_impl_,                       \
+                              utils_equal(utils_sizeof field, 2)),             \
+                 field)
+  #define __utils_forward_field(i, ...)                                        \
+    __utils_call2(                                                             \
+        utils_if,                                                              \
+        (utils_is_call_operator(utils_get(i, __VA_ARGS__)))(                   \
+            __utils_field_check, utils_del)(utils_get(i, __VA_ARGS__)))
+  #define __utils_define_fields_impl2_true(...)                                \
+    __utils_forward_field(0, __VA_ARGS__)                                      \
+        __utils_forward_field(1, __VA_ARGS__)                                  \
+            __utils_forward_field(2, __VA_ARGS__)                              \
+                __utils_forward_field(3, __VA_ARGS__)                          \
+                    __utils_forward_field(4, __VA_ARGS__)                      \
+                        __utils_forward_field(5, __VA_ARGS__)                  \
+                            __utils_forward_field(6, __VA_ARGS__)
+  #define __utils_define_fields_impl2_false(...)
+  #define __utils_define_fields_impl(fields)                                   \
+    __utils_call3(utils_concat(__utils_define_fields_impl2_,                   \
+                               utils_is_call_operator(fields)),                \
+                  (utils_expand fields))
+  #define __utils_define_fields(...)                                           \
+    __utils_define_fields_impl(                                                \
+        utils_concat(__utils_expand_fields_, utils_get(1, __VA_ARGS__)))
+#endif
+
+#define __utils_define_argument_impl2(type, name, ...) type name
+#define __utils_define_argument_impl(...)                                      \
+  utils_expand(__utils_define_argument_impl2(__VA_ARGS__, 0))
+#define __utils_define_argument(tuple) __utils_define_argument_impl tuple
 #define __utils_define_arguments_impl2(...)                                    \
   utils_map_list(__utils_define_argument, __VA_ARGS__)
 #define __utils_define_arguments_impl(attr1, attr2)                            \
   utils_if(utils_is_call_operator(attr1))(__utils_define_arguments_impl2,      \
                                           utils_del)(                          \
-      utils_expand attr1)utils_if(utils_is_call_operator(attr2))(utils_expand, \
-                                                                 utils_del)(   \
-      utils_if(utils_is_call_operator(attr1))(utils_comma, utils_del)()        \
-          __utils_call3(__utils_define_arguments_impl2, (utils_expand attr2)))
+      utils_expand attr1)utils_if(utils_and(utils_is_call_operator(attr1),     \
+                                            utils_is_call_operator(attr2)))(   \
+      utils_comma, utils_del)()                                                \
+      utils_if(utils_is_call_operator(attr2))(__utils_define_arguments_impl2,  \
+                                              utils_del)(utils_expand attr2)
 #define __utils_define_arguments(...)                                          \
   __utils_call2(                                                               \
       __utils_define_arguments_impl,                                           \
@@ -558,31 +603,65 @@ private:                                                                       \
       __utils_pass_arguments_impl,                                             \
       (utils_get_attribute(exception_attribute, base_args, __VA_ARGS__)))
 
-#define __utils_define_constructor(exception_name, base, ...)                  \
-public:                                                                        \
-  exception_name(__utils_define_arguments(__VA_ARGS__))                        \
-      : base(__utils_pass_arguments(__VA_ARGS__))                              \
-            __utils_init_fields(__VA_ARGS__)                                   \
-  {                                                                            \
-  }
+#ifndef RUNNING_DOXYGEN
+  #define __utils_define_constructor(exception_name, base, ...)                \
+  public:                                                                      \
+    exception_name(__utils_define_arguments(__VA_ARGS__))                      \
+        : base(__utils_pass_arguments(__VA_ARGS__))                            \
+              __utils_init_fields(__VA_ARGS__)                                 \
+    {                                                                          \
+    }
+#else
+  #define __utils_define_constructor(exception_name, base, ...)
+#endif
 
 #define __utils_define_what_impl(attr)                                         \
   utils_if(utils_is_call_operator(attr))(utils_expand, utils_del)(             \
       public                                                                   \
       : const char* what()                                                     \
           const noexcept override { return utils_expand attr; })
-#define __utils_define_what(...)                                               \
-  __utils_call2(                                                               \
-      __utils_define_what_impl,                                                \
-      (utils_get_attribute(exception_attribute, reason, __VA_ARGS__)))
+#ifndef RUNNING_DOXYGEN
+  #define __utils_define_what(...)                                             \
+    __utils_call2(                                                             \
+        __utils_define_what_impl,                                              \
+        (utils_get_attribute(exception_attribute, reason, __VA_ARGS__)))
+#else
+  #define __utils_expand_reason_reason(str)                                    \
+    (public : const char* what() const noexcept override { return str; })
+  #define __utils_define_what_check(result1, result2)                          \
+    utils_if(utils_is_call_operator(result1))(utils_expand,                    \
+                                              utils_del)(utils_expand result1) \
+        utils_if(utils_is_call_operator(result2))(utils_expand, utils_del)(    \
+            utils_expand result2)
+  #define __utils_define_what(...)                                             \
+    __utils_define_what_check(                                                 \
+        utils_concat(__utils_expand_reason_,                                   \
+                     utils_get(utils_decrement(utils_sizeof(__VA_ARGS__)),     \
+                               __VA_ARGS__)),                                  \
+        utils_concat(__utils_expand_reason_,                                   \
+                     utils_get(utils_decrement(utils_decrement(                \
+                                   utils_sizeof(__VA_ARGS__))),                \
+                               __VA_ARGS__)))
+#endif
 
 #define __utils_add_extra_impl(attr)                                           \
   utils_if(utils_is_call_operator(attr))(utils_expand,                         \
                                          utils_del)(utils_expand attr)
-#define __utils_add_extra(...)                                                 \
-  __utils_call2(                                                               \
-      __utils_add_extra_impl,                                                  \
-      (utils_get_attribute(exception_attribute, extra, __VA_ARGS__)))
+#ifndef RUNNING_DOXYGEN
+  #define __utils_add_extra(...)                                               \
+    __utils_call2(                                                             \
+        __utils_add_extra_impl,                                                \
+        (utils_get_attribute(exception_attribute, extra, __VA_ARGS__)))
+#else
+  #define __utils_expand_extra_extra(...) (__VA_ARGS__)
+  #define __utils_add_extra_check(expr)                                        \
+    utils_if(utils_is_call_operator(expr))(utils_expand,                       \
+                                           utils_del)(utils_expand expr)
+  #define __utils_add_extra(...)                                               \
+    __utils_add_extra_check(utils_concat(                                      \
+        __utils_expand_extra_,                                                 \
+        utils_get(utils_decrement(utils_sizeof(__VA_ARGS__)), __VA_ARGS__)))
+#endif
 
 // clang-format off
 /* This generates an exception class using the following properties:
