@@ -7,6 +7,29 @@
 #if utils_cc_assertions
 namespace alterhook::utils
 {
+  namespace helpers
+  {
+    // tag for __thiscall cuz msvc is annoyed
+    template <typename T>
+    struct thiscall_pfn_tag;
+    template <typename T>
+    struct unwrap_stdfunc_impl;
+    template <typename T>
+    using unwrap_stdfunc_t = typename unwrap_stdfunc_impl<T>::type;
+    template <typename T>
+    inline constexpr bool __cdecl_check = false;
+    template <typename T>
+    inline constexpr bool __clrcall_check = false;
+    template <typename T>
+    inline constexpr bool __fastcall_check = false;
+    template <typename T>
+    inline constexpr bool __stdcall_check = false;
+    template <typename T>
+    inline constexpr bool __thiscall_check = false;
+    template <typename T>
+    inline constexpr bool __vectorcall_check = false;
+  } // namespace helpers
+
   // All the supported windows x86 calling conventions
   enum class calling_convention
   {
@@ -18,87 +41,67 @@ namespace alterhook::utils
     __VECTORCALL
   };
 
-  namespace helpers
+  template <typename T>
+  inline constexpr bool is_cdecl_v =
+      helpers::__cdecl_check<helpers::unwrap_stdfunc_t<T>>;
+
+  template <typename T>
+  struct is_cdecl
   {
-    // Since a function pointer with calling convention `__thiscall` can't be
-    // safely converted to a function type with same calling convention due to
-    // msvc not allowing it, we will use this flag to store the function type as
-    // template param T without __thiscall and to denote that this function type
-    // originally had the __thiscall cc.
-    template <typename T>
-    struct thiscall_pfn_tag
-    {
-    };
+    static constexpr bool value = is_cdecl_v<T>;
+  };
 
-  #define __utils_define_default_cc_checks(cc)                                 \
-    template <typename T>                                                      \
-    inline constexpr bool utils_concat(cc, _check) = false;
+  template <typename T>
+  inline constexpr bool is_clrcall_v =
+      helpers::__clrcall_check<helpers::unwrap_stdfunc_t<T>>;
 
-    utils_map(__utils_define_default_cc_checks, __cdecl, __clrcall, __fastcall,
-              __stdcall, __thiscall, __vectorcall)
+  template <typename T>
+  struct is_clrcall
+  {
+    static constexpr bool value = is_clrcall_v<T>;
+  };
 
-  // we keep this overload in its own macro as its the only one to be used for
-  // __thiscall
-  #define __utils_define_member_function_cc_overload(cc, cv, ref, exception)   \
-    template <typename ret, typename cls, typename... args>                    \
-    inline constexpr bool utils_concat(                                        \
-        cc, _check)<ret (cc cls::*)(args...) cv ref exception> = true;
+  template <typename T>
+  inline constexpr bool is_fastcall_v =
+      helpers::__fastcall_check<helpers::unwrap_stdfunc_t<T>>;
 
-  #define __utils_define_cc_overloads(cc, cv, ref, exception)                  \
-    template <typename ret, typename... args>                                  \
-    inline constexpr bool utils_concat(                                        \
-        cc, _check)<ret cc(args...) cv ref exception> = true;                  \
-    template <typename ret, typename... args>                                  \
-    inline constexpr bool utils_concat(                                        \
-        cc, _check)<std::function<ret cc(args...) cv ref exception>> = true;   \
-    __utils_define_member_function_cc_overload(cc, cv, ref, exception)
+  template <typename T>
+  struct is_fastcall
+  {
+    static constexpr bool value = is_fastcall_v<T>;
+  };
 
-  #define __utils_define__cdecl_overloads(cc, cv, ref, exception)              \
-    __utils_define_cc_overloads(cc, cv, ref, exception)
-  #define __utils_define__clrcall_overloads(cc, cv, ref, exception)            \
-    __utils_define_cc_overloads(cc, cv, ref, exception)
-  #define __utils_define__fastcall_overloads(cc, cv, ref, exception)           \
-    __utils_define_cc_overloads(cc, cv, ref, exception)
-  #define __utils_define__stdcall_overloads(cc, cv, ref, exception)            \
-    __utils_define_cc_overloads(cc, cv, ref, exception)
-  #define __utils_define__thiscall_overloads(cc, cv, ref, exception)           \
-    __utils_define_member_function_cc_overload(cc, cv, ref, exception)
-  #define __utils_define__vectorcall_overloads(cc, cv, ref, exception)         \
-    __utils_define_cc_overloads(cc, cv, ref, exception)
+  template <typename T>
+  inline constexpr bool is_stdcall_v =
+      helpers::__stdcall_check<helpers::unwrap_stdfunc_t<T>>;
 
-  #define __utils_define_all_cc_overloads(cc, cv, ref, exception)              \
-    utils_concat(utils_concat(__utils_define, cc), _overloads)(cc, cv, ref,    \
-                                                               exception)
+  template <typename T>
+  struct is_stdcall
+  {
+    static constexpr bool value = is_stdcall_v<T>;
+  };
 
-        // clang-format off
-    __utils_member_call_cv_ref_noexcept(__utils_define_all_cc_overloads) 
-      
-    template <typename R, typename... args>
-    inline constexpr bool __thiscall_check<thiscall_pfn_tag<R>(args...)> = true;
-    // clang-format on
+  template <typename T>
+  inline constexpr bool is_thiscall_v =
+      helpers::__thiscall_check<helpers::unwrap_stdfunc_t<T>>;
 
-    template <typename R, typename... args>
-    inline constexpr bool
-        __thiscall_check<thiscall_pfn_tag<R>(args...) noexcept> = true;
+  template <typename T>
+  struct is_thiscall
+  {
+    static constexpr bool value = is_thiscall_v<T>;
+  };
 
-  } // namespace helpers
+  template <typename T>
+  inline constexpr bool is_vectorcall_v =
+      helpers::__vectorcall_check<helpers::unwrap_stdfunc_t<T>>;
 
-  #define __utils_define_cc_checks_api(name)                                   \
-    template <typename T>                                                      \
-    inline constexpr bool utils_concat(utils_concat(is_, name), _v) =          \
-        helpers::utils_concat(utils_concat(__, name),                          \
-                              _check)<std::remove_pointer_t<T>>;               \
-    template <typename T>                                                      \
-    struct utils_concat(is_, name)                                             \
-    {                                                                          \
-      static constexpr bool value =                                            \
-          utils_concat(utils_concat(is_, name), _v)<T>;                        \
-    };
+  template <typename T>
+  struct is_vectorcall
+  {
+    static constexpr bool value = is_vectorcall_v<T>;
+  };
 
-  utils_map(__utils_define_cc_checks_api, cdecl, clrcall, fastcall, stdcall,
-            thiscall, vectorcall)
-
-      namespace helpers
+  namespace helpers
   {
     template <typename T>
     utils_consteval calling_convention get_calling_convention()
@@ -111,7 +114,7 @@ namespace alterhook::utils
                 (is_clrcall_v, CLRCALL), (is_fastcall_v, FASTCALL),
                 (is_vectorcall_v, VECTORCALL))
     }
-  }
+  } // namespace helpers
 
   #define __utils_decl_add_cc(name)                                            \
     template <typename T>                                                      \
@@ -261,6 +264,50 @@ namespace alterhook::utils
   utils_map(__utils_emit_tags, (cdecl, c_decl, __CDECL),
             (clrcall, clrcall, __CLRCALL), (fastcall, fastcall, __FASTCALL),
             (stdcall, stdcall, __STDCALL), (thiscall, thiscall, __THISCALL),
-            (vectorcall, vectorcall, __VECTORCALL))
-} // namespace utils
+            (vectorcall, vectorcall, __VECTORCALL));
+
+  namespace helpers
+  {
+    template <typename T>
+    struct thiscall_pfn_tag
+    {
+    };
+
+    template <typename T>
+    struct unwrap_stdfunc_impl
+    {
+      typedef T type;
+    };
+
+    template <typename T>
+    struct unwrap_stdfunc_impl<std::function<T>>
+    {
+      typedef T type;
+    };
+
+  #define utils_equal___thiscall___thiscall ~, true
+
+  #define __utils_cc_check_impl_member(cc, cv, ref, exception)                 \
+    template <typename ret, typename cls, typename... args>                    \
+    inline constexpr bool                                                      \
+        cc##_check<ret (cc cls::*)(args...) cv ref exception> = true;
+  #define __utils_cc_check_impl_regular(cc, cv, ref, exception)                \
+    template <typename ret, typename... args>                                  \
+    inline constexpr bool cc##_check<ret cc(args...) cv ref exception> = true;
+  #define __utils_cc_check_impl_overloads(cc, cv, ref, exception)              \
+    __utils_cc_check_impl_member(cc, cv, ref, exception)                       \
+        utils_if(utils_not(utils_equal(cc, __thiscall)))(                      \
+            __utils_cc_check_impl_regular, utils_del)(cc, cv, ref, exception)
+
+    __utils_member_call_cv_ref_noexcept(__utils_cc_check_impl_overloads)
+
+        template <typename R, typename... args>
+        inline constexpr bool __thiscall_check<thiscall_pfn_tag<R>(args...)> =
+            true;
+
+    template <typename R, typename... args>
+    inline constexpr bool
+        __thiscall_check<thiscall_pfn_tag<R>(args...) noexcept> = true;
+  } // namespace helpers
+} // namespace alterhook::utils
 #endif

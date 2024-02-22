@@ -43,13 +43,14 @@
 
 // clang-format off
 
-make_enum(func_called, originalcls_func, originalcls_func2, detourcls_func,
-          detourcls_func2, detourcls_func3, detourcls_func4, detourcls_func5,
-          detourcls_func6, detourcls_func7, detourcls_func8, modifier1_func,
-          modifier1_func2, target_multiply_by_int, target_multiply_by_float,
-          modifier2_multiply_by_int, modifier2_multiply_by_float,
-          target_private_power_all, modifier2_private_power_all,
-          target_return_sum, modifier2_return_sum, lambda, lambda2,
+make_enum(func_called, originalcls_func, originalcls_func2, originalcls_func3,
+          detourcls_func, detourcls_func2, detourcls_func3, detourcls_func4,
+          detourcls_func5, detourcls_func6, detourcls_func7, detourcls_func8,
+          modifier1_func, modifier1_func2, target_multiply_by_int,
+          target_multiply_by_float, modifier2_multiply_by_int,
+          modifier2_multiply_by_float, target_private_power_all,
+          modifier2_private_power_all, target_return_sum, modifier2_return_sum,
+          lambda, lambda2, generic_lambda, custom_callable,
           second_modifier1_func, second_modifier1_func2)
 
 inline std::stack<func_called> call_stack;
@@ -98,12 +99,23 @@ struct originalcls
     std::cout << "originalcls::func2\n";
     call_stack.push(func_called::originalcls_func2);
   }
+
+  noinline void func3(int increment)
+  {
+    origresult = { x + increment, y + increment, z + increment };
+    std::cout << "originalcls::func3\n";
+    call_stack.push(func_called::originalcls_func3);
+  }
 };
 
-#if utils_windows
-  #define __add_fastcall __fastcall
+#if utils_cc_assertions
+  #define __add_fastcall     __fastcall
+  #define __add_thiscall     __thiscall
+  #define __cc_specific(...) __VA_ARGS__
 #else
   #define __add_fastcall
+  #define __add_thiscall
+  #define __cc_specific(...)
 #endif
 
 inline std::function<void __add_fastcall(originalcls*)> original;
@@ -115,6 +127,19 @@ inline std::function<void __add_fastcall(originalcls*)> original6;
 inline std::function<void __add_fastcall(originalcls*)> original7;
 inline std::function<void __add_fastcall(originalcls*)> original8;
 inline std::function<void __add_fastcall(originalcls*)> original9;
+
+struct custom_callable : originalcls
+{
+  inline static void (originalcls::*original)(int) = nullptr;
+
+  template <typename T>
+  void operator()(T arg)
+  {
+    std::cout << "custom_callable\n";
+    call_stack.push(func_called::custom_callable);
+    (this->*original)((x * y * z) + arg);
+  }
+};
 
 struct detourcls : originalcls
 {

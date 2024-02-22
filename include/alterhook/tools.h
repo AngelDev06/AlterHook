@@ -40,6 +40,65 @@ namespace alterhook
   }
 
   /**
+   * @brief takes an instance of a callable type with an ambiguous overload of
+   * either `operator()` or the conversion operator to a function pointer and
+   * returns a member function pointer for the former and a function pointer for
+   * the latter based on the function-like type `func`.
+   * @tparam func the function-like type based on which a member function
+   * pointer/function pointer will be generated in order to disambiguate the
+   * overloads (must satisfy @ref alterhook::utils::function_type)
+   * @tparam callable the callable type of the instance which should have an
+   * ambiguous overload of `operator()` (i.e. one that cannot be accessed
+   * normally via `&callable::operator()`) or optionally a conversion operator
+   * to a function pointer. It is allowed to have no overload of `operator()` at
+   * all but in that case it must have the conversion operator defined.
+   * @param instance the instance to disambiguate. For regular ambiguous
+   * callable types that do not provide a conversion operator to a function
+   * pointer, the instance is not required. So a
+   * @ref alterhook::disambiguate() "second overload" is provided for that
+   * specific reason
+   * @returns the disambiguated result. It is a member function pointer to the
+   * ambiguous `operator()` overload if no conversion operator is provided,
+   * otherwise it's a function pointer returned from the invocation of the
+   * provided conversion operator.
+   *
+   * To generate the needed types based on `func`:
+   * - @ref alterhook::utils::generic_lambda_disambiguation_type_t is used when
+   *   @ref alterhook::utils::disambiguatable_lambda_with is satisfied
+   * - @ref alterhook::utils::generic_callable_disambiguation_type_t is used
+   *   when @ref alterhook::utils::disambiguatable_callable_with is satisfied
+   *
+   * If for some reason both are satisfied, the former is preferred, which is to
+   * invoke the conversion operator. See the relevant documentation of those
+   * utilities to find out how the types are generated and what the requirements
+   * are.
+   */
+  template <
+      typename func, typename callable,
+      typename = std::enable_if_t<utils::disambiguatable_with<callable, func>>>
+  auto disambiguate(callable&& instance) noexcept;
+
+  /**
+   * @brief a convenient overload of
+   * @ref alterhook::disambiguate(callable&&) that does not require an instance,
+   * because it disambiguates only the `operator()` and doesn't call any
+   * conversion operator.
+   * @returns always a member function pointer to the disambiguated `operator()`
+   * overload.
+   *
+   * Since no conversion operator is called in this overload, the `callable`
+   * type specified is expected to define an ambiguous overload of `operator()`
+   * and @ref alterhook::utils::generic_callable_disambiguation_type_t is what
+   * will be used to generate the member function pointer. See @ref
+   * alterhook::utils::disambiguatable_callable_with for the requirements of
+   * `func` and `callable`.
+   */
+  template <typename func, typename callable,
+            typename = std::enable_if_t<
+                utils::disambiguatable_callable_with<callable, func>>>
+  auto disambiguate() noexcept;
+
+  /**
    * @brief Takes any callable type and tries to get its underlying address
    * @tparam T the callable type, it can be anything that satisfies
    * @ref alterhook::utils::callable_type
@@ -56,6 +115,15 @@ namespace alterhook
    * it points to a virtual function.
    */
   template <typename T, typename = std::enable_if_t<utils::callable_type<T>>>
+  constexpr std::byte* get_target_address(T&& fn) noexcept;
+
+  /// @brief An @ref alterhook::get_target_address() overload that tries to
+  /// disambiguate `fn` first before further processing based on `func` using
+  /// @ref alterhook::disambiguate(callable&&) or just calls the other overload
+  /// if that's not possible
+  template <typename func, typename T,
+            typename = std::enable_if_t<utils::callable_type<T> ||
+                                        utils::disambiguatable_with<T, func>>>
   constexpr std::byte* get_target_address(T&& fn) noexcept;
 
   /**
@@ -93,13 +161,37 @@ namespace alterhook
   template <typename T>
   [[noreturn]] void nested_throw(T&& exception);
 
+  template <typename func, typename callable, typename>
+  auto disambiguate(callable&& instance) noexcept
+  {
+    if constexpr (utils::disambiguatable_lambda_with<callable, func>)
+      return static_cast<utils::generic_lambda_disambiguation_type_t<func>>(
+          instance);
+    else
+      return static_cast<
+          utils::generic_callable_disambiguation_type_t<callable, func>>(
+          &callable::operator());
+  }
+
+  template <typename func, typename callable, typename>
+  auto disambiguate() noexcept
+  {
+    return static_cast<
+        utils::generic_callable_disambiguation_type_t<callable, func>>(
+        &callable::operator());
+  }
+
   template <typename T, typename>
   constexpr std::byte* get_target_address(T&& fn) noexcept
   {
     typedef utils::remove_cvref_t<T> fn_t;
     static_assert(!utils::stl_function_type<fn_t>,
-                  "Cannot get the underlying function address out of an "
-                  "instance of `std::function`");
+                  "get_target_address: Cannot get the underlying function "
+                  "address out of an `std::function` instance");
+    if constexpr (utils::lambda_type<fn_t>)
+      static_assert(
+          utils::captureless_lambda<fn_t>,
+          "get_target_address: A lambda was passed that is not captureless");
 
     if constexpr (utils::captureless_lambda<fn_t>)
       return reinterpret_cast<std::byte*>(
@@ -108,18 +200,27 @@ namespace alterhook
 #if utils_clang && utils_windows
     else if constexpr (utils::member_function_type<fn_t>)
       return reinterpret_cast<std::byte*>(addresser::address_of_regular(fn));
-    else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
+    else if constexpr (utils::fn_object_v<fn_t>)
       return reinterpret_cast<std::byte*>(
           addresser::address_of_regular(&fn_t::operator()));
 #else
     else if constexpr (utils::member_function_type<fn_t>)
       return reinterpret_cast<std::byte*>(addresser::address_of(fn));
-    else if constexpr (utils::fn_object_v<std::remove_pointer_t<fn_t>>)
+    else if constexpr (utils::fn_object_v<fn_t>)
       return reinterpret_cast<std::byte*>(
           addresser::address_of(&fn_t::operator()));
 #endif
     else
       return reinterpret_cast<std::byte*>(fn);
+  }
+
+  template <typename func, typename T, typename>
+  constexpr std::byte* get_target_address(T&& fn) noexcept
+  {
+    if constexpr (utils::disambiguatable_with<T, func>)
+      return get_target_address(disambiguate<func>(std::forward<T>(fn)));
+    else
+      return get_target_address(std::forward<T>(fn));
   }
 
   template <typename T, typename>
@@ -133,7 +234,7 @@ namespace alterhook
       return val;
     }
     else if constexpr (std::is_function_v<utils::clean_type_t<T>>)
-      return reinterpret_cast<std::add_pointer_t<utils::clean_type_t<T>>>(
+      return reinterpret_cast<utils::add_pointer_t<utils::clean_type_t<T>>>(
           address);
     else
       return fn_t(
@@ -151,7 +252,7 @@ namespace alterhook
       return val;
     }
     else if constexpr (std::is_function_v<utils::clean_type_t<T>>)
-      return reinterpret_cast<std::add_pointer_t<utils::clean_type_t<T>>>(
+      return reinterpret_cast<utils::add_pointer_t<utils::clean_type_t<T>>>(
           const_cast<void*>(address));
     else
       return reinterpret_cast<utils::unwrap_stl_function_t<fn_t>>(
@@ -229,39 +330,39 @@ namespace alterhook
     template <typename dtr, typename orig>
     utils_consteval void assert_valid_detour_original_pair()
     {
-      typedef utils::clean_type_t<dtr>  detour_type;
-      typedef utils::clean_type_t<orig> storage_type;
-      static_assert(std::is_same_v<utils::fn_return_t<detour_type>,
-                                   utils::fn_return_t<storage_type>>,
-                    "The return type of the detour and the original function "
-                    "need to be the same");
+      if constexpr (!utils::disambiguatable_with<dtr, orig>)
+      {
+        static_assert(
+            std::is_same_v<utils::fn_return_t<dtr>, utils::fn_return_t<orig>>,
+            "The return type of the detour and the original function "
+            "need to be the same");
 #if utils_cc_assertions
-      static_assert(
-          utils::compatible_calling_convention_with<detour_type, storage_type>,
-          "The calling conventions of the detour and the original function "
-          "need to be compatible");
+        static_assert(
+            utils::compatible_calling_convention_with<dtr, orig>,
+            "The calling conventions of the detour and the original function "
+            "need to be compatible");
 #endif
-      static_assert(
-          utils::compatible_function_arguments_with<detour_type, storage_type>,
-          "The arguments the detour accepts aren't compatible with the "
-          "original function");
+        static_assert(
+            utils::compatible_function_arguments_with<dtr, orig>,
+            "The arguments the detour accepts aren't compatible with the "
+            "original function");
+      }
     }
 
     template <typename trg, typename dtr>
     utils_consteval void assert_valid_target_and_detour_pair()
     {
-      typedef utils::clean_type_t<trg> ctrg;
-      typedef utils::clean_type_t<dtr> cdtr;
       static_assert(
-          std::is_same_v<utils::fn_return_t<ctrg>, utils::fn_return_t<cdtr>>,
-          "The return type of the target and the detour function need to be "
+          std::is_same_v<utils::fn_return_t<trg>, utils::fn_return_t<dtr>>,
+          "The return type of the target and the detour function need to "
+          "be "
           "the same");
 #if utils_cc_assertions
-      static_assert(utils::compatible_calling_convention_with<ctrg, cdtr>,
+      static_assert(utils::compatible_calling_convention_with<trg, dtr>,
                     "The calling conventions of the target and the detour "
                     "function need to be compatible");
 #endif
-      static_assert(utils::compatible_function_arguments_with<cdtr, ctrg>,
+      static_assert(utils::compatible_function_arguments_with<dtr, trg>,
                     "The arguments the detour accepts aren't compatible with "
                     "the target function");
     }

@@ -886,50 +886,63 @@ namespace alterhook::utils
 
   namespace helpers
   {
-    template <typename seq>
+    template <typename detour, typename original>
+    utils_concept detour_and_original_requirements =
+        function_type<original> && std::is_lvalue_reference_v<original> &&
+        (callable_type<detour> || disambiguatable_with<detour, original>);
+
+    template <typename first_key, typename key, typename detour,
+              typename original>
+    utils_concept key_detour_and_original_requirements =
+        std::is_convertible_v<key, first_key> &&
+        detour_and_original_requirements<detour, original>;
+
+    template <typename seq, bool = true>
     inline constexpr bool detours_and_originals_impl = false;
 
     template <typename tuple, typename... rest>
-    inline constexpr bool
-        detours_and_originals_impl<type_sequence<tuple, rest...>> =
-            callable_type<std::tuple_element_t<0, tuple>> &&
-            function_type<std::tuple_element_t<1, tuple>> &&
-            std::is_lvalue_reference_v<std::tuple_element_t<1, tuple>> &&
-            detours_and_originals_impl<type_sequence<rest...>>;
+    inline constexpr bool detours_and_originals_impl<
+        type_sequence<tuple, rest...>, true> =
+        detours_and_originals_impl<
+            type_sequence<rest...>,
+            detour_and_original_requirements<std::tuple_element_t<0, tuple>,
+                                             std::tuple_element_t<1, tuple>>>;
 
     template <typename first, typename second, typename... rest>
     inline constexpr bool detours_and_originals_impl<
-        type_sequence<type_sequence<first, second>, rest...>> =
-        callable_type<first> && function_type<second> &&
-        std::is_lvalue_reference_v<second> &&
-        detours_and_originals_impl<type_sequence<rest...>>;
+        type_sequence<type_sequence<first, second>, rest...>, true> =
+        detours_and_originals_impl<
+            type_sequence<rest...>,
+            detour_and_original_requirements<first, second>>;
 
     template <>
-    inline constexpr bool detours_and_originals_impl<type_sequence<>> = true;
+    inline constexpr bool detours_and_originals_impl<type_sequence<>, true> =
+        true;
 
-    template <typename key, typename seq>
+    template <typename key, typename seq, bool = true>
     inline constexpr bool keys_detours_and_originals_impl = false;
 
     template <typename key, typename tuple, typename... rest>
-    inline constexpr bool
-        keys_detours_and_originals_impl<key, type_sequence<tuple, rest...>> =
-            std::is_convertible_v<std::tuple_element_t<0, tuple>, key> &&
-            callable_type<std::tuple_element_t<1, tuple>> &&
-            function_type<std::tuple_element_t<2, tuple>> &&
-            std::is_lvalue_reference_v<std::tuple_element_t<2, tuple>> &&
-            keys_detours_and_originals_impl<key, type_sequence<rest...>>;
+    inline constexpr bool keys_detours_and_originals_impl<
+        key, type_sequence<tuple, rest...>, true> =
+        keys_detours_and_originals_impl<key, type_sequence<rest...>,
+                                        key_detour_and_original_requirements<
+                                            key, std::tuple_element_t<0, tuple>,
+                                            std::tuple_element_t<1, tuple>,
+                                            std::tuple_element_t<2, tuple>>>;
 
     template <typename key, typename first, typename second, typename third,
               typename... rest>
     inline constexpr bool keys_detours_and_originals_impl<
-        key, type_sequence<type_sequence<first, second, third>, rest...>> =
-        std::is_convertible_v<first, key> && callable_type<second> &&
-        function_type<third> && std::is_lvalue_reference_v<third> &&
-        keys_detours_and_originals_impl<key, type_sequence<rest...>>;
+        key, type_sequence<type_sequence<first, second, third>, rest...>,
+        true> =
+        keys_detours_and_originals_impl<
+            key, type_sequence<rest...>,
+            key_detour_and_original_requirements<key, first, second, third>>;
 
     template <typename key>
     inline constexpr bool
-        keys_detours_and_originals_impl<key, type_sequence<>> = true;
+        keys_detours_and_originals_impl<key, type_sequence<>, true> = true;
 
 #if !utils_cpp20
     template <typename seq, typename = void>
