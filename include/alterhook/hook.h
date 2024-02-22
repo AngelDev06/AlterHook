@@ -230,7 +230,7 @@ namespace alterhook
   template <typename dtr, typename orig, typename>
   hook::hook(std::byte* target, dtr&& detour, orig& original, bool enable_hook)
       : trampoline(target),
-        pdetour(get_target_address(std::forward<dtr>(detour))),
+        pdetour(get_target_address<orig>(std::forward<dtr>(detour))),
         original_wrap(std::launder(
             reinterpret_cast<helpers::original*>(&original_buffer)))
   {
@@ -263,7 +263,8 @@ namespace alterhook
       : hook(get_target_address(std::forward<trg>(target)),
              std::forward<dtr>(detour), original, enable_hook)
   {
-    helpers::assert_valid_target_and_detour_pair<trg, dtr>();
+    helpers::assert_valid_target_and_detour_pair<
+        trg, utils::try_disambiguate_t<dtr, orig>>();
   }
 
   template <typename trg, typename dtr, typename>

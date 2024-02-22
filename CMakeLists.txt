@@ -285,7 +285,7 @@ else()
 	)
 
 	target_compile_options(
-		AlterHook PRIVATE 
+		AlterHook PRIVATE
 		"${ALTERHOOK_GNU_WARNINGS}"
 		"${ALTERHOOK_GCC_WARNINGS}"
 		"${ALTERHOOK_CLANG_WARNINGS}"

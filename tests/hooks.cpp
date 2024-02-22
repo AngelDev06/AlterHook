@@ -17,6 +17,43 @@ protected:
   originalcls instance{ 1, 2, 3 };
 };
 
+TEST(StandaloneHookTest, Constructors)
+{
+  originalcls instance{ 1, 2, 3 };
+  {
+    static void(__add_fastcall * custom_original1)(
+        originalcls*, __cc_specific(void*, ) int)                     = nullptr;
+    static void(__add_thiscall * custom_original2)(originalcls*, int) = nullptr;
+    alterhook::hook hook{ &originalcls::func3,
+                          [](auto* instance_ptr, __cc_specific(auto, ) auto arg)
+                          {
+                            std::cout << "generic lambda\n";
+                            call_stack.push(func_called::generic_lambda);
+                            custom_original1(instance_ptr,
+                                             __cc_specific(nullptr, ) arg * 2);
+                          },
+                          custom_original1 };
+
+    instance.func3(8);
+    verify_call_stack(func_called::originalcls_func3,
+                      func_called::generic_lambda);
+    EXPECT_EQ(std::tuple(instance.x + 16, instance.y + 16, instance.z + 16),
+              origresult);
+  }
+  {
+    alterhook::hook hook{ &originalcls::func3, custom_callable{},
+                          custom_callable::original };
+    instance.func3(8);
+    verify_call_stack(func_called::originalcls_func3,
+                      func_called::custom_callable);
+    const auto incrementation = (instance.x * instance.y * instance.z) + 8;
+    EXPECT_EQ(std::tuple(instance.x + incrementation,
+                         instance.y + incrementation,
+                         instance.z + incrementation),
+              origresult);
+  }
+}
+
 TEST_F(HookTest, StatusUpdate)
 {
   EXPECT_FALSE(hook1.is_enabled());

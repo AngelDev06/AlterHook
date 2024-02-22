@@ -11,6 +11,27 @@
 
 namespace alterhook::utils
 {
+  template <size_t i>
+  struct rank : rank<i - 1>
+  {
+    static constexpr size_t index = i;
+  };
+
+  template <>
+  struct rank<0>
+  {
+    static constexpr size_t index = 0;
+  };
+
+  template <typename T>
+  struct type_identity
+  {
+    typedef T type;
+  };
+
+  template <typename T>
+  using type_identity_t = typename type_identity<T>::type;
+
   template <typename T, typename... types>
   constexpr bool any_of(T&& value, types&&... args) noexcept
   {
@@ -109,6 +130,14 @@ namespace alterhook::utils
     {
       typedef std::index_sequence<indexes...> type;
     };
+
+    template <typename bools, typename indexes>
+    inline constexpr size_t index_of_true_impl = 0;
+    template <bool... values, size_t... indexes>
+    inline constexpr size_t
+        index_of_true_impl<std::integer_sequence<bool, values...>,
+                           std::index_sequence<indexes...>> =
+            ((values ? indexes : 0) + ...);
   } // namespace helpers
 
   template <size_t end, size_t begin = 0, size_t step = 2>
@@ -123,6 +152,11 @@ namespace alterhook::utils
   template <typename T>
   using remove_cvref_t = std::remove_cvref_t<T>;
 #endif
+
+  template <bool... values>
+  inline constexpr size_t index_of_true =
+      helpers::index_of_true_impl<std::integer_sequence<bool, values...>,
+                                  std::make_index_sequence<sizeof...(values)>>;
 
   template <typename fn, typename ret, typename... args>
   utils_concept invocable_r = std::is_invocable_r_v<ret, fn, args...>;
