@@ -13,21 +13,21 @@ namespace alterhook
   uintptr_t process_frozen_threads(const trampoline& tramp, bool enable_hook,
                                    uintptr_t pc) noexcept
   {
-    const uintptr_t target = reinterpret_cast<uintptr_t>(tramp.ptarget) & ~1,
-                    tramp_buffer =
+    const uintptr_t utarget = reinterpret_cast<uintptr_t>(tramp.ptarget),
+                    utrampoline =
                         reinterpret_cast<uintptr_t>(tramp.ptrampoline.get());
 
     if (enable_hook)
     {
       for (const auto [oldpos, newpos] : tramp.positions)
       {
-        if (pc != (target + oldpos))
+        if (pc != (utarget + oldpos))
           continue;
-        const uintptr_t dest = tramp_buffer + newpos;
+        const uintptr_t dest = utrampoline + newpos;
 
-        if (!tramp.pc_handling.has_value())
+        if (!tramp.pc_handling)
           return dest;
-        const uintptr_t pushloc = tramp_buffer + tramp.pc_handling.value();
+        const uintptr_t pushloc = utrampoline + tramp.pc_handling.value();
 
         if (dest > pushloc)
         {
@@ -44,8 +44,8 @@ namespace alterhook
 
     for (const auto [oldpos, newpos] : tramp.positions)
     {
-      const uintptr_t dest = target + oldpos, src = tramp_buffer + newpos,
-                      prevsrc = tramp_buffer + prevpos;
+      const uintptr_t dest = utarget + oldpos, src = utrampoline + newpos,
+                      prevsrc = utrampoline + prevpos;
 
       if (prevsrc > pc || pc > src)
       {
@@ -55,12 +55,12 @@ namespace alterhook
 
       if (!tramp.pc_handling.has_value())
         return dest;
-      const uintptr_t pushloc = tramp_buffer + tramp.pc_handling.value();
+      const uintptr_t pushloc = utrampoline + tramp.pc_handling.value();
 
       if (pc < src || pc > pushloc)
       {
         report_error(tramp.ptrampoline.get(), tramp.ptarget,
-                     static_cast<uint8_t>(pc - tramp_buffer));
+                     static_cast<uint8_t>(pc - utrampoline));
         return 0;
       }
 

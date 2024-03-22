@@ -10,6 +10,7 @@
   #error unsupported c++ version (at least c++17 is needed)
 #endif
 #include "other.h"
+#include "index_sequence.h"
 #include "type_sequence.h"
 #include "calling_conventions.h"
 #include "function_traits.h"

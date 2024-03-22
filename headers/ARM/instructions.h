@@ -789,10 +789,19 @@ namespace alterhook
 
       struct FULL_JMP : templates::custom_instruction<1>
       {
-        LDR_LITERAL ldr;
-        uint32_t    address;
+        const LDR_LITERAL ldr{ pc, -static_cast<int16_t>(sizeof(uint32_t)) };
+        uint32_t          address = 0;
 
-        FULL_JMP(uint32_t address) : ldr(pc, -4), address(address) {}
+        FULL_JMP(uint32_t address = 0) : address(address) {}
+      };
+
+      struct FULL_JMP_FROM_ABOVE : templates::custom_instruction<1>
+      {
+        uint32_t          address = 0;
+        const LDR_LITERAL ldr{ pc, -static_cast<int16_t>(
+                                       3 * sizeof(INSTRUCTION<>)) };
+
+        FULL_JMP_FROM_ABOVE(uint32_t address = 0) : address(address) {}
       };
 
       struct CALL : templates::custom_instruction<2>
@@ -1121,10 +1130,19 @@ namespace alterhook
 
       struct FULL_JMP : templates::custom_instruction<1>
       {
-        LDR_LITERAL ldr;
-        uint32_t    address;
+        const LDR_LITERAL ldr{ pc, 0 };
+        uint32_t          address = 0;
 
-        FULL_JMP(uint32_t address) : ldr(pc, 0), address(address) {}
+        FULL_JMP(uint32_t address = 0) : address(address) {}
+      };
+
+      struct FULL_JMP_FROM_ABOVE : templates::custom_instruction<1>
+      {
+        uint32_t address = 0;
+        const LDR_LITERAL ldr{ pc, -static_cast<int16_t>(
+                                       2 * sizeof(INSTRUCTION<>)) };
+
+        FULL_JMP_FROM_ABOVE(uint32_t address = 0) : address(address) {}
       };
 
       struct CALL : templates::custom_instruction<2>
@@ -1698,6 +1716,18 @@ namespace alterhook
       return current;
     }
   } // namespace thumb
+
+  namespace thumb2::custom
+  {
+    struct [[gnu::packed]] ALIGNED_FULL_JMP : templates::custom_instruction<2>
+    {
+      const LDR_LITERAL ldr{ pc, sizeof(thumb::BKPT) };
+      const thumb::BKPT bkpt{};
+      uint32_t          address = 0;
+
+      ALIGNED_FULL_JMP(uint32_t address = 0) : address(address) {}
+    };
+  }
 } // namespace alterhook
 
 #pragma GCC visibility pop

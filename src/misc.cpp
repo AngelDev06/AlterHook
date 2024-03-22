@@ -41,6 +41,25 @@ namespace alterhook
       return stream.str();
     }
 
+    std::string post_relocation_processing_fail::info() const
+    {
+      std::stringstream       stream;
+      alterhook::disassembler bin{ m_instr.data(),
+                                   __usethumb(m_thumb, ) false };
+      auto                    instr = bin.disasm(m_instr.size()).begin();
+
+      stream << "TARGET: 0x" << std::hex << std::setfill('0') << std::setw(8)
+             << reinterpret_cast<uintptr_t>(get_target())
+             << "\nRELOCATED INSTRUCTION: 0x" << std::setfill('0')
+             << std::setw(8) << instr->address << ": " << instr->mnemonic
+             << '\t' << instr->op_str;
+      if (m_instruction_expected_target_address)
+        stream << "\nINSTRUCTION EXPECTED TARGET ADDRESS: 0x"
+               << std::setfill('0') << std::setw(8)
+               << m_instruction_expected_target_address;
+      return stream.str();
+    }
+
     std::string trampoline_max_size_exceeded::info() const
     {
       std::stringstream stream;

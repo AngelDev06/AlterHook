@@ -61,7 +61,7 @@ foreach (
 	"calling_conventions" "concepts" "function_traits" 
 	"other" "static_vector" "type_sequence" "utils"
 	"utils_macros" "properties" "data_processing"
-	"boilerplate" "type_name"
+	"boilerplate" "type_name" "index_sequence"
 )
 	list(APPEND ALTERHOOK_UTILITIES_HEADERS "include/alterhook/utilities/${HEADER}.h")
 endforeach()
@@ -131,7 +131,12 @@ endif()
 
 list(APPEND ALTERHOOK_ARCH_PRIVATE_HEADERS "headers/${ALTERHOOK_TARGET_ARCH}/instructions.h")
 foreach (SRC "trampoline" "injection" "thread_processing")
-	list(APPEND ALTERHOOK_ARCH_CPP_FILES "src/${ALTERHOOK_TARGET_ARCH}/${SRC}.cpp")
+	file(GLOB shared_cpp LIST_DIRECTORIES false "src/*${ALTERHOOK_TARGET_ARCH}*/${SRC}.cpp")
+	list(LENGTH shared_cpp file_count)
+	if (NOT file_count EQUAL 1)
+		message(FATAL_ERROR "Found none or more than one file corresponding to `${SRC}.cpp`")
+	endif()
+	list(APPEND ALTERHOOK_ARCH_CPP_FILES "${shared_cpp}")
 endforeach()
 
 if (ALTERHOOK_ALWAYS_USE_RELAY AND NOT ALTERHOOK_TARGET_ARCH STREQUAL "X86")

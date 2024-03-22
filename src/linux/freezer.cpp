@@ -52,7 +52,7 @@ namespace alterhook
   };
 
   std::pair<const trampoline*, bool> thread_freezer::args{};
-#if utils_arm
+#if utils_arm || utils_aarch64
   std::pair<std::atomic_bool, std::tuple<std::byte*, std::byte*, size_t>>
       thread_freezer::result{};
 #endif
@@ -209,7 +209,7 @@ namespace alterhook
     }
   }
 
-#if utils_arm
+#if utils_arm || utils_aarch64
   void thread_freezer::handle_errors()
   {
     if (!result.first.load(std::memory_order_relaxed))

@@ -170,7 +170,8 @@ namespace alterhook::aarch64
   constexpr std::array regsize_encodings = {
     cs_operand_encoding{1,  { 31 }, { 1 }},
     cs_operand_encoding{ 1, { 30 }, { 2 }},
-    cs_operand_encoding{ 1, { 30 }, { 1 }}
+    cs_operand_encoding{ 1, { 30 }, { 1 }},
+    cs_operand_encoding{ 1, { 31 }, { 1 }}
   };
 
   enum class offset_type
@@ -270,7 +271,8 @@ namespace alterhook::aarch64
           utils::bitsfill<uint32_t>(offset_bitcount);
       typedef offset_types::template at<utils::to_underlying(offset_format)>
           offset_t;
-      typedef std::conditional_t<std::is_signed_v<offset_t>, int32_t, uint32_t>
+      typedef std::conditional_t<std::is_signed_v<offset_t>, intptr_t,
+                                 uintptr_t>
           offset_fits_t;
 
       static uint32_t convert_offset(offset_t offset) noexcept
@@ -308,9 +310,11 @@ namespace alterhook::aarch64
         {
           if constexpr (offset_pad != 0)
           {
-            if (offset & utils::bitsfill<uint32_t>(offset_pad))
+            if (offset & utils::bitsfill<uintptr_t>(offset_pad))
               return false;
           }
+          if ((std::numeric_limits<offset_t>::max)() < offset)
+            return false;
           if constexpr (std::is_signed_v<offset_t>)
             return convert_offset(abs(offset)) <= (offset_max >> 1);
           else
@@ -342,7 +346,8 @@ namespace alterhook::aarch64
         else if constexpr (utils::any_of(offset_format, offset_type::uimm12_10,
                                          offset_type::uimm12_10_pad1,
                                          offset_type::uimm12_10_pad2,
-                                         offset_type::uimm12_10_pad3))
+                                         offset_type::uimm12_10_pad3,
+                                         offset_type::uimm12_10_pad4))
           utils_assert(offset_fits(offset),
                        "offset too large to fit in 12 bits");
         else if constexpr (offset_format == offset_type::imm9_12)
@@ -439,6 +444,12 @@ namespace alterhook::aarch64
         assert_register(reg);
         base::instr = patch_operand<1>(register_encoding, base::instr, reg);
       }
+
+      reg_t get_register() const noexcept
+      {
+        return static_cast<reg_t>(
+            fetch_operand<1, uint8_t>(register_encoding, base::instr));
+      }
     };
 
     template <typename resizable_register_format_t, typename base = INSTRUCTION>
@@ -495,6 +506,24 @@ namespace alterhook::aarch64
             patch_operand<1>(regsize_encoding, base::instr,
                              valid_registers::template find<T>),
             utils::to_underlying(reg));
+      }
+
+      template <typename T>
+      T get_register() noexcept
+      {
+        ctime_assert<T>();
+        utils_assert(
+            (fetch_operand<1, uint8_t>(regsize_encoding, base::instr)) ==
+                valid_registers::template find<T>,
+            "incorrect register type");
+        return static_cast<T>(fetch_operand<1, uint8_t>(
+            resizable_register_encoding, base::instr));
+      }
+
+      uint8_t register_size() const noexcept
+      {
+        constexpr std::array<uint8_t, 3> sizes = { 4, 8, 16 };
+        return sizes[fetch_operand<1, uint8_t>(regsize_encoding, base::instr)];
       }
     };
 
@@ -579,27 +608,149 @@ namespace alterhook::aarch64
     template <typename T>
     using property_arg_type_t = typename property_arg_type<T>::type;
 
-    template <insn_id_t idval, uint32_t opcodeval, typename indexseq,
-              typename typeseq>
+    template <insn_id_t idval, uint32_t opcodeval, typename typeseq,
+              typename indexseq>
     struct basic_instruction_impl;
 
-    template <insn_id_t idval, uint32_t opcodeval, size_t... indexes,
-              typename... properties>
+    template <insn_id_t idval, uint32_t opcodeval, typename... properties,
+              size_t... indexes>
     struct basic_instruction_impl<idval, opcodeval,
-                                  std::index_sequence<indexes...>,
-                                  utils::type_sequence<properties...>>
+                                  utils::type_sequence<properties...>,
+                                  std::index_sequence<indexes...>>
         : utils::properties<properties...>
     {
       typedef typename utils::properties<properties...>::base base;
+      typedef basic_instruction_impl                          instr_base;
       template <size_t N>
       using property_at = typename base::template property_at<N>;
 
       static constexpr uint32_t  opcode = opcodeval;
       static constexpr insn_id_t id     = idval;
 
-      
+      basic_instruction_impl(property_arg_type_t<property_at<indexes>>... args)
+          : basic_instruction_impl(
+                std::tuple(args...),
+                utils::make_reversed_index_sequence<sizeof...(properties)>{})
+      {
+      }
+
+    private:
+      template <typename... types, size_t... rindexes>
+      basic_instruction_impl(std::tuple<types...>&& args,
+                             std::index_sequence<rindexes...>)
+          : base(opcode, std::get<rindexes>(args)...)
+      {
+      }
+    };
+
+    template <insn_id_t idval, uint32_t opcodeval, typename... properties>
+    using basic_instruction =
+        basic_instruction_impl<idval, opcodeval,
+                               utils::type_sequence<properties...>,
+                               std::make_index_sequence<sizeof...(properties)>>;
+
+    template <insn_id_t idval, uint32_t opcodeval, offset_type offtype>
+    struct LDR_PRE
+        : basic_instruction<
+              idval, opcodeval,
+              utils::property<templates::register_operand,
+                              utils::val<register_type::reg5_0>>,
+              utils::property<templates::register_operand,
+                              utils::val<register_type::reg5_5>>,
+              utils::property<templates::offset_operand, utils::val<offtype>>>
+    {
+      typedef typename basic_instruction<
+          idval, opcodeval,
+          utils::property<templates::register_operand,
+                          utils::val<register_type::reg5_0>>,
+          utils::property<templates::register_operand,
+                          utils::val<register_type::reg5_5>>,
+          utils::property<templates::offset_operand,
+                          utils::val<offtype>>>::instr_base instr_base;
+      using instr_base::instr_base;
+      template <size_t N>
+      using property_at = typename instr_base::template property_at<N>;
+
+      void set_destination_register(reg_t reg) noexcept
+      {
+        property_at<0>::set_register(reg);
+      }
+
+      void set_base_register(reg_t reg) noexcept
+      {
+        property_at<1>::set_register(reg);
+      }
+
+      void set_register(reg_t) noexcept = delete;
     };
   } // namespace templates
+
+  using B = templates::basic_instruction<
+      AArch64_INS_B, 0x14'00'00'00,
+      utils::property<templates::offset_operand,
+                      utils::val<offset_type::imm26_0_pad2>>>;
+
+  using B_cond = templates::basic_instruction<
+      AArch64_INS_B, 0x54'00'00'00,
+      utils::property<templates::offset_operand,
+                      utils::val<offset_type::imm19_5_pad2>>,
+      utils::property<templates::condition_operand>>;
+
+  using BL = templates::basic_instruction<
+      AArch64_INS_BL, 0x94'00'00'00,
+      utils::property<templates::offset_operand,
+                      utils::val<offset_type::imm26_0_pad2>>>;
+
+  using LDRu32 = templates::LDR_PRE<AArch64_INS_LDR, 0xB9'40'00'00,
+                                    offset_type::uimm12_10_pad2>;
+
+  using LDRu64 = templates::LDR_PRE<AArch64_INS_LDR, 0xF9'40'00'00,
+                                    offset_type::uimm12_10_pad3>;
+
+  using LDRSWu = templates::LDR_PRE<AArch64_INS_LDRSW, 0xB9'80'00'00,
+                                    offset_type::uimm12_10_pad3>;
+
+  using LDRVu8   = templates::LDR_PRE<AArch64_INS_LDR, 0x3D'40'00'00,
+                                    offset_type::uimm12_10>;
+  using LDRVu16  = templates::LDR_PRE<AArch64_INS_LDR, 0x7D'40'00'00,
+                                     offset_type::uimm12_10_pad1>;
+  using LDRVu32  = templates::LDR_PRE<AArch64_INS_LDR, 0xBD'40'00'00,
+                                     offset_type::uimm12_10_pad2>;
+  using LDRVu64  = templates::LDR_PRE<AArch64_INS_LDR, 0xFD'40'00'00,
+                                     offset_type::uimm12_10_pad3>;
+  using LDRVu128 = templates::LDR_PRE<AArch64_INS_LDR, 0x3D'C0'00'00,
+                                      offset_type::uimm12_10_pad4>;
+
+  using ADR = templates::basic_instruction<
+      AArch64_INS_ADR, 0x10'00'00'00,
+      utils::property<templates::register_operand,
+                      utils::val<register_type::reg5_0>>,
+      utils::property<templates::customized_offset_operand,
+                      templates::rorimmhi_immlo<0>,
+                      utils::val<offset_type::imm2_29_19_5>>>;
+
+  using ADRP = templates::basic_instruction<
+      AArch64_INS_ADRP, 0x90'00'00'00,
+      utils::property<templates::register_operand,
+                      utils::val<register_type::reg5_0>>,
+      utils::property<templates::customized_offset_operand,
+                      templates::rorimmhi_immlo<12>,
+                      utils::val<offset_type::imm2_29_19_5_pad12>>>;
+
+  using BR = templates::basic_instruction<
+      AArch64_INS_BR, 0xD6'1F'00'00,
+      utils::property<templates::register_operand,
+                      utils::val<register_type::reg5_5>>>;
+
+  using BLR = templates::basic_instruction<
+      AArch64_INS_BLR, 0xD6'3F'00'00,
+      utils::property<templates::register_operand,
+                      utils::val<register_type::reg5_5>>>;
+
+  using BRK = templates::basic_instruction<
+      AArch64_INS_BRK, 0xD4'20'00'00,
+      utils::property<templates::offset_operand,
+                      utils::val<offset_type::uimm16_5>>>;
 
   struct ADD : utils::properties<
                    utils::property<
@@ -632,7 +783,11 @@ namespace alterhook::aarch64
     }
 
     template <typename T>
-    void set_register(T) noexcept = delete;
+    void set_register(T reg) noexcept
+    {
+      set_destination_register(reg);
+      set_source_register(reg);
+    }
   };
 
   struct SUB : utils::properties<
@@ -666,39 +821,14 @@ namespace alterhook::aarch64
     }
 
     template <typename T>
-    void set_register(T) noexcept = delete;
-  };
-
-  struct B
-      : utils::properties<utils::property<
-            templates::offset_operand, utils::val<offset_type::imm26_0_pad2>>>
-  {
-    static constexpr uint32_t opcode = 0x14'00'00'00;
-
-    B(offset_t offset = 0) : base(opcode, offset) {}
-  };
-
-  struct BL
-      : utils::properties<utils::property<
-            templates::offset_operand, utils::val<offset_type::imm26_0_pad2>>>
-  {
-    static constexpr uint32_t opcode = 0x94'00'00'00;
-
-    BL(offset_t offset = 0) : base(opcode, offset) {}
-  };
-
-  struct B_cond : utils::properties<
-                      utils::property<templates::condition_operand>,
-                      utils::property<templates::offset_operand,
-                                      utils::val<offset_type::imm19_5_pad2>>>
-  {
-    static constexpr uint32_t opcode = 0x54'00'00'00;
-
-    B_cond(offset_t offset = 0, condition_t cond = 0)
-        : base(opcode, offset, cond)
+    void set_register(T reg) noexcept
     {
+      set_destination_register(reg);
+      set_source_register(reg);
     }
   };
+
+  struct CBNZ;
 
   struct CBZ : utils::properties<
                    utils::property<
@@ -707,7 +837,10 @@ namespace alterhook::aarch64
                    utils::property<templates::offset_operand,
                                    utils::val<offset_type::imm19_5_pad2>>>
   {
-    static constexpr uint32_t opcode = 0x34'00'00'00;
+    static constexpr uint32_t             opcode = 0x34'00'00'00;
+    static constexpr templates::insn_id_t id     = AArch64_INS_CBZ;
+
+    CBZ(CBNZ other);
 
     template <typename T = wregisters>
     CBZ(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
@@ -722,7 +855,14 @@ namespace alterhook::aarch64
                     utils::property<templates::offset_operand,
                                     utils::val<offset_type::imm19_5_pad2>>>
   {
-    static constexpr uint32_t opcode = 0x35'00'00'00;
+    static constexpr uint32_t             opcode = 0x35'00'00'00;
+    static constexpr templates::insn_id_t id     = AArch64_INS_CBNZ;
+
+    CBNZ(CBZ other)
+        : CBNZ(static_cast<CBNZ&>(static_cast<INSTRUCTION&>(
+              (other.instr &= ~CBZ::opcode, other.instr |= opcode, other))))
+    {
+    }
 
     template <typename T = wregisters>
     CBNZ(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
@@ -730,35 +870,49 @@ namespace alterhook::aarch64
     }
   };
 
-  struct TBZ : utils::properties<
-                   utils::property<templates::bitpos_operand>,
+  inline CBZ::CBZ(CBNZ other)
+      : CBZ(static_cast<CBZ&>(static_cast<INSTRUCTION&>(
+            (other.instr &= ~CBNZ::opcode, other.instr |= opcode, other))))
+  {
+  }
+
+  struct TBNZ;
+
+  struct TBZ : templates::basic_instruction<
+                   AArch64_INS_TBZ, 0x36'00'00'00,
+                   utils::property<templates::offset_operand,
+                                   utils::val<offset_type::imm14_5_pad2>>,
                    utils::property<templates::register_operand,
                                    utils::val<register_type::reg5_5>>,
-                   utils::property<templates::offset_operand,
-                                   utils::val<offset_type::imm14_5_pad2>>>
+                   utils::property<templates::bitpos_operand>>
   {
-    static constexpr uint32_t opcode = 0x36'00'00'00;
+    using instr_base::instr_base;
 
-    TBZ(offset_t offset = 0, register_t reg = W0, bitpos_t bitpos = 0)
-        : base(opcode, offset, reg, bitpos)
-    {
-    }
+    TBZ(TBNZ other);
   };
 
-  struct TBNZ : utils::properties<
-                    utils::property<templates::bitpos_operand>,
+  struct TBNZ : templates::basic_instruction<
+                    AArch64_INS_TBNZ, 0x37'00'00'00,
+                    utils::property<templates::offset_operand,
+                                    utils::val<offset_type::imm14_5_pad2>>,
                     utils::property<templates::register_operand,
                                     utils::val<register_type::reg5_5>>,
-                    utils::property<templates::offset_operand,
-                                    utils::val<offset_type::imm14_5_pad2>>>
+                    utils::property<templates::bitpos_operand>>
   {
-    static constexpr uint32_t opcode = 0x37'00'00'00;
+    using instr_base::instr_base;
 
-    TBNZ(offset_t offset = 0, register_t reg = W0, bitpos_t bitpos = 0)
-        : base(opcode, offset, reg, bitpos)
+    TBNZ(TBZ other)
+        : TBNZ(static_cast<TBNZ&>(static_cast<INSTRUCTION&>(
+              (other.instr &= ~TBZ::opcode, other.instr |= opcode, other))))
     {
     }
   };
+
+  inline TBZ::TBZ(TBNZ other)
+      : TBZ(static_cast<TBZ&>(static_cast<INSTRUCTION&>(
+            (other.instr &= ~TBNZ::opcode, other.instr |= opcode, other))))
+  {
+  }
 
   struct LDR_post
       : utils::properties<
@@ -794,62 +948,6 @@ namespace alterhook::aarch64
     void set_register(T) noexcept = delete;
   };
 
-  struct LDRu32 : utils::properties<
-                      utils::property<templates::register_operand,
-                                      utils::val<register_type::reg5_0>>,
-                      utils::property<templates::register_operand,
-                                      utils::val<register_type::reg5_5>>,
-                      utils::property<templates::offset_operand,
-                                      utils::val<offset_type::uimm12_10_pad2>>>
-  {
-    static constexpr uint32_t opcode = 0xB9'40'00'00;
-
-    LDRu32(reg_t destreg = W0, reg_t basereg = W0, offset_t offset = 0)
-        : base(opcode, offset, basereg, destreg)
-    {
-    }
-
-    void set_destination_register(reg_t reg) noexcept
-    {
-      property_at<0>::set_register(reg);
-    }
-
-    void set_base_register(reg_t reg) noexcept
-    {
-      property_at<1>::set_register(reg);
-    }
-
-    void set_register(reg_t) noexcept = delete;
-  };
-
-  struct LDRu64 : utils::properties<
-                      utils::property<templates::register_operand,
-                                      utils::val<register_type::reg5_0>>,
-                      utils::property<templates::register_operand,
-                                      utils::val<register_type::reg5_5>>,
-                      utils::property<templates::offset_operand,
-                                      utils::val<offset_type::uimm12_10_pad3>>>
-  {
-    static constexpr uint32_t opcode = 0xF9'40'00'00;
-
-    LDRu64(reg_t destreg = W0, reg_t basereg = W0, offset_t offset = 0)
-        : base(opcode, offset, basereg, destreg)
-    {
-    }
-
-    void set_destination_register(reg_t reg) noexcept
-    {
-      property_at<0>::set_register(reg);
-    }
-
-    void set_base_register(reg_t reg) noexcept
-    {
-      property_at<1>::set_register(reg);
-    }
-
-    void set_register(reg_t) noexcept = delete;
-  };
-
   struct LDR_LITERAL
       : utils::properties<
             utils::property<
@@ -861,37 +959,9 @@ namespace alterhook::aarch64
     static constexpr uint32_t opcode = 0x18'00'00'00;
 
     template <typename T = wregisters>
-    LDR_LITERAL(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
+    LDR_LITERAL(T reg = T(), offset_t offset = 0) : base(opcode, offset, reg)
     {
     }
-  };
-
-  struct LDRSWu : utils::properties<
-                      utils::property<templates::register_operand,
-                                      utils::val<register_type::reg5_0>>,
-                      utils::property<templates::register_operand,
-                                      utils::val<register_type::reg5_5>>,
-                      utils::property<templates::offset_operand,
-                                      utils::val<offset_type::uimm12_10_pad3>>>
-  {
-    static constexpr uint32_t opcode = 0xB9'80'00'00;
-
-    LDRSWu(reg_t destreg = W0, reg_t basereg = W0, offset_t offset = 0)
-        : base(opcode, offset, basereg, destreg)
-    {
-    }
-
-    void set_destination_register(reg_t reg) noexcept
-    {
-      property_at<0>::set_register(reg);
-    }
-
-    void set_base_register(reg_t reg) noexcept
-    {
-      property_at<1>::set_register(reg);
-    }
-
-    void set_register(reg_t) noexcept = delete;
   };
 
   struct LDRSW_LITERAL
@@ -903,48 +973,11 @@ namespace alterhook::aarch64
   {
     static constexpr uint32_t opcode = 0x98'00'00'00;
 
-    LDRSW_LITERAL(offset_t offset = 0, register_t reg = X0)
+    LDRSW_LITERAL(register_t reg = X0, offset_t offset = 0)
         : base(opcode, offset, reg)
     {
     }
   };
-
-  template <
-      uint32_t opc, offset_type offtype,
-      typename base = utils::properties<
-          utils::property<templates::register_operand,
-                          utils::val<register_type::reg5_0>>,
-          utils::property<templates::register_operand,
-                          utils::val<register_type::reg5_5>>,
-          utils::property<templates::offset_operand, utils::val<offtype>>>>
-  struct LDRVu : base
-  {
-    typedef typename base::template property_at<0> usefirst;
-    typedef typename base::template property_at<1> usesecond;
-
-    static constexpr uint32_t opcode = opc;
-
-    LDRVu(uint8_t destreg = 0, reg_t basereg = W0,
-          typename base::offset_t offset = 0)
-        : base(opcode, offset, basereg, static_cast<reg_t>(destreg))
-    {
-    }
-
-    void set_destination_register(uint8_t reg) noexcept
-    {
-      usefirst::set_register(static_cast<reg_t>(reg));
-    }
-
-    void set_base_register(reg_t reg) noexcept { usesecond::set_register(reg); }
-
-    void set_register(reg_t) noexcept = delete;
-  };
-
-  using LDRVu8   = LDRVu<0x3D'40'00'00, offset_type::uimm12_10>;
-  using LDRVu16  = LDRVu<0x7D'40'00'00, offset_type::uimm12_10_pad1>;
-  using LDRVu32  = LDRVu<0xBD'40'00'00, offset_type::uimm12_10_pad2>;
-  using LDRVu64  = LDRVu<0xFD'40'00'00, offset_type::uimm12_10_pad3>;
-  using LDRVu128 = LDRVu<0x3D'C0'00'00, offset_type::uimm12_10_pad4>;
 
   struct LDRV_LITERAL
       : utils::properties<
@@ -957,7 +990,7 @@ namespace alterhook::aarch64
     static constexpr uint32_t opcode = 0x1C'00'00'00;
 
     template <typename T = wregisters>
-    LDRV_LITERAL(offset_t offset = 0, T reg = T()) : base(opcode, offset, reg)
+    LDRV_LITERAL(T reg = T(), offset_t offset = 0) : base(opcode, offset, reg)
     {
     }
   };
@@ -996,49 +1029,6 @@ namespace alterhook::aarch64
     void set_register(T) noexcept = delete;
   };
 
-  struct ADR : utils::properties<
-                   utils::property<templates::register_operand,
-                                   utils::val<register_type::reg5_0>>,
-                   utils::property<templates::customized_offset_operand,
-                                   templates::rorimmhi_immlo<0>,
-                                   utils::val<offset_type::imm2_29_19_5>>>
-  {
-    static constexpr uint32_t opcode = 0x10'00'00'00;
-
-    ADR(offset_t offset = 0, reg_t reg = X0) : base(opcode, offset, reg) {}
-  };
-
-  struct ADRP
-      : utils::properties<
-            utils::property<templates::register_operand,
-                            utils::val<register_type::reg5_0>>,
-            utils::property<templates::customized_offset_operand,
-                            templates::rorimmhi_immlo<12>,
-                            utils::val<offset_type::imm2_29_19_5_pad12>>>
-  {
-    static constexpr uint32_t opcode = 0x90'00'00'00;
-
-    ADRP(offset_t offset = 0, reg_t reg = X0) : base(opcode, offset, reg) {}
-  };
-
-  struct BR
-      : utils::properties<utils::property<templates::register_operand,
-                                          utils::val<register_type::reg5_5>>>
-  {
-    static constexpr uint32_t opcode = 0xD6'1F'00'00;
-
-    BR(reg_t reg = W0) : base(opcode, reg) {}
-  };
-
-  struct BRK
-      : utils::properties<utils::property<templates::offset_operand,
-                                          utils::val<offset_type::uimm16_5>>>
-  {
-    static constexpr uint32_t opcode = 0xD4'20'00'00;
-
-    BRK(offset_t offset = 0) : base(opcode, offset) {}
-  };
-
   struct NOP : INSTRUCTION
   {
     static constexpr uint32_t opcode = 0xD5'03'20'1F;
@@ -1050,11 +1040,31 @@ namespace alterhook::aarch64
   {
     struct FULL_JMP
     {
-      const LDR_LITERAL ldr{ 8, xregisters::X17 };
+      const LDR_LITERAL ldr{ xregisters::X17, 2 * sizeof(INSTRUCTION) };
       const BR          br{ X17 };
       uint64_t          address = 0;
 
       FULL_JMP(uint64_t address = 0) : address(address) {}
+    };
+
+    struct [[gnu::packed]] ALIGNED_FULL_JMP
+    {
+      const LDR_LITERAL ldr{ xregisters::X17, 3 * sizeof(INSTRUCTION) };
+      const BR          br{ X17 };
+      const BRK         brk{ 0 };
+      uint64_t          address = 0;
+
+      ALIGNED_FULL_JMP(uint64_t address = 0) : address(address) {}
+    };
+
+    struct FULL_JUMP_FROM_ABOVE
+    {
+      uint64_t address = 0;
+      const LDR_LITERAL ldr{ xregisters::X17,
+                             -static_cast<int32_t>(sizeof(uint64_t)) };
+      const BR          br{ X17 };
+
+      FULL_JUMP_FROM_ABOVE(uint64_t address = 0) : address(address) {}
     };
 
     struct JMP
@@ -1062,7 +1072,71 @@ namespace alterhook::aarch64
       const LDR_LITERAL ldr;
       const BR          br{ X17 };
 
-      JMP(int32_t ldr_offset = 0) : ldr(ldr_offset, xregisters::X17) {}
+      JMP(int32_t ldr_offset = 0) : ldr(xregisters::X17, ldr_offset) {}
+    };
+
+    struct CONDITIONAL_JMP
+    {
+      const B_cond conditional_b;
+      JMP          jmp;
+
+      CONDITIONAL_JMP(AArch64CC_CondCode condition, int32_t ldr_offset)
+          : conditional_b(8, AArch64CC_getInvertedCondCode(condition)),
+            jmp(ldr_offset)
+      {
+      }
+    };
+
+    struct JMP_IF_ZERO
+    {
+      const CBNZ cbnz;
+      JMP        jmp;
+
+      JMP_IF_ZERO(CBZ cbz, int32_t ldr_offset)
+          : cbnz((cbz.set_offset(8), cbz)), jmp(ldr_offset)
+      {
+      }
+    };
+
+    struct JMP_IF_NOT_ZERO
+    {
+      const CBZ cbz;
+      JMP       jmp;
+
+      JMP_IF_NOT_ZERO(CBNZ cbnz, int32_t ldr_offset)
+          : cbz((cbnz.set_offset(8), cbnz)), jmp(ldr_offset)
+      {
+      }
+    };
+
+    struct TEST_JMP_ON_ZERO
+    {
+      const TBNZ tbnz;
+      JMP        jmp;
+
+      TEST_JMP_ON_ZERO(TBZ tbz, int32_t ldr_offset)
+          : tbnz((tbz.set_offset(8), tbz)), jmp(ldr_offset)
+      {
+      }
+    };
+
+    struct TEST_JMP_ON_NON_ZERO
+    {
+      const TBZ tbz;
+      JMP       jmp;
+
+      TEST_JMP_ON_NON_ZERO(TBNZ tbnz, int32_t ldr_offset)
+          : tbz((tbnz.set_offset(8), tbnz)), jmp(ldr_offset)
+      {
+      }
+    };
+
+    struct CALL
+    {
+      const LDR_LITERAL ldr;
+      const BLR         blr{ X17 };
+
+      CALL(int32_t ldr_offset = 0) : ldr(xregisters::X17, ldr_offset) {}
     };
 
     template <typename T>
@@ -1075,8 +1149,9 @@ namespace alterhook::aarch64
       T           ldr;
 
     public:
-      LDR_LIKE_ABS(reg_t reg = X0, reg_t tmp_reg = X0, int32_t offset = 0)
-          : fetch_ldr(offset, tmp_reg), ldr(reg, tmp_reg)
+      LDR_LIKE_ABS(reg_t reg = X0, reg_t tmp_reg = X0, int32_t fetch_offset = 0)
+          : fetch_ldr(static_cast<xregisters>(tmp_reg), fetch_offset),
+            ldr(reg, tmp_reg, 0)
       {
       }
 
@@ -1097,11 +1172,28 @@ namespace alterhook::aarch64
       }
     };
 
-    using LDR_ABS     = LDR_LIKE_ABS<LDRu64>;
+    using LDR32_ABS   = LDR_LIKE_ABS<LDRu32>;
+    using LDR64_ABS   = LDR_LIKE_ABS<LDRu64>;
     using LDRSW_ABS   = LDR_LIKE_ABS<LDRSWu>;
     using LDRV32_ABS  = LDR_LIKE_ABS<LDRVu32>;
     using LDRV64_ABS  = LDR_LIKE_ABS<LDRVu64>;
     using LDRV128_ABS = LDR_LIKE_ABS<LDRVu128>;
+
+    // acts as a tag for pc handling
+    struct DATA_FETCH : LDR_LITERAL
+    {
+      using LDR_LITERAL::LDR_LITERAL;
+    };
+
+    // tag for final branch
+    struct SHORT_JMP : B
+    {
+      using B::B;
+    };
+
+    typedef utils::type_sequence<LDR32_ABS, LDR64_ABS, LDRSW_ABS, LDRV32_ABS,
+                                 LDRV64_ABS, LDRV128_ABS>
+        absolute_loads;
 
     // note: there are no actual push/pop instructions in the aarch64
     // architecture, reason being that the stack pointer needs to be 16 bytes
@@ -1142,7 +1234,74 @@ namespace alterhook::aarch64
         LDR_post::set_destination_register(reg);
       }
     };
+
+    typedef typename utils::type_sequence<
+        SHORT_JMP, FULL_JMP, JMP, CONDITIONAL_JMP, JMP_IF_ZERO, JMP_IF_NOT_ZERO,
+        TEST_JMP_ON_ZERO, TEST_JMP_ON_NON_ZERO, CALL, PUSH,
+        POP>::template merge<absolute_loads>
+        all_custom;
   } // namespace custom
+
+  // clang-format off
+  inline bool is_xreg(aarch64_reg reg) noexcept
+  {
+    switch (reg)
+    {
+    case AArch64_REG_X0:  case AArch64_REG_X1:  case AArch64_REG_X2:
+    case AArch64_REG_X3:  case AArch64_REG_X4:  case AArch64_REG_X5:
+    case AArch64_REG_X6:  case AArch64_REG_X7:  case AArch64_REG_X8:
+    case AArch64_REG_X9:  case AArch64_REG_X10: case AArch64_REG_X11:
+    case AArch64_REG_X12: case AArch64_REG_X13: case AArch64_REG_X14:
+    case AArch64_REG_X15: case AArch64_REG_X16: case AArch64_REG_X17:
+    case AArch64_REG_X18: case AArch64_REG_X19: case AArch64_REG_X20: 
+    case AArch64_REG_X21: case AArch64_REG_X22: case AArch64_REG_X23:
+    case AArch64_REG_X24: case AArch64_REG_X25: case AArch64_REG_X26:
+    case AArch64_REG_X27: case AArch64_REG_X28: case AArch64_REG_X29:
+    case AArch64_REG_X30: return true;
+    default: return false;
+    }
+  }
+
+  inline std::optional<reg_t> map_cs_reg(aarch64_reg reg) noexcept
+  {
+    switch (reg)
+    {
+    case AArch64_REG_W0:  case AArch64_REG_X0:  return X0;
+    case AArch64_REG_W1:  case AArch64_REG_X1:  return X1;
+    case AArch64_REG_W2:  case AArch64_REG_X2:  return X2;
+    case AArch64_REG_W3:  case AArch64_REG_X3:  return X3;
+    case AArch64_REG_W4:  case AArch64_REG_X4:  return X4;
+    case AArch64_REG_W5:  case AArch64_REG_X5:  return X5;
+    case AArch64_REG_W6:  case AArch64_REG_X6:  return X6;
+    case AArch64_REG_W7:  case AArch64_REG_X7:  return X7;
+    case AArch64_REG_W8:  case AArch64_REG_X8:  return X8;
+    case AArch64_REG_W9:  case AArch64_REG_X9:  return X9;
+    case AArch64_REG_W10: case AArch64_REG_X10: return X10;
+    case AArch64_REG_W11: case AArch64_REG_X11: return X11;
+    case AArch64_REG_W12: case AArch64_REG_X12: return X12;
+    case AArch64_REG_W13: case AArch64_REG_X13: return X13;
+    case AArch64_REG_W14: case AArch64_REG_X14: return X14;
+    case AArch64_REG_W15: case AArch64_REG_X15: return X15;
+    case AArch64_REG_W16: case AArch64_REG_X16: return X16;
+    case AArch64_REG_W17: case AArch64_REG_X17: return X17;
+    case AArch64_REG_W18: case AArch64_REG_X18: return X18;
+    case AArch64_REG_W19: case AArch64_REG_X19: return X19;
+    case AArch64_REG_W20: case AArch64_REG_X20: return X20;
+    case AArch64_REG_W21: case AArch64_REG_X21: return X21;
+    case AArch64_REG_W22: case AArch64_REG_X22: return X22;
+    case AArch64_REG_W23: case AArch64_REG_X23: return X23;
+    case AArch64_REG_W24: case AArch64_REG_X24: return X24;
+    case AArch64_REG_W25: case AArch64_REG_X25: return X25;
+    case AArch64_REG_W26: case AArch64_REG_X26: return X26;
+    case AArch64_REG_W27: case AArch64_REG_X27: return X27;
+    case AArch64_REG_W28: case AArch64_REG_X28: return X28;
+    case AArch64_REG_W29: case AArch64_REG_X29: return X29;
+    case AArch64_REG_W30: case AArch64_REG_X30: return X30;
+    default: return std::nullopt;
+    }
+  }
+
+  // clang-format on
 } // namespace alterhook::aarch64
 
 #pragma GCC visibility pop

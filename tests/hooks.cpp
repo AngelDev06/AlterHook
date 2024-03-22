@@ -3,19 +3,53 @@
 class HookTest : public testing::Test
 {
 protected:
+  //! [hook::hook example]
+  typedef alterhook::utils::fastcall<void> fastcall_void;
   alterhook::hook hook1{ &originalcls::func, &detourcls::func, original,
                          false };
   alterhook::hook hook2{ &originalcls::func2,
-                         [](originalcls* self) -> put_cc
+                         [](originalcls* self) -> fastcall_void
                          {
                            std::cout << "lambda\n";
                            call_stack.push(func_called::lambda);
                            original2(self);
-                           lambda_ret;
+                           return fastcall_void();
                          },
                          original2, false };
+  //! [hook::hook example]
   originalcls instance{ 1, 2, 3 };
 };
+
+TEST_F(HookTest, StatusUpdate)
+{
+  EXPECT_FALSE(hook1.is_enabled());
+  hook1.enable();
+  instance.func();
+  verify_call_stack(func_called::originalcls_func, func_called::detourcls_func);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  hook1.disable();
+  instance.func();
+  verify_call_stack(func_called::originalcls_func);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  EXPECT_FALSE(hook2.is_enabled());
+  hook2.enable();
+  instance.func2();
+  verify_call_stack(func_called::originalcls_func2, func_called::lambda);
+  SAME_ORIG_RESULT(instance);
+
+  std::cout << "-------------------------------------------\n";
+
+  hook2.disable();
+  instance.func2();
+  verify_call_stack(func_called::originalcls_func2);
+  SAME_ORIG_RESULT(instance);
+}
 
 TEST(StandaloneHookTest, Constructors)
 {
@@ -52,37 +86,6 @@ TEST(StandaloneHookTest, Constructors)
                          instance.z + incrementation),
               origresult);
   }
-}
-
-TEST_F(HookTest, StatusUpdate)
-{
-  EXPECT_FALSE(hook1.is_enabled());
-  hook1.enable();
-  instance.func();
-  verify_call_stack(func_called::originalcls_func, func_called::detourcls_func);
-  SAME_ORIG_RESULT(instance);
-
-  std::cout << "-------------------------------------------\n";
-
-  hook1.disable();
-  instance.func();
-  verify_call_stack(func_called::originalcls_func);
-  SAME_ORIG_RESULT(instance);
-
-  std::cout << "-------------------------------------------\n";
-
-  EXPECT_FALSE(hook2.is_enabled());
-  hook2.enable();
-  instance.func2();
-  verify_call_stack(func_called::originalcls_func2, func_called::lambda);
-  SAME_ORIG_RESULT(instance);
-
-  std::cout << "-------------------------------------------\n";
-
-  hook2.disable();
-  instance.func2();
-  verify_call_stack(func_called::originalcls_func2);
-  SAME_ORIG_RESULT(instance);
 }
 
 TEST_F(HookTest, CopyAssignment)
@@ -204,15 +207,16 @@ TEST_F(HookTest, Setters)
 
   std::cout << "-------------------------------------------\n";
 
-  hook1.set_detour(
-      [](originalcls* self) -> put_cc
-      {
-        std::cout << "lambda2\n";
-        call_stack.push(func_called::lambda2);
-        original9(self);
-        lambda_ret;
-      });
-  hook1.set_original(original9);
+  hook1
+      .set_detour(
+          [](originalcls* self) -> put_cc
+          {
+            std::cout << "lambda2\n";
+            call_stack.push(func_called::lambda2);
+            original9(self);
+            lambda_ret;
+          })
+      .set_original(original9);
 
   instance.func2();
   verify_call_stack(func_called::originalcls_func2, func_called::lambda2);

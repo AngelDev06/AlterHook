@@ -43,14 +43,17 @@ namespace alterhook
     static constexpr cs_arch architecture = CS_ARCH_X86;
     typedef cs_x86           arch_t;
     typedef cs_x86_op        operand_t;
+    typedef x86_reg          register_t;
 #elif utils_aarch64
     static constexpr cs_arch architecture = CS_ARCH_AARCH64;
     typedef cs_aarch64       arch_t;
     typedef cs_aarch64_op    operand_t;
+    typedef aarch64_reg      register_t;
 #elif utils_arm
     static constexpr cs_arch architecture = CS_ARCH_ARM;
     typedef cs_arm           arch_t;
     typedef cs_arm_op        operand_t;
+    typedef arm_reg          register_t;
 #endif
 
     constexpr cs_mode mode() const noexcept
@@ -123,22 +126,32 @@ namespace alterhook
       return get_all_registers(instr).reads(reg);
     }
 
-    bool has_group(const cs_insn& instr, uint8_t group) const
+    static bool has_group(const cs_insn& instr, uint8_t group)
     {
       return memchr(instr.detail->groups, group, instr.detail->groups_count);
     }
 
-    bool is_branch(const cs_insn& instr) const noexcept
+    static bool is_branch(const cs_insn& instr) noexcept
     {
       return has_group(instr, CS_GRP_JUMP) || has_group(instr, CS_GRP_CALL);
     }
 
-    bool is_relative_branch(const cs_insn& instr) const noexcept
+    static bool is_call(const cs_insn& instr) noexcept
+    {
+      return has_group(instr, CS_GRP_CALL);
+    }
+
+    static bool is_relative_branch(const cs_insn& instr) noexcept
     {
       return has_group(instr, CS_GRP_BRANCH_RELATIVE);
     }
 
-    std::optional<int64_t> get_immediate(const arch_t& instr) const noexcept
+    static bool is_return(const cs_insn& instr) noexcept
+    {
+      return has_group(instr, CS_GRP_RET);
+    }
+
+    static std::optional<int64_t> get_immediate(const arch_t& instr) noexcept
     {
       const auto *operands_begin = instr.operands,
                  *operands_end   = instr.operands + instr.op_count;
@@ -148,6 +161,19 @@ namespace alterhook
           { return static_cast<cs_op_type>(operand.type) == CS_OP_IMM; });
       if (result != operands_end)
         return result->imm;
+      return std::nullopt;
+    }
+
+    static std::optional<register_t> get_register(const arch_t& instr) noexcept
+    {
+      const auto *operands_begin = instr.operands,
+                 *operands_end   = instr.operands + instr.op_count;
+      const auto result          = std::find_if(
+          operands_begin, operands_end,
+          [](const operand_t& operand)
+          { return static_cast<cs_op_type>(operand.type) == CS_OP_REG; });
+      if (result != operands_end)
+        return static_cast<register_t>(result->reg);
       return std::nullopt;
     }
 
