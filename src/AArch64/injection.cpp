@@ -20,8 +20,11 @@ namespace alterhook
     const auto [address, size] =
         flags.use_small_jmp ? std::pair(target, sizeof(aarch64::B))
         : flags.patch_above
-            ? std::pair(target - sizeof(uint64_t), far_jump_size)
-            : std::pair(target, far_jump_size);
+            ? std::pair(target - sizeof(uintptr_t), far_jump_size)
+            : std::pair(target, static_cast<size_t>(
+                                    utils::align_up(target + far_jump_size,
+                                                    sizeof(uintptr_t)) -
+                                    target));
     const auto [prot_addr, prot_size] = __prot_data(address, size);
 
     if (!execset(prot_addr, prot_size))
@@ -29,32 +32,19 @@ namespace alterhook
 
     if (flags.enable)
     {
+      const auto detour = reinterpret_cast<uintptr_t>(backup_or_detour);
       if (flags.patch_above)
       {
         assert(!(reinterpret_cast<uintptr_t>(address) % 8));
-        std::array<std::byte, far_jump_size> buffer{};
-        new (buffer.data()) auto(backup_or_detour);
-        new (&buffer[sizeof(backup_or_detour)])
-            aarch64::custom::JMP(static_cast<int32_t>(address - target));
-        memcpy(address, buffer.data(), buffer.size());
+        new (address) aarch64::custom::FULL_JUMP_FROM_ABOVE(detour);
       }
       else if (flags.use_small_jmp)
         new (target)
             aarch64::B(static_cast<int32_t>(backup_or_detour - target));
       else if (reinterpret_cast<uintptr_t>(address) % 8)
-      {
-        constexpr int32_t address_pos = sizeof(aarch64::custom::JMP) + 4;
-        std::array<std::byte, far_jump_size + 2> buffer{};
-        new (buffer.data()) aarch64::custom::JMP(address_pos);
-#ifndef NDEBUG
-        new (&buffer[sizeof(aarch64::custom::JMP)]) aarch64::BRK();
-#endif
-        new (&buffer[address_pos]) auto(backup_or_detour);
-        memcpy(address, buffer.data(), buffer.size());
-      }
+        new (address) aarch64::custom::ALIGNED_FULL_JMP(detour);
       else
-        new (address) aarch64::custom::FULL_JMP(
-            reinterpret_cast<uintptr_t>(backup_or_detour));
+        new (address) aarch64::custom::FULL_JMP(detour);
     }
     else
       memcpy(address, backup_or_detour, size);

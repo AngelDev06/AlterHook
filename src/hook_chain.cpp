@@ -17,7 +17,6 @@ namespace alterhook
                  "hook_chain::hook_chain: can't initialize hook chain with a "
                  "hook that doesn't hold a reference to the original");
     memcpy(backup.data(), other.backup.data(), backup.size());
-    __alterhook_def_thumb_var(ptarget);
 
     auto [itr, should_enable] =
         other.enabled
@@ -26,7 +25,7 @@ namespace alterhook
 
     itr->init(*this, itr, other.pdetour, other.original_buffer);
     itr->enabled   = should_enable;
-    itr->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+    itr->poriginal = helpers::resolve_original(ptarget, ptrampoline.get());
     starts_enabled = should_enable;
   }
 
@@ -153,7 +152,7 @@ namespace alterhook
       {
         trampoline::operator=(other);
         inject_back(enabled.begin(), enabled.end());
-        __alterhook_make_backup();
+        helpers::make_backup(ptarget, backup.data(), patch_above);
         if (!enabled.empty())
         {
           std::unique_lock lock{ hook_lock };
@@ -182,7 +181,7 @@ namespace alterhook
       }
 
       trampoline::operator=(std::move(other));
-      __alterhook_make_backup();
+      helpers::make_backup(ptarget, backup.data(), patch_above);
 
       if (!enabled.empty())
       {
@@ -273,8 +272,7 @@ namespace alterhook
     if (enabled.empty())
     {
       reverse_list_iterator rbegin = disabled.rbegin();
-      __alterhook_def_thumb_var(ptarget);
-      rbegin->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+      rbegin->poriginal = helpers::resolve_original(ptarget, ptrampoline.get());
       *rbegin->origwrap = rbegin->poriginal;
       thread_freezer freeze{ *this, true };
       {
@@ -820,9 +818,9 @@ namespace alterhook
       if (!other.enabled.empty())
       {
         patch(other.enabled.back().pdetour);
-        __alterhook_def_thumb_var(ptarget);
-        hook& hfront     = other.enabled.front();
-        hfront.poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+        hook& hfront = other.enabled.front();
+        hfront.poriginal =
+            helpers::resolve_original(ptarget, ptrampoline.get());
         *hfront.origwrap = hfront.poriginal;
 #if !utils_64bit
         injected_first_range = true;
@@ -838,10 +836,9 @@ namespace alterhook
           try
           {
             patch(other, enabled.back().pdetour);
-            __alterhook_def_thumb_var(other.ptarget);
-            hook& hfront = enabled.front();
-            hfront.poriginal =
-                __alterhook_add_thumb_bit(other.ptrampoline.get());
+            hook& hfront     = enabled.front();
+            hfront.poriginal = helpers::resolve_original(
+                other.ptarget, other.ptrampoline.get());
             *hfront.origwrap = hfront.poriginal;
           }
           catch (...)
@@ -855,9 +852,9 @@ namespace alterhook
 #endif
         {
           patch(other, enabled.back().pdetour);
-          __alterhook_def_thumb_var(other.ptarget);
-          hook& hfront     = enabled.front();
-          hfront.poriginal = __alterhook_add_thumb_bit(other.ptrampoline.get());
+          hook& hfront = enabled.front();
+          hfront.poriginal =
+              helpers::resolve_original(other.ptarget, other.ptrampoline.get());
           *hfront.origwrap = hfront.poriginal;
         }
       }
@@ -1350,8 +1347,8 @@ namespace alterhook
       hook& otherback  = *last_enabled;
       if (first_enabled == enabled.begin())
       {
-        __alterhook_def_thumb_var(ptarget);
-        otherfront.poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+        otherfront.poriginal =
+            helpers::resolve_original(ptarget, ptrampoline.get());
         *otherfront.origwrap = otherfront.poriginal;
       }
       else
@@ -1462,7 +1459,7 @@ namespace alterhook
     uninject_all();
 
     init(target);
-    __alterhook_make_backup();
+    helpers::make_backup(ptarget, backup.data(), patch_above);
 
     if (!enabled.empty())
     {
@@ -1741,8 +1738,8 @@ namespace alterhook
       std::unique_lock lock{ hook_lock };
       if (enabled.empty())
       {
-        __alterhook_def_thumb_var(ptarget);
-        first->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+        first->poriginal =
+            helpers::resolve_original(ptarget, ptrampoline.get());
         *first->origwrap = first->poriginal;
         thread_freezer freeze{ *this, true };
         inject(lastprev->pdetour, true);
@@ -1771,8 +1768,7 @@ namespace alterhook
 
     if (first == enabled.begin())
     {
-      __alterhook_def_thumb_var(ptarget);
-      first->poriginal = __alterhook_add_thumb_bit(ptrampoline.get());
+      first->poriginal = helpers::resolve_original(ptarget, ptrampoline.get());
       *first->origwrap = first->poriginal;
     }
     else
@@ -1989,10 +1985,10 @@ namespace alterhook
 
     if (enable_hook)
     {
-      __alterhook_def_thumb_var(ptarget);
       const std::byte* const original =
-          itr == enabled.begin() ? __alterhook_add_thumb_bit(ptrampoline.get())
-                                 : std::prev(itr)->pdetour;
+          itr == enabled.begin()
+              ? helpers::resolve_original(ptarget, ptrampoline.get())
+              : std::prev(itr)->pdetour;
       entry.init(*this, itr, detour, original, buffer);
       join_last();
     }
@@ -2028,9 +2024,8 @@ namespace alterhook
 
     if (enable_hook)
     {
-      __alterhook_def_thumb_var(ptarget);
       entry.init(*this, itr, detour,
-                 __alterhook_add_thumb_bit(ptrampoline.get()), buffer);
+                 helpers::resolve_original(ptarget, ptrampoline.get()), buffer);
       join_first();
     }
     else
@@ -2055,10 +2050,10 @@ namespace alterhook
 
     if (trg == include::enabled)
     {
-      __alterhook_def_thumb_var(ptarget);
       const std::byte* const original =
-          itr == enabled.begin() ? __alterhook_add_thumb_bit(ptrampoline.get())
-                                 : std::prev(itr)->pdetour;
+          itr == enabled.begin()
+              ? helpers::resolve_original(ptarget, ptrampoline.get())
+              : std::prev(itr)->pdetour;
       itr->init(*this, itr, detour, original, buffer);
       join(itr);
     }

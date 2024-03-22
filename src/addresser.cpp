@@ -98,43 +98,45 @@ namespace alterhook
                               __alterhook_comma_seperator)                     \
   }
 
-  template <ptrdiff_t index>
-  static ptrdiff_t index_func()
+  namespace
   {
-    return index;
-  }
+    template <ptrdiff_t index>
+    static ptrdiff_t index_func()
+    {
+      return index;
+    }
 
-  constexpr size_t table_size = 0x100;
-  typedef intptr_t table_t[table_size];
-  static table_t   custom_vtable  = __alterhook_custom_vtable_set();
-  static table_t   vpointer_array = __alterhook_vpointer_array_set();
+    constexpr size_t table_size = 0x100;
+    typedef intptr_t table_t[table_size];
+    table_t          custom_vtable  = __alterhook_custom_vtable_set();
+    table_t          vpointer_array = __alterhook_vpointer_array_set();
 
 #if utils_gcc
   #pragma GCC diagnostic push
   #pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
 #endif
 
-  // clang-format off
+    // clang-format off
+    class virtual_function_array
+    {
+    private:
+      __alterhook_generate_virtual_functions() 
+    public:
+      typedef void  (virtual_function_array::*vmethod_t)();
+      typedef vmethod_t vtable_t[table_size];
 
-  class virtual_function_array
-  {
-  private:
-    __alterhook_generate_virtual_functions() 
-  public: 
-    typedef void (virtual_function_array::*vmethod_t)();
-    typedef vmethod_t vtable_t[table_size];
+      static vtable_t array;
+    };
 
-    static vtable_t array;
-  };
+    // clang-format on
 
-  // clang-format on
+    virtual_function_array::vtable_t virtual_function_array::array =
+        __alterhook_virtual_function_array_set();
+  } // namespace
 
 #if utils_gcc
   #pragma GCC diagnostic pop
 #endif
-
-  virtual_function_array::vtable_t virtual_function_array::array =
-      __alterhook_virtual_function_array_set();
 
   addresser::multiple_inheritance* addresser::instance() noexcept
   {

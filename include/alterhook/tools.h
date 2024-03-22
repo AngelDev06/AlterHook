@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "detail/macros.h"
+#include "detail/constants.h"
 #include "utilities/utils.h"
 #include "addresser.h"
 
@@ -429,6 +430,33 @@ namespace alterhook
                      ...),
                     "The arguments of the detours and the target function "
                     "aren't compatible");
+    }
+
+    inline void make_backup(std::byte* target, std::byte* dest,
+                            bool patch_above) noexcept
+    {
+#if utils_arm
+      target = reinterpret_cast<std::byte*>(
+          reinterpret_cast<uintptr_t>(target) & ~1);
+#endif
+      if (patch_above)
+        memcpy(dest, target - detail::constants::patch_above_target_offset,
+               detail::constants::patch_above_backup_size);
+      else
+        memcpy(dest, target, detail::constants::backup_size);
+    }
+
+    inline std::byte* resolve_original([[maybe_unused]] std::byte* target,
+                                       std::byte* trampoline) noexcept
+    {
+#if utils_arm
+      // basically copies the thumb bit from `target` to `trampoline`
+      return reinterpret_cast<std::byte*>(
+          reinterpret_cast<uintptr_t>(trampoline) |
+          (reinterpret_cast<uintptr_t>(target) & 1));
+#else
+      return trampoline;
+#endif
     }
 
     template <typename iseq, typename tseq>

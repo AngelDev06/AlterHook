@@ -15,6 +15,11 @@
 
 namespace alterhook
 {
+  /**
+   * @brief A class representing a chain of inline hooks with (possibly)
+   * different **detour**, **original callback** and **status** but same
+   * **trampoline function** and **target**.
+   */
   class ALTERHOOK_API hook_chain : trampoline
   {
   public:
@@ -81,12 +86,12 @@ namespace alterhook
 
     hook_chain(const trampoline& other) : trampoline(other)
     {
-      __alterhook_make_backup();
+      helpers::make_backup(ptarget, backup.data(), patch_above);
     }
 
     hook_chain(trampoline&& other) noexcept : trampoline(std::move(other))
     {
-      __alterhook_make_backup();
+      helpers::make_backup(ptarget, backup.data(), patch_above);
     }
 
     hook_chain(const hook_chain& other);
@@ -647,10 +652,10 @@ namespace alterhook
       : trampoline(other)
   {
     memcpy(backup.data(), other.backup.data(), backup.size());
-    __alterhook_def_thumb_var(ptarget);
     list_iterator itr = disabled.emplace(disabled.end());
     itr->init(*this, itr, other.pdetour,
-              __alterhook_add_thumb_bit(ptrampoline.get()), original, false);
+              helpers::resolve_original(ptarget, ptrampoline.get()), original,
+              false);
   }
 
   template <typename detour_t, typename original_t, size_t... d_indexes,
@@ -682,14 +687,13 @@ namespace alterhook
         utils::type_sequence<dfirst, detours...>(),
         utils::type_sequence<ofirst, originals...>());
 
-    __alterhook_def_thumb_var(ptarget);
-    __alterhook_make_backup();
+    helpers::make_backup(ptarget, backup.data(), patch_above);
     hook& fentry = enabled.emplace_back();
     fentry.init(
         *this, enabled.begin(),
         get_target_address(std::forward<dfirst>(std::get<0>(args.first))),
-        __alterhook_add_thumb_bit(ptrampoline.get()), std::get<0>(args.second),
-        true);
+        helpers::resolve_original(ptarget, ptrampoline.get()),
+        std::get<0>(args.second), true);
     starts_enabled = true;
 
     if constexpr (sizeof...(detours) > 0)
@@ -748,10 +752,9 @@ namespace alterhook
     {
       if (to == transfer::enabled)
       {
-        __alterhook_def_thumb_var(ptarget);
         const std::byte* original =
             itr == enabled.begin()
-                ? __alterhook_add_thumb_bit(ptrampoline.get())
+                ? helpers::resolve_original(ptarget, ptrampoline.get())
                 : std::prev(itr)->pdetour;
         hook* entry = nullptr;
         first_entry.init(
@@ -962,10 +965,10 @@ namespace alterhook
     {
       if (trg == transfer::enabled)
       {
-        __alterhook_def_thumb_var(ptarget);
         const std::byte* original =
-            enabled.empty() ? __alterhook_add_thumb_bit(ptrampoline.get())
-                            : std::prev(hitr)->pdetour;
+            enabled.empty()
+                ? helpers::resolve_original(ptarget, ptrampoline.get())
+                : std::prev(hitr)->pdetour;
         hook* entry = nullptr;
         first_entry.init(*this, hitr, first->pdetour, original,
                          first->origbuff);
@@ -1028,7 +1031,7 @@ namespace alterhook
    */
   inline hook_chain::hook_chain(std::byte* target) : trampoline(target)
   {
-    __alterhook_make_backup();
+    helpers::make_backup(target, backup.data(), patch_above);
   }
 
   inline hook_chain::iterator hook_chain::erase(iterator position)

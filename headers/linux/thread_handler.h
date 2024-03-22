@@ -25,7 +25,7 @@ namespace alterhook
     static bool                               should_suspend;
     static struct sigaction                   old_action;
     static std::pair<const trampoline*, bool> args;
-#if utils_arm
+#if utils_arm || utils_aarch64
     static std::pair<std::atomic_bool,
                      std::tuple<std::byte*, std::byte*, size_t>>
         result;
@@ -44,8 +44,8 @@ namespace alterhook
     static void thread_control_handler(int sig, siginfo_t* siginfo,
                                        void* sigcontext);
 
-// ARM specific
-#if utils_arm
+// ARM/AArch64 specific
+#if utils_arm || utils_aarch64
     void        handle_errors();
     friend void report_error(std::byte* tramp, std::byte* target,
                              uint8_t pos) noexcept;

@@ -88,7 +88,7 @@ namespace alterhook
      * @brief Allocates an executable buffer (if needed) and replaces all
      * properties of `*this` with a copy of those of `other`.
      * @param other the trampoline to copy from
-     * @returns a reference to `*this`
+     * @returns `*this`
      * @par Exceptions
      * - @ref trampoline-copy-exceptions
      * @note If there is already an executable buffer allocated on `*this` it
@@ -99,7 +99,7 @@ namespace alterhook
      * @brief Moves all contents of `other` to `*this` overriding the existing
      * ones and leaving `other` uninitialized.
      * @param other the trampoline to move from
-     * @returns a reference to `*this`
+     * @returns `*this`
      * @note If there is already an executable buffer allocated it will be
      * deallocated and the one from `other` will be used instead.
      */
@@ -187,16 +187,16 @@ namespace alterhook
               typename = std::enable_if_t<utils::function_type<fn>>>
     auto get_callback() const;
 
-    /// Returns the target that the trampoline is initialized with. Returns
-    /// `nullptr` if not initialized.
+    /// @brief Returns the target that the trampoline is initialized with.
+    /// Returns `nullptr` if not initialized.
     std::byte* get_target() const noexcept { return ptarget; }
 
-    /// Returns the size (in bytes) of the instructions (and their associated
-    /// data) currently stored in the trampoline buffer.
+    /// @brief Returns the size (in bytes) of the instructions (and their
+    /// associated data) currently stored in the trampoline buffer.
     size_t size() const noexcept { return tramp_size; }
 
-    /// Returns the number of instructions that were relocated from the target
-    /// function.
+    /// @brief Returns the number of instructions that were relocated from the
+    /// target function.
     size_t count() const noexcept { return positions.size(); }
 
     /**
@@ -230,14 +230,10 @@ namespace alterhook
                                             bool              enable_hook,
                                             uintptr_t         ip) noexcept;
 #endif
-    /// the deleter specified in `std::unique_ptr` which uses the internal
-    /// buffer deallocator.
+    /// @brief the deleter specified in `std::unique_ptr` which uses the
+    /// internal buffer deallocator.
     struct ALTERHOOK_API deleter
     {
-      constexpr deleter() noexcept = default;
-
-      constexpr deleter(const deleter&) noexcept = default;
-
       void operator()(std::byte* ptrampoline) const noexcept;
     };
 
@@ -260,10 +256,13 @@ namespace alterhook
     /// preceding bytes when hooking.
     bool   patch_above = false;
     size_t tramp_size  = 0; ///< What @ref alterhook::trampoline::size returns
-#if utils_arm || defined(RUNNING_DOXYGEN)
+#if utils_arm || utils_aarch64 || defined(RUNNING_DOXYGEN)
     /// @brief If PC handling is activate on the trampoline, this tells the
-    /// exact position where it starts (only defined on armv7)
+    /// exact position where it starts (only defined on armv7 and aarch64)
     pc_handling_t pc_handling = std::nullopt;
+#endif
+#if utils_aarch64 || defined(RUNNING_DOXYGEN)
+    uint8_t available_size = 0;
 #endif
 #if !utils_windows || defined(RUNNING_DOXYGEN)
     /// @brief Tells the protection of the target function (only defined on
@@ -287,16 +286,16 @@ namespace alterhook
     utils_assert(
         ptarget,
         "trampoline::invoke: attempt to invoke an uninitialized trampoline");
-    __alterhook_def_thumb_var(ptarget);
-    std::byte* func = __alterhook_add_thumb_bit(ptrampoline.get());
-    return std::invoke(function_cast<fn>(func), std::forward<types>(args)...);
+    return std::invoke(function_cast<fn>(helpers::resolve_original(
+                           ptarget, ptrampoline.get())),
+                       std::forward<types>(args)...);
   }
 
   template <typename fn, typename>
   auto trampoline::get_callback() const
   {
-    __alterhook_def_thumb_var(ptarget);
-    return function_cast<fn>(__alterhook_add_thumb_bit(ptrampoline.get()));
+    return function_cast<fn>(
+        helpers::resolve_original(ptarget, ptrampoline.get()));
   }
 } // namespace alterhook
 

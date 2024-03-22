@@ -338,18 +338,18 @@ namespace alterhook
 
       typedef utils::static_vector<reference, max_references> references_t;
 
-      uint8_t         id        = 0;
+      ptrdiff_t       id        = 0;
       std::byte*      dest      = nullptr;
       instruction_set instr_set = instruction_set::UNKNOWN;
       references_t    references{};
 
-      branch_destination(uint8_t id) : id(id) {}
+      branch_destination(ptrdiff_t id) : id(id) {}
     };
 
     struct branch_destination_list
         : utils::static_vector<branch_destination, max_branch_dests>
     {
-      iterator get_entry(uint8_t id) noexcept
+      iterator get_entry(ptrdiff_t id) noexcept
       {
         return std::find_if(begin(), end(),
                             [=](const branch_destination& branch_dest)
@@ -375,7 +375,7 @@ namespace alterhook
             ref.src);
       }
 
-      void process(uint8_t id)
+      void process(ptrdiff_t id)
       {
         auto result = get_entry(id);
         if (result == end())
@@ -418,7 +418,7 @@ namespace alterhook
         clear();
       }
 
-      void set_new_location(uint8_t id, std::byte* dest)
+      void set_new_location(ptrdiff_t id, std::byte* dest)
       {
         auto result = get_entry(id);
         if (result == end())
@@ -453,7 +453,7 @@ namespace alterhook
       }
 
       template <typename T>
-      void insert_or_add_reference(std::byte* target, uint8_t id,
+      void insert_or_add_reference(std::byte* target, ptrdiff_t id,
                                    instruction_set instr_set, T&& reference)
       {
         auto result = get_entry(id);
@@ -692,7 +692,7 @@ namespace alterhook
         }
 
         template <typename T2 = void>
-        reference& register_as_branch(uint8_t id)
+        reference& register_as_branch(ptrdiff_t id)
         {
           if constexpr (is_custom_instruction<T>)
             ctx->branch_list.insert_or_add_reference(
@@ -1338,21 +1338,20 @@ namespace alterhook
 
           if (in_overriden_area)
           {
-            const uint8_t branch_dest_id =
+            const ptrdiff_t branch_dest_id =
                 session.instruction_info.ubranch_destination -
                 ctx.target.ubegin;
-#ifndef __INTELLISENSE__
             std::visit(
-                utils::overloaded{
-                    [](std::monostate&)
-                    {
-                      assert(!"expected instruction variant to be "
-                              "non-empty");
-                    },
-                    [=](auto& ref)
-                    { ref.register_as_branch(branch_dest_id); } },
+                [=](auto& ref)
+                {
+                  if constexpr (std::is_same_v<
+                                    utils::remove_cvref_t<decltype(ref)>,
+                                    std::monostate>)
+                    assert(!"expected instruction variant to be non-empty");
+                  else
+                    ref.register_as_branch(branch_dest_id);
+                },
                 branch_ref);
-#endif
           }
           else
           {

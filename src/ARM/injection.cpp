@@ -18,14 +18,15 @@ namespace alterhook
     __define_old_protect(flags);
     const bool thumb = reinterpret_cast<uintptr_t>(target) & 1;
     reinterpret_cast<uintptr_t&>(target) &= ~1;
+    constexpr size_t far_jump_size        = sizeof(arm::custom::FULL_JMP);
     const auto [address, size] =
-        flags.patch_above
-            ? std::pair(target - sizeof(uint32_t),
-                        sizeof(arm::custom::FULL_JMP))
-            : std::pair(target, flags.use_small_jmp ? sizeof(arm::B)
-                                : reinterpret_cast<uintptr_t>(target) % 4
-                                    ? sizeof(arm::custom::FULL_JMP) + 2
-                                    : sizeof(arm::custom::FULL_JMP));
+        flags.use_small_jmp ? std::pair(target, sizeof(arm::B))
+        : flags.patch_above
+            ? std::pair(target - sizeof(uintptr_t), far_jump_size)
+            : std::pair(target, static_cast<size_t>(
+                                    utils::align_up(target + far_jump_size,
+                                                    sizeof(uintptr_t)) -
+                                    target));
     const auto [prot_addr, prot_size] = __prot_data(address, size);
 
     if (!execset(prot_addr, prot_size))
@@ -33,48 +34,34 @@ namespace alterhook
 
     if (flags.enable)
     {
-      const uint8_t pc_offset = thumb ? 4 : 8;
+      const auto    detour    = reinterpret_cast<uintptr_t>(backup_or_detour);
       if (flags.patch_above)
       {
-        const int16_t ldr_relative_address =
-            address - utils::align(target + pc_offset, 4u);
-        std::byte buffer[sizeof(arm::custom::FULL_JMP)]{};
-        new (buffer) auto(backup_or_detour);
+        assert(!(reinterpret_cast<uintptr_t>(target) % sizeof(uintptr_t)));
         if (thumb)
-          new (&buffer[sizeof(uintptr_t)])
-              thumb2::custom::JMP(ldr_relative_address);
+          new (address) thumb2::custom::FULL_JMP_FROM_ABOVE(detour);
         else
-          new (&buffer[sizeof(uintptr_t)])
-              arm::custom::JMP(ldr_relative_address);
-        memcpy(address, buffer, size);
+          new (address) arm::custom::FULL_JMP_FROM_ABOVE(detour);
       }
       else if (flags.use_small_jmp)
       {
+        const uint8_t  pc_offset = thumb ? 4 : 8;
         const intptr_t relative_address =
             backup_or_detour - utils::align(target + pc_offset, 4u);
         if (thumb)
-          new (target) thumb2::B(relative_address);
+          new (address) thumb2::B(relative_address);
         else
-          new (target) arm::B(relative_address);
+          new (address) arm::B(relative_address);
       }
       else if (thumb)
       {
-        if (reinterpret_cast<uintptr_t>(target) % 4)
-        {
-          std::byte buffer[sizeof(arm::custom::FULL_JMP) + sizeof(arm::NOP)]{};
-          new (buffer) thumb2::custom::JMP(2);
-          new (&buffer[sizeof(thumb2::custom::JMP)]) thumb::NOP();
-          new (&buffer[sizeof(thumb2::custom::JMP) + sizeof(thumb::NOP)]) auto(
-              backup_or_detour);
-          memcpy(address, buffer, size);
-        }
+        if (reinterpret_cast<uintptr_t>(target) % sizeof(uintptr_t))
+          new (address) thumb2::custom::ALIGNED_FULL_JMP(detour);
         else
-          new (target) thumb2::custom::FULL_JMP(
-              reinterpret_cast<uintptr_t>(backup_or_detour));
+          new (address) thumb2::custom::FULL_JMP(detour);
       }
       else
-        new (target) arm::custom::FULL_JMP(
-            reinterpret_cast<uintptr_t>(backup_or_detour));
+        new (address) arm::custom::FULL_JMP(detour);
     }
     else
       memcpy(address, backup_or_detour, size);

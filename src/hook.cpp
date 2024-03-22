@@ -82,7 +82,7 @@ namespace alterhook
     const bool should_enable = enabled;
     disable();
     trampoline::operator=(other);
-    __alterhook_make_backup();
+    helpers::make_backup(ptarget, backup.data(), patch_above);
     if (should_enable)
       enable();
     return *this;
@@ -96,10 +96,9 @@ namespace alterhook
     const bool should_enable = enabled;
     disable();
     trampoline::operator=(std::move(other));
-    __alterhook_make_backup();
-    __alterhook_def_thumb_var(ptarget);
+    helpers::make_backup(ptarget, backup.data(), patch_above);
     if (original_wrap)
-      *original_wrap = __alterhook_add_thumb_bit(ptrampoline.get());
+      *original_wrap = helpers::resolve_original(ptarget, ptrampoline.get());
     if (should_enable)
       enable();
     return *this;
@@ -135,17 +134,18 @@ namespace alterhook
     }
   }
 
-  void hook::set_target(std::byte* target)
+  hook& hook::set_target(std::byte* target)
   {
     if (target == ptarget)
-      return;
+      return *this;
     const bool should_enable = enabled;
     disable();
     init(target);
-    __alterhook_make_backup();
+    helpers::make_backup(target, backup.data(), patch_above);
 
     if (should_enable)
       enable();
+    return *this;
   }
 
   void hook::set_detour(std::byte* detour)
@@ -167,21 +167,20 @@ namespace alterhook
     thread_freezer freeze{};
     if (enabled)
       freeze.init(nullptr);
-    __alterhook_def_thumb_var(ptarget);
     if (!original_wrap)
     {
       original_buffer = original;
       original_wrap =
           std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
-      *original_wrap = __alterhook_add_thumb_bit(ptrampoline.get());
+      *original_wrap = helpers::resolve_original(ptarget, ptrampoline.get());
       return;
     }
     helpers::orig_buff_t tmp = std::exchange(original_buffer, original);
-    *original_wrap           = __alterhook_add_thumb_bit(ptrampoline.get());
+    *original_wrap = helpers::resolve_original(ptarget, ptrampoline.get());
     *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
   }
 
-  void hook::reset_original()
+  hook& hook::reset_original()
   {
     if (original_wrap)
     {
@@ -191,6 +190,7 @@ namespace alterhook
       *original_wrap = nullptr;
       original_wrap  = nullptr;
     }
+    return *this;
   }
 
   bool hook::operator==(const hook& other) const noexcept
