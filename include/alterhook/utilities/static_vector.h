@@ -13,13 +13,23 @@
 
 namespace alterhook::utils
 {
+#ifndef NDEBUG
+  namespace helpers
+  {
+    template <typename T, size_t N>
+    class static_vector_const_iterator;
+    template <typename T, size_t N>
+    class static_vector_iterator;
+  } // namespace helpers
+#endif
+
   template <typename T, size_t N>
   class static_vector
   {
   public:
 #ifndef NDEBUG
-    class iterator;
-    class const_iterator;
+    typedef helpers::static_vector_iterator<T, N>       iterator;
+    typedef helpers::static_vector_const_iterator<T, N> const_iterator;
 #else
     typedef T*       iterator;
     typedef const T* const_iterator;
@@ -219,296 +229,333 @@ namespace alterhook::utils
       -> static_vector<std::common_type_t<first, rest...>, sizeof...(rest) + 1>;
 
 #ifndef NDEBUG
-  template <typename T, size_t N>
-  class static_vector<T, N>::const_iterator
+  namespace helpers
   {
-  public:
+    template <typename T, size_t N>
+    class static_vector_const_iterator
+    {
+    public:
   #if utils_cpp20
-    typedef std::contiguous_iterator_tag iterator_concept;
+      typedef std::contiguous_iterator_tag iterator_concept;
   #endif
-    typedef std::random_access_iterator_tag iterator_category;
-    typedef T                               value_type;
-    typedef ptrdiff_t                       difference_type;
-    typedef const T*                        pointer;
-    typedef const T&                        reference;
+      typedef std::random_access_iterator_tag iterator_category;
+      typedef T                               value_type;
+      typedef ptrdiff_t                       difference_type;
+      typedef const T*                        pointer;
+      typedef const T&                        reference;
 
-    constexpr const_iterator() noexcept = default;
+      constexpr static_vector_const_iterator() noexcept = default;
 
-    constexpr reference operator*() const noexcept { return *operator->(); }
+      constexpr reference operator*() const noexcept { return *operator->(); }
 
-    constexpr pointer operator->() const noexcept
-    {
-      utils_assert(
-          ptr && pcount,
-          "static_vector::iterator cannot dereference uninitialized iterator");
-      utils_assert(index < *pcount, "static_vector::iterator: cannot "
-                                    "dereference an out of range element");
-      return ptr + index;
-    }
+      constexpr pointer operator->() const noexcept
+      {
+        utils_assert(ptr && pcount, "static_vector::iterator cannot "
+                                    "dereference uninitialized iterator");
+        utils_assert(index < *pcount, "static_vector::iterator: cannot "
+                                      "dereference an out of range element");
+        return ptr + index;
+      }
 
-    constexpr const_iterator& operator++() noexcept
-    {
-      utils_assert(
-          ptr && pcount,
-          "static_vector::iterator: cannot increment uninitialized iterator");
-      utils_assert(
-          index < *pcount,
-          "static_vector::iterator: cannot increment iterator past end");
-      ++index;
-      return *this;
-    }
-
-    constexpr const_iterator operator++(int) noexcept
-    {
-      const_iterator tmp = *this;
-      ++*this;
-      return tmp;
-    }
-
-    constexpr const_iterator& operator--() noexcept
-    {
-      utils_assert(
-          ptr && pcount,
-          "static_vector::iterator: cannot decrement uninitialized iterator");
-      utils_assert(
-          index != 0,
-          "static_vector::iterator: cannot decrement iterator before begin");
-      --index;
-      return *this;
-    }
-
-    constexpr const_iterator operator--(int) noexcept
-    {
-      const_iterator tmp = *this;
-      --*this;
-      return tmp;
-    }
-
-    constexpr const_iterator& operator+=(const ptrdiff_t offset) noexcept
-    {
-      verify_offset(offset);
-      index += offset;
-      return *this;
-    }
-
-    constexpr const_iterator& operator-=(const ptrdiff_t offset) noexcept
-    {
-      return *this += -offset;
-    }
-
-    constexpr ptrdiff_t operator-(const const_iterator& other) const noexcept
-    {
-      compat(other);
-      return index - other.index;
-    }
-
-    constexpr reference operator[](const ptrdiff_t offset) const noexcept
-    {
-      return *(*this + offset);
-    }
-
-    constexpr bool operator==(const const_iterator& other) const noexcept
-    {
-      compat(other);
-      return other.index == index;
-    }
-
-    constexpr bool operator<(const const_iterator& other) const noexcept
-    {
-      compat(other);
-      return index < other.index;
-    }
-
-    constexpr const_iterator operator+(const ptrdiff_t offset) const noexcept
-    {
-      const_iterator tmp  = *this;
-      tmp                += offset;
-      return tmp;
-    }
-
-    constexpr const_iterator operator-(const ptrdiff_t offset) const noexcept
-    {
-      const_iterator tmp  = *this;
-      tmp                -= offset;
-      return tmp;
-    }
-
-    friend constexpr const_iterator operator+(const ptrdiff_t offset,
-                                              const_iterator  itr) noexcept
-    {
-      itr += offset;
-      return itr;
-    }
-
-    constexpr bool operator!=(const const_iterator& other) const noexcept
-    {
-      return !(*this == other);
-    }
-
-    constexpr bool operator>(const const_iterator& other) const noexcept
-    {
-      return other < *this;
-    }
-
-    constexpr bool operator<=(const const_iterator& other) const noexcept
-    {
-      return !(other < *this);
-    }
-
-    constexpr bool operator>=(const const_iterator& other) const noexcept
-    {
-      return !(*this < other);
-    }
-
-  private:
-    const T*      ptr    = nullptr;
-    size_t        index  = 0;
-    const size_t* pcount = nullptr;
-
-    template <typename U>
-    friend struct std::pointer_traits;
-    friend static_vector;
-    friend iterator;
-
-    constexpr explicit const_iterator(pointer ptr, size_t index,
-                                      const size_t* pcount) noexcept
-        : ptr(ptr), index(index), pcount(pcount)
-    {
-    }
-
-    constexpr void verify_offset(const ptrdiff_t offset) const noexcept
-    {
-      if (offset != 0)
+      constexpr static_vector_const_iterator& operator++() noexcept
+      {
         utils_assert(
-            ptr, "static_vector::iterator: cannot seek uninitialized iterator");
-
-      if (offset < 0)
+            ptr && pcount,
+            "static_vector::iterator: cannot increment uninitialized iterator");
         utils_assert(
-            index >= -offset,
-            "static_vector::iterator: cannot seek iterator before begin");
+            index < *pcount,
+            "static_vector::iterator: cannot increment iterator past end");
+        ++index;
+        return *this;
+      }
 
-      if (offset > 0)
-        utils_assert(*pcount - index >= offset,
-                     "static_vector::iterator: cannot seek iterator after end");
-    }
+      constexpr static_vector_const_iterator operator++(int) noexcept
+      {
+        static_vector_const_iterator tmp = *this;
+        ++*this;
+        return tmp;
+      }
 
-    constexpr void compat(const const_iterator& itr) const noexcept
+      constexpr static_vector_const_iterator& operator--() noexcept
+      {
+        utils_assert(
+            ptr && pcount,
+            "static_vector::iterator: cannot decrement uninitialized iterator");
+        utils_assert(
+            index != 0,
+            "static_vector::iterator: cannot decrement iterator before begin");
+        --index;
+        return *this;
+      }
+
+      constexpr static_vector_const_iterator operator--(int) noexcept
+      {
+        static_vector_const_iterator tmp = *this;
+        --*this;
+        return tmp;
+      }
+
+      constexpr static_vector_const_iterator&
+          operator+=(const ptrdiff_t offset) noexcept
+      {
+        verify_offset(offset);
+        index += offset;
+        return *this;
+      }
+
+      constexpr static_vector_const_iterator&
+          operator-=(const ptrdiff_t offset) noexcept
+      {
+        return *this += -offset;
+      }
+
+      constexpr ptrdiff_t
+          operator-(const static_vector_const_iterator& other) const noexcept
+      {
+        compat(other);
+        return index - other.index;
+      }
+
+      constexpr reference operator[](const ptrdiff_t offset) const noexcept
+      {
+        return *(*this + offset);
+      }
+
+      constexpr bool
+          operator==(const static_vector_const_iterator& other) const noexcept
+      {
+        compat(other);
+        return other.index == index;
+      }
+
+      constexpr bool
+          operator<(const static_vector_const_iterator& other) const noexcept
+      {
+        compat(other);
+        return index < other.index;
+      }
+
+      constexpr static_vector_const_iterator
+          operator+(const ptrdiff_t offset) const noexcept
+      {
+        static_vector_const_iterator tmp  = *this;
+        tmp                              += offset;
+        return tmp;
+      }
+
+      constexpr static_vector_const_iterator
+          operator-(const ptrdiff_t offset) const noexcept
+      {
+        static_vector_const_iterator tmp  = *this;
+        tmp                              -= offset;
+        return tmp;
+      }
+
+      friend constexpr static_vector_const_iterator
+          operator+(const ptrdiff_t              offset,
+                    static_vector_const_iterator itr) noexcept
+      {
+        itr += offset;
+        return itr;
+      }
+
+      constexpr bool
+          operator!=(const static_vector_const_iterator& other) const noexcept
+      {
+        return !(*this == other);
+      }
+
+      constexpr bool
+          operator>(const static_vector_const_iterator& other) const noexcept
+      {
+        return other < *this;
+      }
+
+      constexpr bool
+          operator<=(const static_vector_const_iterator& other) const noexcept
+      {
+        return !(other < *this);
+      }
+
+      constexpr bool
+          operator>=(const static_vector_const_iterator& other) const noexcept
+      {
+        return !(*this < other);
+      }
+
+    private:
+      const T*      ptr    = nullptr;
+      size_t        index  = 0;
+      const size_t* pcount = nullptr;
+
+      template <typename U>
+      friend struct pointer_traits_impl;
+      template <typename U, size_t O>
+      friend class ::alterhook::utils::static_vector;
+      template <typename U, size_t O>
+      friend class static_vector_iterator;
+
+      constexpr explicit static_vector_const_iterator(
+          pointer ptr, size_t index, const size_t* pcount) noexcept
+          : ptr(ptr), index(index), pcount(pcount)
+      {
+      }
+
+      constexpr void verify_offset(const ptrdiff_t offset) const noexcept
+      {
+        if (offset != 0)
+          utils_assert(
+              ptr,
+              "static_vector::iterator: cannot seek uninitialized iterator");
+
+        if (offset < 0)
+          utils_assert(
+              index >= -offset,
+              "static_vector::iterator: cannot seek iterator before begin");
+
+        if (offset > 0)
+          utils_assert(
+              *pcount - index >= offset,
+              "static_vector::iterator: cannot seek iterator after end");
+      }
+
+      constexpr void
+          compat(const static_vector_const_iterator& itr) const noexcept
+      {
+        utils_assert(ptr == itr.ptr,
+                     "static_vector::iterator: iterators are incompatible");
+      }
+
+      constexpr const T* unwrap() const noexcept { return ptr + index; }
+    };
+
+    template <typename T, size_t N>
+    class static_vector_iterator : public static_vector_const_iterator<T, N>
     {
-      utils_assert(ptr == itr.ptr,
-                   "static_vector::iterator: iterators are incompatible");
-    }
-
-    constexpr const T* unwrap() const noexcept { return ptr + index; }
-  };
-
-  template <typename T, size_t N>
-  class static_vector<T, N>::iterator : public const_iterator
-  {
-  public:
-    typedef const_iterator base;
+    public:
+      typedef static_vector_const_iterator<T, N> base;
   #if utils_cpp20
-    typedef std::contiguous_iterator_tag iterator_concept;
+      typedef std::contiguous_iterator_tag iterator_concept;
   #endif
-    typedef std::random_access_iterator_tag iterator_category;
-    typedef T                               value_type;
-    typedef ptrdiff_t                       difference_type;
-    typedef T*                              pointer;
-    typedef T&                              reference;
+      typedef std::random_access_iterator_tag iterator_category;
+      typedef T                               value_type;
+      typedef ptrdiff_t                       difference_type;
+      typedef T*                              pointer;
+      typedef T&                              reference;
 
-    constexpr iterator() noexcept = default;
+      constexpr static_vector_iterator() noexcept = default;
 
-    constexpr reference operator*() const noexcept
+      constexpr reference operator*() const noexcept
+      {
+        return const_cast<reference>(base::operator*());
+      }
+
+      constexpr pointer operator->() const noexcept
+      {
+        return const_cast<pointer>(base::operator->());
+      }
+
+      constexpr static_vector_iterator& operator++() noexcept
+      {
+        base::operator++();
+        return *this;
+      }
+
+      constexpr static_vector_iterator operator++(int) noexcept
+      {
+        static_vector_iterator tmp = *this;
+        base::operator++();
+        return tmp;
+      }
+
+      constexpr static_vector_iterator& operator--() noexcept
+      {
+        base::operator--();
+        return *this;
+      }
+
+      constexpr static_vector_iterator operator--(int) noexcept
+      {
+        static_vector_iterator tmp = *this;
+        base::operator--();
+        return tmp;
+      }
+
+      constexpr static_vector_iterator&
+          operator+=(const ptrdiff_t offset) noexcept
+      {
+        base::operator+=(offset);
+        return *this;
+      }
+
+      constexpr static_vector_iterator
+          operator+(const ptrdiff_t offset) const noexcept
+      {
+        static_vector_iterator tmp  = *this;
+        tmp                        += offset;
+        return tmp;
+      }
+
+      friend constexpr static_vector_iterator
+          operator+(const ptrdiff_t offset, static_vector_iterator itr) noexcept
+      {
+        itr += offset;
+        return itr;
+      }
+
+      constexpr static_vector_iterator&
+          operator-=(const ptrdiff_t offset) noexcept
+      {
+        base::operator-=(offset);
+        return *this;
+      }
+
+      using base::operator-;
+
+      constexpr static_vector_iterator
+          operator-(const ptrdiff_t offset) const noexcept
+      {
+        static_vector_iterator tmp  = *this;
+        tmp                        -= offset;
+        return tmp;
+      }
+
+      constexpr reference operator[](const ptrdiff_t offset) const noexcept
+      {
+        return const_cast<reference>(base::operator[](offset));
+      }
+
+    private:
+      template <typename U>
+      friend struct pointer_traits_impl;
+      template <typename U, size_t O>
+      friend class ::alterhook::utils::static_vector;
+
+      constexpr explicit static_vector_iterator(pointer ptr, size_t index,
+                                                const size_t* pcount) noexcept
+          : base(ptr, index, pcount)
+      {
+      }
+
+      constexpr pointer unwrap() const noexcept
+      {
+        return const_cast<pointer>(base::unwrap());
+      }
+    };
+
+    template <typename T>
+    struct pointer_traits_impl
     {
-      return const_cast<reference>(base::operator*());
-    }
+      typedef T                                              pointer;
+      typedef std::remove_reference_t<typename T::reference> element_type;
+      typedef ptrdiff_t                                      difference_type;
 
-    constexpr pointer operator->() const noexcept
-    {
-      return const_cast<pointer>(base::operator->());
-    }
-
-    constexpr iterator& operator++() noexcept
-    {
-      base::operator++();
-      return *this;
-    }
-
-    constexpr iterator operator++(int) noexcept
-    {
-      iterator tmp = *this;
-      base::operator++();
-      return tmp;
-    }
-
-    constexpr iterator& operator--() noexcept
-    {
-      base::operator--();
-      return *this;
-    }
-
-    constexpr iterator operator--(int) noexcept
-    {
-      iterator tmp = *this;
-      base::operator--();
-      return tmp;
-    }
-
-    constexpr iterator& operator+=(const ptrdiff_t offset) noexcept
-    {
-      base::operator+=(offset);
-      return *this;
-    }
-
-    constexpr iterator operator+(const ptrdiff_t offset) const noexcept
-    {
-      iterator tmp  = *this;
-      tmp          += offset;
-      return tmp;
-    }
-
-    friend constexpr iterator operator+(const ptrdiff_t offset,
-                                        iterator        itr) noexcept
-    {
-      itr += offset;
-      return itr;
-    }
-
-    constexpr iterator& operator-=(const ptrdiff_t offset) noexcept
-    {
-      base::operator-=(offset);
-      return *this;
-    }
-
-    using base::operator-;
-
-    constexpr iterator operator-(const ptrdiff_t offset) const noexcept
-    {
-      iterator tmp  = *this;
-      tmp          -= offset;
-      return tmp;
-    }
-
-    constexpr reference operator[](const ptrdiff_t offset) const noexcept
-    {
-      return const_cast<reference>(base::operator[](offset));
-    }
-
-  private:
-    template <typename U>
-    friend struct std::pointer_traits;
-    friend static_vector;
-
-    constexpr explicit iterator(pointer ptr, size_t index,
-                                const size_t* pcount) noexcept
-        : base(ptr, index, pcount)
-    {
-    }
-
-    constexpr pointer unwrap() const noexcept
-    {
-      return const_cast<pointer>(base::unwrap());
-    }
-  };
+      static constexpr element_type* to_address(pointer p) noexcept
+      {
+        return p.unwrap();
+      }
+    };
+  } // namespace helpers
 
   template <typename T, size_t N>
   typename static_vector<T, N>::iterator static_vector<T, N>::begin() noexcept
@@ -959,6 +1006,24 @@ namespace alterhook::utils
     count = len;
   }
 } // namespace alterhook::utils
+
+#ifndef NDEBUG
+template <typename T, size_t N>
+struct std::pointer_traits<
+    alterhook::utils::helpers::static_vector_const_iterator<T, N>>
+    : alterhook::utils::helpers::pointer_traits_impl<
+          alterhook::utils::helpers::static_vector_const_iterator<T, N>>
+{
+};
+
+template <typename T, size_t N>
+struct std::pointer_traits<
+    alterhook::utils::helpers::static_vector_iterator<T, N>>
+    : alterhook::utils::helpers::pointer_traits_impl<
+          alterhook::utils::helpers::static_vector_iterator<T, N>>
+{
+};
+#endif
 
 #if utils_msvc
   #pragma warning(pop)
