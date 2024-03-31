@@ -561,7 +561,7 @@ namespace alterhook
           // extra loads are removed
           if (reg >= aarch64::X8)
             modifiable_list.erase_stack_manipulators_and_redundant_loads()
-                .fix_erased_instructions(trampoline.buffer_end);
+                .fix_erased_instructions(trampoline.end);
 
           for (modifiable_instruction& entry : modifiable_list)
             entry.patch_pc_register(static_cast<aarch64::xregisters>(reg));

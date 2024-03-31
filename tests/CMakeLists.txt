@@ -28,6 +28,12 @@ if (ALTERHOOK_TARGET_ARCH STREQUAL "ARM")
 		"ARM/trampoline_target_tests.h"
 		"ARM/trampolines_general.h"
 	)
+elseif (ALTERHOOK_TARGET_ARCH STREQUAL "AArch64")
+	set(
+		ALTERHOOK_AARCH64_TESTS
+		"AArch64/trampolines.cpp"
+		"AArch64/trampolines.h"
+	)
 endif()
 
 add_executable(
@@ -38,6 +44,7 @@ add_executable(
 	"testcls.h"
 	"modifiers.h"
 	${ALTERHOOK_ARM_TESTS}
+	${ALTERHOOK_AARCH64_TESTS}
 )
 
 target_link_libraries(

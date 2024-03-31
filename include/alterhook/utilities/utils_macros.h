@@ -4,7 +4,12 @@
 #include "boilerplate.h"
 #include <cassert>
 
-#define utils_assert(expr, msg) assert(((void)msg, expr))
+// intellisense fucks up completely for some reason
+#ifndef __INTELLISENSE__
+  #define utils_assert(expr, msg) assert(((void)msg, expr))
+#else
+  #define utils_assert(expr, msg) assert(expr)
+#endif
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
   #define utils_windows true
