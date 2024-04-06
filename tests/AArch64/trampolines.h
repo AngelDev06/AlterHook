@@ -43,6 +43,8 @@ extern "C"
 
     std::cout << "hex: " << std::hex << arg << std::dec << '\n';
   }
+
+  void print_empty() { std::cout << "empty\n"; }
 }
 
 namespace aarch64
@@ -65,4 +67,18 @@ namespace aarch64
     static auto func_ptr = reinterpret_cast<void (*volatile)()>(
         reinterpret_cast<uintptr_t>(func) + sizeof(uint32_t));
   } // namespace test1
+
+  namespace test2
+  {
+    [[gnu::naked, clang::optnone, gnu::aligned(8)]] void func()
+    {
+      asm(R"(cbz X0, 0f
+             b print_hex
+             0:
+             stp fp, lr, [sp, #-16]!
+             bl print_empty
+             ldp fp, lr, [sp], #16
+             ret)");
+    }
+  } // namespace test2
 } // namespace aarch64

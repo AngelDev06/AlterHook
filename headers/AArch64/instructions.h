@@ -370,7 +370,8 @@ namespace alterhook::aarch64
       void set_offset(offset_t offset) noexcept
       {
         assert_offset(offset);
-        base::instr = patch_operand<2>(offset_encoding, base::instr, offset);
+        base::instr = patch_operand<2>(offset_encoding, base::instr,
+                                       convert_offset(offset));
       }
 
       offset_t get_offset() const noexcept
@@ -1059,7 +1060,7 @@ namespace alterhook::aarch64
 
     struct FULL_JUMP_FROM_ABOVE
     {
-      uint64_t address = 0;
+      uint64_t          address = 0;
       const LDR_LITERAL ldr{ xregisters::X17,
                              -static_cast<int32_t>(sizeof(uint64_t)) };
       const BR          br{ X17 };
@@ -1069,75 +1070,120 @@ namespace alterhook::aarch64
 
     struct JMP
     {
-      const LDR_LITERAL ldr;
-      const BR          br{ X17 };
+      typedef typename LDR_LITERAL::offset_t fetch_offset_t;
 
       JMP(int32_t ldr_offset = 0) : ldr(xregisters::X17, ldr_offset) {}
+
+      fetch_offset_t get_fetch_offset() const noexcept
+      {
+        return ldr.get_offset();
+      }
+
+      void set_fetch_offset(fetch_offset_t offset) noexcept
+      {
+        ldr.set_offset(offset);
+      }
+
+    private:
+      LDR_LITERAL ldr;
+      BR          br{ X17 };
     };
 
-    struct CONDITIONAL_JMP
+    template <typename main_instr_t, typename... types>
+    struct JMP_LIKE
     {
-      const B_cond conditional_b;
-      JMP          jmp;
+      typedef typename JMP::fetch_offset_t fetch_offset_t;
+      typedef JMP_LIKE                     jmp_like_t;
 
+      JMP_LIKE(types... args, int32_t ldr_offset)
+          : main_instr(args...), jmp(ldr_offset)
+      {
+      }
+
+      fetch_offset_t get_fetch_offset() const noexcept
+      {
+        return jmp.get_fetch_offset() + sizeof(main_instr);
+      }
+
+      void set_fetch_offset(fetch_offset_t offset) noexcept
+      {
+        jmp.set_fetch_offset(offset - sizeof(main_instr));
+      }
+
+    private:
+      const main_instr_t main_instr;
+      JMP                jmp;
+    };
+
+    struct CONDITIONAL_JMP : JMP_LIKE<B_cond, int32_t, AArch64CC_CondCode>
+    {
       CONDITIONAL_JMP(AArch64CC_CondCode condition, int32_t ldr_offset)
-          : conditional_b(8, AArch64CC_getInvertedCondCode(condition)),
-            jmp(ldr_offset)
+          : jmp_like_t(8, condition, ldr_offset)
       {
       }
     };
 
-    struct JMP_IF_ZERO
+    struct JMP_IF_ZERO : JMP_LIKE<CBNZ, CBNZ>
     {
-      const CBNZ cbnz;
-      JMP        jmp;
-
       JMP_IF_ZERO(CBZ cbz, int32_t ldr_offset)
-          : cbnz((cbz.set_offset(8), cbz)), jmp(ldr_offset)
+          : jmp_like_t((cbz.set_offset(8), cbz), ldr_offset)
       {
       }
     };
 
-    struct JMP_IF_NOT_ZERO
+    struct JMP_IF_NOT_ZERO : JMP_LIKE<CBZ, CBZ>
     {
-      const CBZ cbz;
-      JMP       jmp;
-
       JMP_IF_NOT_ZERO(CBNZ cbnz, int32_t ldr_offset)
-          : cbz((cbnz.set_offset(8), cbnz)), jmp(ldr_offset)
+          : jmp_like_t((cbnz.set_offset(8), cbnz), ldr_offset)
       {
       }
     };
 
-    struct TEST_JMP_ON_ZERO
+    struct TEST_JMP_ON_ZERO : JMP_LIKE<TBNZ, TBNZ>
     {
-      const TBNZ tbnz;
-      JMP        jmp;
-
       TEST_JMP_ON_ZERO(TBZ tbz, int32_t ldr_offset)
-          : tbnz((tbz.set_offset(8), tbz)), jmp(ldr_offset)
+          : jmp_like_t((tbz.set_offset(8), tbz), ldr_offset)
       {
       }
     };
 
-    struct TEST_JMP_ON_NON_ZERO
+    struct TEST_JMP_ON_NON_ZERO : JMP_LIKE<TBZ, TBZ>
     {
-      const TBZ tbz;
-      JMP       jmp;
-
       TEST_JMP_ON_NON_ZERO(TBNZ tbnz, int32_t ldr_offset)
-          : tbz((tbnz.set_offset(8), tbnz)), jmp(ldr_offset)
+          : jmp_like_t((tbnz.set_offset(8), tbnz), ldr_offset)
       {
       }
     };
 
     struct CALL
     {
-      const LDR_LITERAL ldr;
-      const BLR         blr{ X17 };
+      typedef typename LDR_LITERAL::offset_t fetch_offset_t;
 
       CALL(int32_t ldr_offset = 0) : ldr(xregisters::X17, ldr_offset) {}
+
+      fetch_offset_t get_fetch_offset() const noexcept
+      {
+        return ldr.get_offset();
+      }
+
+      void set_fetch_offset(fetch_offset_t offset) noexcept
+      {
+        ldr.set_offset(offset);
+      }
+
+    private:
+      LDR_LITERAL ldr;
+      BLR         blr{ X17 };
     };
+
+    typedef utils::type_sequence<FULL_JMP, ALIGNED_FULL_JMP,
+                                 FULL_JUMP_FROM_ABOVE>
+        full_absolute_branches;
+
+    typedef utils::type_sequence<JMP, CONDITIONAL_JMP, JMP_IF_ZERO,
+                                 JMP_IF_NOT_ZERO, TEST_JMP_ON_ZERO,
+                                 TEST_JMP_ON_NON_ZERO, CALL>
+        partial_absolute_branches;
 
     template <typename T>
     struct LDR_LIKE_ABS
@@ -1179,21 +1225,24 @@ namespace alterhook::aarch64
     using LDRV64_ABS  = LDR_LIKE_ABS<LDRVu64>;
     using LDRV128_ABS = LDR_LIKE_ABS<LDRVu128>;
 
+    typedef utils::type_sequence<LDR32_ABS, LDR64_ABS, LDRSW_ABS, LDRV32_ABS,
+                                 LDRV64_ABS, LDRV128_ABS>
+        absolute_loads;
+
     // acts as a tag for pc handling
     struct DATA_FETCH : LDR_LITERAL
     {
       using LDR_LITERAL::LDR_LITERAL;
     };
 
-    // tag for final branch
-    struct SHORT_JMP : B
+    // also a tag that denotes an instruction has been erased
+    struct ERASED : INSTRUCTION
     {
-      using B::B;
+      using INSTRUCTION::INSTRUCTION;
     };
 
-    typedef utils::type_sequence<LDR32_ABS, LDR64_ABS, LDRSW_ABS, LDRV32_ABS,
-                                 LDRV64_ABS, LDRV128_ABS>
-        absolute_loads;
+    // instruction types for special treatment (they act as tags)
+    typedef utils::type_sequence<DATA_FETCH, ERASED> tagged_instructions;
 
     // note: there are no actual push/pop instructions in the aarch64
     // architecture, reason being that the stack pointer needs to be 16 bytes
@@ -1235,10 +1284,11 @@ namespace alterhook::aarch64
       }
     };
 
-    typedef typename utils::type_sequence<
-        SHORT_JMP, FULL_JMP, JMP, CONDITIONAL_JMP, JMP_IF_ZERO, JMP_IF_NOT_ZERO,
-        TEST_JMP_ON_ZERO, TEST_JMP_ON_NON_ZERO, CALL, PUSH,
-        POP>::template merge<absolute_loads>
+    typedef utils::type_sequence<PUSH, POP> stack_manipulators;
+
+    typedef typename full_absolute_branches::template merge<
+        partial_absolute_branches, absolute_loads, tagged_instructions,
+        stack_manipulators>
         all_custom;
   } // namespace custom
 

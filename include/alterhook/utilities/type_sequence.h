@@ -50,6 +50,9 @@ namespace alterhook::utils
     template <typename T>
     using push_back = type_sequence<types..., T>;
 
+    template <typename... other_types>
+    using append = type_sequence<types..., other_types...>;
+
     template <typename... sequences>
     using merge = typename helpers::merge_impl<type_sequence<types...>,
                                                sequences...>::type;

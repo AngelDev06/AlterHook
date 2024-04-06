@@ -53,20 +53,24 @@ namespace alterhook
       const auto *begin = instr.detail->aarch64.operands,
                  *end   = instr.detail->aarch64.operands +
                         instr.detail->aarch64.op_count;
-      // the PC is read implicitly on the ldr(literal) encoding so it won't be
-      // included in the operands list. therefore we check to see if the
-      // operands list has no registers that are read
-      return !std::count_if(begin, end,
-                            [](const cs_aarch64_op& operand)
-                            {
-                              return operand.type == AArch64_OP_REG &&
-                                     (operand.access & CS_AC_READ) != 0;
-                            });
+      // the PC register is encoded implicitly on pc-relative loads and
+      // therefore capstone does not include it in the operands list. so we
+      // check if there is no memory operand provided
+      return std::find_if(begin, end,
+                          [](const cs_aarch64_op& operand)
+                          { return operand.type == AArch64_OP_MEM; }) == end;
     }
 
     constexpr size_t max_branch_dests   = 5;
     constexpr size_t max_to_be_modified = 8;
     constexpr size_t erased_max         = 8;
+
+    template <typename instr_t>
+    constexpr bool any_custom_instruction =
+        std::is_base_of_v<aarch64::INSTRUCTION,
+                          utils::remove_cvref_t<instr_t>> ||
+        aarch64::custom::all_custom::template has<
+            utils::remove_cvref_t<instr_t>>;
 
     template <typename instr_t, typename reg_t, typename = void>
     constexpr bool can_set_register = false;
@@ -88,56 +92,34 @@ namespace alterhook
         std::is_same_v<decltype(std::declval<instr_t>().get_fetch_offset()),
                        typename aarch64::LDR_LITERAL::offset_t>;
 
-    typedef utils::static_vector<std::pair<std::byte*, uint8_t>, erased_max>
-        erased_info_t;
-    typedef utils::type_sequence<aarch64::B, aarch64::B_cond, aarch64::BL,
-                                 aarch64::CBZ, aarch64::CBNZ, aarch64::TBZ,
-                                 aarch64::TBNZ>
-                                                     all_branches;
-    typedef typename aarch64::custom::absolute_loads custom_far_loads;
-    typedef utils::type_sequence<aarch64::LDR_LITERAL, aarch64::LDRSW_LITERAL,
-                                 aarch64::LDRV_LITERAL>
-        relative_loads;
-    typedef utils::type_sequence<
-        aarch64::LDRu32, aarch64::LDRu64, aarch64::LDRSWu, aarch64::LDRVu8,
-        aarch64::LDRVu16, aarch64::LDRVu32, aarch64::LDRVu64, aarch64::LDRVu128>
-        preindexed_loads;
-    typedef utils::type_sequence<aarch64::custom::PUSH, aarch64::custom::POP>
-                                                             stack_manipulators;
-    typedef utils::type_sequence<aarch64::ADD, aarch64::SUB> state_updaters;
-    typedef typename all_branches::template merge<
-        custom_far_loads, preindexed_loads, stack_manipulators,
-        state_updaters>::template push_back<aarch64::custom::DATA_FETCH>
-        all_modifiables;
-    template <typename seq>
-    using pointer_variant_t = typename seq::template apply<
+    using simple_branches =
+        utils::type_sequence<aarch64::B, aarch64::B_cond, aarch64::BL,
+                             aarch64::CBZ, aarch64::CBNZ, aarch64::TBZ,
+                             aarch64::TBNZ>;
+    using custom_far_branches = aarch64::custom::partial_absolute_branches;
+    using all_branches =
+        typename simple_branches::template merge<custom_far_branches>;
+    using custom_far_loads = aarch64::custom::absolute_loads;
+    using relative_loads =
+        utils::type_sequence<aarch64::LDR_LITERAL, aarch64::LDRSW_LITERAL,
+                             aarch64::LDRV_LITERAL>;
+    using preindexed_loads =
+        utils::type_sequence<aarch64::LDRu32, aarch64::LDRu64, aarch64::LDRSWu,
+                             aarch64::LDRVu8, aarch64::LDRVu16,
+                             aarch64::LDRVu32, aarch64::LDRVu64,
+                             aarch64::LDRVu128>;
+    using stack_manipulators = aarch64::custom::stack_manipulators;
+    using state_updaters     = utils::type_sequence<aarch64::ADD, aarch64::SUB>;
+    using instruction_tags   = aarch64::custom::tagged_instructions;
+    using all_modifiables    = typename simple_branches::template merge<
+        custom_far_branches, custom_far_loads, relative_loads, preindexed_loads,
+        stack_manipulators, state_updaters, instruction_tags>;
+    using modifiables_variant = typename all_modifiables::template apply<
         std::add_pointer_t>::template to<std::variant>;
 
-    uint8_t collapse_instructions(typename erased_info_t::iterator first,
-                                  typename erased_info_t::iterator end,
-                                  std::byte*                       buffer_end)
+    struct modifiable_instruction : modifiables_variant
     {
-      if (first == end)
-        return 0;
-      auto [range_begin, erased_count]  = *first;
-      range_begin                      += erased_count;
-
-      for (auto itr = std::next(first); itr != end; ++itr)
-      {
-        std::copy(range_begin, itr->first, range_begin - erased_count);
-        erased_count += itr->second;
-        range_begin   = itr->first + itr->second;
-      }
-
-      std::copy(range_begin, buffer_end, range_begin - erased_count);
-      return erased_count;
-    }
-
-    struct modifiable_instruction : pointer_variant_t<all_modifiables>
-    {
-      typedef pointer_variant_t<all_modifiables>           base;
-      typedef std::tuple<std::byte*&, std::byte*, uint8_t> safe_erase_ret_t;
-      using base::base;
+      using modifiables_variant::modifiables_variant;
 
       void patch_pc_register(aarch64::xregisters reg)
       {
@@ -145,173 +127,31 @@ namespace alterhook
             [reg](auto* pinstr)
             {
               typedef std::remove_pointer_t<decltype(pinstr)> instr_t;
-              if constexpr (!all_branches::template has<instr_t>)
-              {
-                if constexpr (can_set_register<instr_t, aarch64::xregisters>)
-                  pinstr->set_register(reg);
-                else if constexpr (can_set_register<instr_t, aarch64::reg_t>)
-                  pinstr->set_register(static_cast<aarch64::reg_t>(reg));
-                else if constexpr (preindexed_loads::template has<instr_t>)
-                  pinstr->set_base_register(static_cast<aarch64::reg_t>(reg));
-                else
-                  static_assert(utils::always_false<instr_t>,
-                                "unhandled modifiable instruction");
-              }
+              if constexpr (can_set_register<instr_t, aarch64::xregisters>)
+                pinstr->set_register(reg);
+              else if constexpr (can_set_register<instr_t, aarch64::reg_t>)
+                pinstr->set_register(static_cast<aarch64::reg_t>(reg));
+              else if constexpr (preindexed_loads::template has<instr_t>)
+                pinstr->set_base_register(static_cast<aarch64::reg_t>(reg));
+              else
+                static_assert(
+                    std::is_same_v<instr_t, aarch64::custom::ERASED> ||
+                        all_branches::template has<instr_t>,
+                    "unhandled modifiable instruction");
             },
             *this);
       }
 
-      void patch_target_address(std::byte* target, std::byte* address)
+      [[noreturn]] static void raise_offset_fix_fail(std::byte* target,
+                                                     std::byte* instr,
+                                                     uint8_t    instr_size,
+                                                     std::byte* address)
       {
-        std::visit(
-            [target, address](auto* pinstr)
-            {
-              typedef std::remove_pointer_t<decltype(pinstr)> instr_t;
-              if constexpr (all_branches::template has<instr_t> ||
-                            relative_loads::template has<instr_t>)
-              {
-                const ptrdiff_t relative_address =
-                    address - reinterpret_cast<std::byte*>(pinstr);
-                if (!instr_t::offset_fits(relative_address))
-                {
-                  const auto *instr_begin =
-                                 reinterpret_cast<std::byte*>(pinstr),
-                             *instr_end = reinterpret_cast<std::byte*>(pinstr) +
-                                          sizeof(instr_t);
-                  throw(exceptions::post_relocation_processing_fail(
-                      target,
-                      utils::to_array<exceptions::instruction_buffer_size>(
-                          instr_begin, instr_end),
-                      instr_begin, address));
-                }
-                pinstr->set_offset(relative_address);
-              }
-            },
-            *this);
-      }
-
-      /*
-       * overrides the erased instructions by moving to the left all remaining
-       * instructions that precede the modifiable one and the modifiable itself.
-       * So the garbage code left by the erased instructions will be replaced by
-       * the instructions that follow. This does not deal with instructions that
-       * follow the modifiable one.
-       *
-       * Returns:
-       * - A reference to the address of the instruction (for further
-       * processing).
-       * - A pointer to the end of the range which is the address that follows
-       * the modifiable instruction in its current position.
-       * - The number of instructions that were erased.
-       */
-      safe_erase_ret_t safe_erase(erased_info_t& info)
-      {
-        return std::visit(
-            [&info](auto*& pinstr) -> safe_erase_ret_t
-            {
-              typedef std::remove_pointer_t<
-                  std::remove_reference_t<decltype(pinstr)>>
-                         instr_t;
-              auto&      raw_pinstr = reinterpret_cast<std::byte*&>(pinstr);
-              const auto range_end  = raw_pinstr + sizeof(instr_t);
-              const auto info_end =
-                  std::find_if(info.begin(), info.end(),
-                               [raw_pinstr](std::pair<std::byte*, uint8_t> item)
-                               { return raw_pinstr < item.first; });
-              uint8_t erased_count =
-                  collapse_instructions(info.begin(), info_end, range_end);
-              info.erase(info.begin(), info_end);
-              raw_pinstr -= erased_count;
-              return { raw_pinstr, range_end, erased_count };
-            },
-            *this);
-      }
-    };
-
-    struct modifiable_instruction_list
-        : utils::static_vector<modifiable_instruction, max_to_be_modified>
-    {
-      erased_info_t erased{};
-
-      modifiable_instruction_list&
-          erase_stack_manipulators_and_redundant_loads()
-      {
-        using aarch64::custom::DATA_FETCH;
-        auto              itr = begin();
-        DATA_FETCH* const tmp = nullptr;
-        auto visitor = [prev_data_fetcher = tmp, this](auto* pinstr) mutable
-        {
-          typedef std::remove_pointer_t<decltype(pinstr)> instr_t;
-          if constexpr (stack_manipulators::template has<instr_t>)
-          {
-            erased.emplace_back(reinterpret_cast<std::byte*>(pinstr),
-                                sizeof(instr_t));
-            return true;
-          }
-          else if constexpr (std::is_same_v<instr_t, DATA_FETCH>)
-          {
-            const auto prevloc =
-                           reinterpret_cast<std::byte*>(prev_data_fetcher),
-                       loc = reinterpret_cast<std::byte*>(pinstr);
-            if (!prevloc)
-              return false;
-            // if they both load from the same place we erase the redundant load
-            const bool result =
-                (prevloc +
-                 std::exchange(prev_data_fetcher, pinstr)->get_offset()) ==
-                (loc + pinstr->get_offset());
-            if (result)
-              erased.emplace_back(loc, sizeof(instr_t));
-            return result;
-          }
-          else if constexpr (state_updaters::template has<instr_t>)
-          {
-            prev_data_fetcher = nullptr;
-            return false;
-          }
-          else
-            return false;
-        };
-        erase(std::remove_if(begin(), end(),
-                             [visitor](modifiable_instruction& entry) mutable
-                             { return std::visit(visitor, entry); }),
-              end());
-        return *this;
-      }
-
-      modifiable_instruction_list&
-          fix_erased_instructions(std::byte* buffer_end)
-      {
-        if (!erased.size() || empty())
-          return *this;
-        // verify they are sorted
-        assert(std::all_of(erased.begin(), erased.end(),
-                           [prev = static_cast<std::byte*>(nullptr)](
-                               std::pair<std::byte*, uint8_t>& item) mutable {
-                             return item.first >
-                                    std::exchange(prev, item.first);
-                           }));
-        std::byte* prev_range_end    = nullptr;
-        uint8_t    prev_erased_total = 0;
-
-        for (auto& entry : *this)
-        {
-          auto [address, range_end, erased_count] = entry.safe_erase(erased);
-
-          if (prev_erased_total)
-            std::copy(prev_range_end, range_end,
-                      prev_range_end - prev_erased_total);
-
-          address           -= prev_erased_total;
-          prev_range_end     = range_end;
-          prev_erased_total += erased_count;
-        }
-
-        collapse_instructions(erased.begin(), erased.end(), buffer_end);
-        if (prev_erased_total)
-          std::copy(prev_range_end, buffer_end,
-                    prev_range_end - prev_erased_total);
-        return *this;
+        throw(exceptions::post_relocation_processing_fail(
+            target,
+            utils::to_array<exceptions::instruction_buffer_size>(
+                instr, instr + instr_size),
+            instr, address));
       }
     };
 
@@ -354,6 +194,15 @@ namespace alterhook
                             { return entry.id == id; });
       }
 
+      void fix_moved_dests(std::byte* perased, std::byte* tramp_last)
+      {
+        for (branch_destination& entry : *this)
+        {
+          if (perased < entry.dest && entry.dest < tramp_last)
+            entry.dest -= sizeof(aarch64::custom::ERASED);
+        }
+      }
+
       void process_all(std::byte* target)
       {
         for (branch_destination& entry : *this)
@@ -363,7 +212,26 @@ namespace alterhook
                        "entry doesn't have its pointer set");
 
           for (auto ref : entry.references)
-            ref.get().patch_target_address(target, entry.dest);
+            std::visit(
+                [target, address = entry.dest](auto* pinstr)
+                {
+                  typedef std::remove_pointer_t<decltype(pinstr)> instr_t;
+                  if constexpr (simple_branches::template has<instr_t>)
+                  {
+                    auto* const raw_pinstr =
+                        reinterpret_cast<std::byte*>(pinstr);
+                    const ptrdiff_t relative_address = address - raw_pinstr;
+                    if (!instr_t::offset_fits(relative_address))
+                      modifiable_instruction::raise_offset_fix_fail(
+                          target, raw_pinstr, sizeof(instr_t), address);
+                    pinstr->set_offset(relative_address);
+                  }
+                  else
+                    assert(!"a non-simple branch entry was spotted in the "
+                            "reference table of a `branch_destination_list` "
+                            "instance");
+                },
+                ref.get());
         }
       }
 
@@ -393,6 +261,124 @@ namespace alterhook
         return std::find_if(begin(), end(),
                             [](const branch_destination& entry)
                             { return !entry.dest; }) != end();
+      }
+    };
+
+    struct modifiable_instruction_list
+        : utils::static_vector<modifiable_instruction, max_to_be_modified>
+    {
+      [[nodiscard]] std::byte* erase_stack_manipulators_and_redundant_loads(
+          branch_destination_list& branch_list, std::byte* target,
+          std::byte* tramp_last)
+      {
+        using aarch64::custom::DATA_FETCH, aarch64::custom::ERASED;
+        if (empty())
+          return tramp_last;
+        DATA_FETCH* prev_data_fetcher = nullptr;
+
+        for (modifiable_instruction& entry : *this)
+          std::visit(
+              [&](auto* pinstr)
+              {
+                typedef std::remove_pointer_t<decltype(pinstr)> instr_t;
+                if constexpr (stack_manipulators::template has<instr_t>)
+                  entry = reinterpret_cast<ERASED*>(pinstr);
+                else if constexpr (state_updaters::template has<instr_t>)
+                  prev_data_fetcher = nullptr;
+                else if constexpr (std::is_same_v<instr_t, DATA_FETCH>)
+                {
+                  const auto prevloc = reinterpret_cast<std::byte*>(
+                                 prev_data_fetcher),
+                             loc = reinterpret_cast<std::byte*>(pinstr);
+                  if (!prevloc)
+                    return;
+                  auto offset =
+                      std::exchange(prev_data_fetcher, pinstr)->get_offset();
+                  if ((prevloc + offset) == (loc + pinstr->get_offset()))
+                    entry = reinterpret_cast<ERASED*>(pinstr);
+                }
+              },
+              entry);
+
+        return collapse_all(branch_list, target, tramp_last);
+      }
+
+    private:
+      std::byte* collapse_all(branch_destination_list& branch_list,
+                              std::byte* target, std::byte* tramp_last)
+      {
+        using aarch64::custom::DATA_FETCH, aarch64::custom::ERASED;
+        std::byte* prev_range_end    = nullptr;
+        uint8_t    prev_erased_total = 0;
+
+        for (modifiable_instruction& entry : *this)
+        {
+          if (auto** pperased =
+                  reinterpret_cast<std::byte**>(std::get_if<ERASED*>(&entry)))
+          {
+            utils_assert(*pperased,
+                         "erased instruction was already dealt with");
+            if (prev_range_end)
+              std::copy(prev_range_end, *pperased,
+                        prev_range_end - prev_erased_total);
+            branch_list.fix_moved_dests(*pperased, tramp_last);
+            prev_range_end     = *pperased + sizeof(ERASED);
+            prev_erased_total += sizeof(ERASED);
+            *pperased          = nullptr;
+            continue;
+          }
+
+          std::visit(
+              [=, &prev_range_end](auto*& pinstr)
+              {
+                typedef std::remove_pointer_t<
+                    std::remove_reference_t<decltype(pinstr)>>
+                    instr_t;
+                if (!prev_erased_total)
+                  return;
+                assert(prev_range_end);
+                auto&      raw_pinstr = reinterpret_cast<std::byte*&>(pinstr);
+                const auto range_end  = raw_pinstr + sizeof(instr_t);
+                std::copy(prev_range_end, range_end,
+                          prev_range_end - prev_erased_total);
+                raw_pinstr     -= prev_erased_total;
+                prev_range_end  = range_end;
+
+                // branches are handled later on
+                if constexpr (relative_loads::template has<instr_t> ||
+                              std::is_same_v<instr_t, DATA_FETCH>)
+                {
+                  std::byte* const absolute_address =
+                      (range_end - sizeof(instr_t)) + pinstr->get_offset();
+                  const ptrdiff_t relative_address =
+                      absolute_address - raw_pinstr;
+                  if (!instr_t::offset_fits(relative_address))
+                    modifiable_instruction::raise_offset_fix_fail(
+                        target, raw_pinstr, sizeof(instr_t), absolute_address);
+                  pinstr->set_offset(relative_address);
+                }
+                else if constexpr (has_getset_fetch_offset<instr_t>)
+                {
+                  std::byte* const absolute_address =
+                      (range_end - sizeof(instr_t)) +
+                      pinstr->get_fetch_offset();
+                  pinstr->set_fetch_offset(absolute_address - raw_pinstr);
+                }
+              },
+              entry);
+        }
+
+        if (prev_erased_total)
+          std::copy(prev_range_end, tramp_last,
+                    prev_range_end - prev_erased_total);
+
+#ifndef NDEBUG
+        std::fill(
+            reinterpret_cast<aarch64::BRK*>(tramp_last - prev_erased_total),
+            reinterpret_cast<aarch64::BRK*>(tramp_last), aarch64::BRK(0));
+#endif
+
+        return tramp_last - prev_erased_total;
       }
     };
 
@@ -560,8 +546,9 @@ namespace alterhook
           // therefore we don't need to do manual backups so all push/pop and
           // extra loads are removed
           if (reg >= aarch64::X8)
-            modifiable_list.erase_stack_manipulators_and_redundant_loads()
-                .fix_erased_instructions(trampoline.end);
+            trampoline.end =
+                modifiable_list.erase_stack_manipulators_and_redundant_loads(
+                    branch_list, target.begin, trampoline.end);
 
           for (modifiable_instruction& entry : modifiable_list)
             entry.patch_pc_register(static_cast<aarch64::xregisters>(reg));
@@ -577,16 +564,24 @@ namespace alterhook
     {
       template <typename T>
       using instr_ptr_t = std::add_pointer_t<utils::remove_cvref_t<T>>;
+
+      enum instruction_category
+      {
+        SIMPLE_BRANCH,
+        MODIFIABLE,
+        CUSTOM
+      };
+
       template <typename T>
-      static constexpr bool is_branch =
-          all_branches::template has<utils::remove_cvref_t<T>>;
+      static constexpr bool is_simple_branch =
+          simple_branches::template has<utils::remove_cvref_t<T>>;
       template <typename T>
       static constexpr bool should_be_modified =
-          !is_branch<T> &&
+          !is_simple_branch<T> &&
           all_modifiables::template has<utils::remove_cvref_t<T>>;
       template <typename T>
       static constexpr bool is_custom_instruction =
-          !is_branch<T> && !should_be_modified<T> &&
+          !is_simple_branch<T> && !should_be_modified<T> &&
           (std::is_base_of_v<aarch64::INSTRUCTION, utils::remove_cvref_t<T>> ||
            aarch64::custom::all_custom::template has<utils::remove_cvref_t<T>>);
 
@@ -631,20 +626,25 @@ namespace alterhook
         ctx.trampoline.end += copy_size;
       }
 
-      template <typename T, std::enable_if_t<is_branch<T>, size_t> = 0>
+      template <typename T,
+                std::enable_if_t<is_simple_branch<T>, instruction_category> =
+                    SIMPLE_BRANCH>
       void add_instruction(T&& instr, std::byte* id)
       {
         register_branch(add_instruction_impl(std::forward<T>(instr)), id);
       }
 
-      template <typename T, std::enable_if_t<is_branch<T>, size_t> = 0>
+      template <typename T,
+                std::enable_if_t<is_simple_branch<T>, instruction_category> =
+                    SIMPLE_BRANCH>
       void add_instruction(T&& instr, uintptr_t id)
       {
         add_instruction(std::forward<T>(instr),
                         reinterpret_cast<std::byte*>(id));
       }
 
-      template <typename T, std::enable_if_t<should_be_modified<T>, size_t> = 0>
+      template <typename T, std::enable_if_t<should_be_modified<T>,
+                                             instruction_category> = MODIFIABLE>
       void add_instruction(T&& instr)
       {
         if constexpr (preindexed_loads::template has<utils::remove_cvref_t<T>>)
@@ -653,8 +653,8 @@ namespace alterhook
             add_instruction_impl(std::forward<T>(instr)));
       }
 
-      template <typename T,
-                std::enable_if_t<is_custom_instruction<T>, size_t> = 0>
+      template <typename T, std::enable_if_t<is_custom_instruction<T>,
+                                             instruction_category> = CUSTOM>
       void add_instruction(T&& instr)
       {
         add_instruction_impl(std::forward<T>(instr));
@@ -665,6 +665,15 @@ namespace alterhook
         prepare_buffer();
         memcpy(&buffer[copy_size], instr.bytes, instr.size);
         copy_size += instr.size;
+      }
+
+      // this also adds the instruction but does not register it to any of the
+      // special handlers (e.g. `modifiable_instruction_list`)
+      template <typename T,
+                std::enable_if_t<any_custom_instruction<T>, size_t> = 0>
+      void add_unregistered_instruction(T&& instr)
+      {
+        add_instruction_impl(std::forward<T>(instr));
       }
 
       ptrdiff_t use_pc_handling(uintptr_t address)
@@ -1146,12 +1155,13 @@ namespace alterhook
 
         if (aarch64::B::offset_fits(relative_address))
         {
-          session.add_instruction(aarch64::custom::SHORT_JMP(relative_address));
+          session.add_unregistered_instruction(aarch64::B(relative_address));
           break;
         }
 
         const uintptr_t dataloc = ctx.allocate_address(ctx.target.uend);
-        session.add_instruction(aarch64::custom::JMP(dataloc - reloc_address));
+        session.add_unregistered_instruction(
+            aarch64::custom::JMP(dataloc - reloc_address));
         break;
       }
     }
@@ -1438,8 +1448,9 @@ namespace alterhook
         throw(exceptions::trampoline_max_size_exceeded(
             src, (dest_end + copy_size) - dest, allocator.available_size));
 
-      if (positions[position_index].second ==
-          static_cast<uint8_t>(instr.address - usrc))
+      if (position_index != positions.size() &&
+          positions[position_index].second ==
+              static_cast<uint8_t>(instr.address - usrc))
         positions[position_index++].second =
             static_cast<uint8_t>(dest_end - dest);
 
