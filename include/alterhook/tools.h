@@ -5,6 +5,7 @@
 #include "detail/constants.h"
 #include "utilities/utils.h"
 #include "addresser.h"
+#include <cstring>
 
 namespace alterhook
 {

@@ -1,4 +1,5 @@
 #include "testcls.h"
+#include <thread>
 #include <alterhook/hook_map.h>
 
 class HookMapTest : public testing::Test
@@ -137,4 +138,49 @@ TEST_F(HookMapTest, Modifiers)
       EXPECT_EQ(hook.get_detour(), address_table["free_func"]);
     EXPECT_EQ(hook.is_enabled(), true);
   }
+
+  std::cout << "-------------------------------------------\n";
+
+  std::thread thread1{ [this]
+                        {
+                          map3.erase("hook3");
+                          map3.insert(
+                              "lambda",
+                              [](originalcls* self __cc_specific(, void*),
+                                 int               increment) -> fastcall_void
+                              {
+                                std::cout << "lambda\n";
+                                call_stack.push_back(func_called::lambda2);
+                                (self->*originalz)(increment);
+                                return fastcall_void();
+                              },
+                              originalz);
+                        } };
+  std::thread thread2{ [this]
+                        {
+                          map3.erase_if(
+                              [](auto pair)
+                              {
+                                auto [key, hook] = pair;
+                                return key == "hook1" || key == "hook3";
+                              });
+                        } };
+
+  thread1.join();
+  thread2.join();
+
+  instance.func3(3);
+  verify_call_stack(func_called::originalcls_func3,
+                    func_called::detourcls_func10, func_called::lambda2);
+  EXPECT_EQ(std::tuple(instance.x + 3, instance.y + 3, instance.z + 3),
+            origresult);
+
+  map3.visit_all(
+      [](auto pair)
+      {
+        auto [key, hook] = pair;
+        if (key == "hook2")
+          EXPECT_EQ(hook.get_detour(), address_table["detourcls::func10"]);
+        EXPECT_EQ(hook.is_enabled(), true);
+      });
 }

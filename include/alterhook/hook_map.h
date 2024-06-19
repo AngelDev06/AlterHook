@@ -2555,6 +2555,7 @@ namespace alterhook
       helpers::default_concurrent_hook_map_base<T>::erase_if(callable&& func)
   {
     std::unique_lock lock{ base::map_lock };
+    size_t           counter = 0;
 
     for (auto itr = T::begin(), itrend = T::end(); itr != itrend;)
     {
@@ -2566,7 +2567,9 @@ namespace alterhook
 
       hook_chain::erase(itr->second.get().get_list_iterator());
       itr = T::erase(itr);
+      ++counter;
     }
+    return counter;
   }
 
   template <typename T>

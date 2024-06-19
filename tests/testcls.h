@@ -145,6 +145,7 @@ inline void (originalcls::*original10)(int) = nullptr;
 inline void (originalcls::*original11)(int) = nullptr;
 inline std::function<void __add_fastcall(originalcls*)> originalx;
 inline std::function<void __add_fastcall(originalcls*)> originaly;
+inline void (originalcls::*originalz)(int) = nullptr;
 
 struct custom_callable : originalcls
 {
