@@ -1336,7 +1336,7 @@ namespace alterhook
   private:
     friend class hook_chain;
     template <template <typename> typename alloc>
-    friend class helpers::alloc_wrapper;
+    friend struct helpers::alloc_wrapper;
     template <typename T, size_t N>
     friend class utils::static_vector;
     typedef std::reference_wrapper<hook_chain> chain_ref_t;

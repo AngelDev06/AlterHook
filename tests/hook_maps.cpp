@@ -97,9 +97,8 @@ TEST(StandaloneHookMapTest, Constructors)
   }
 }
 
-TEST_F(HookMapTest, Modifiers)
+TEST_F(HookMapTest, UniqueMapModifiers)
 {
-  originalcls instance{ 1, 2, 3 };
   map1.erase("hook1");
   instance.func();
   verify_call_stack(func_called::originalcls_func, func_called::detourcls_func2,
@@ -115,9 +114,10 @@ TEST_F(HookMapTest, Modifiers)
                     func_called::detourcls_func3, func_called::detourcls_func6,
                     func_called::detourcls_func7);
   SAME_ORIG_RESULT(instance);
+}
 
-  std::cout << "-------------------------------------------\n";
-
+TEST_F(HookMapTest, MultiMapModifiers)
+{
   map2.insert(std::forward_as_tuple("regular", &detourcls::func8, original8),
               std::forward_as_tuple("free function", free_func, originaly));
   instance.func2();
@@ -138,33 +138,34 @@ TEST_F(HookMapTest, Modifiers)
       EXPECT_EQ(hook.get_detour(), address_table["free_func"]);
     EXPECT_EQ(hook.is_enabled(), true);
   }
+}
 
-  std::cout << "-------------------------------------------\n";
-
+TEST_F(HookMapTest, ConcurrentUniqueMapModifiers)
+{
   std::thread thread1{ [this]
-                        {
-                          map3.erase("hook3");
-                          map3.insert(
-                              "lambda",
-                              [](originalcls* self __cc_specific(, void*),
-                                 int               increment) -> fastcall_void
-                              {
-                                std::cout << "lambda\n";
-                                call_stack.push_back(func_called::lambda2);
-                                (self->*originalz)(increment);
-                                return fastcall_void();
-                              },
-                              originalz);
-                        } };
+                       {
+                         map3.erase("hook3");
+                         map3.insert(
+                             "lambda",
+                             [](originalcls* self __cc_specific(, void*),
+                                int               increment) -> fastcall_void
+                             {
+                               std::cout << "lambda\n";
+                               call_stack.push_back(func_called::lambda2);
+                               (self->*originalz)(increment);
+                               return fastcall_void();
+                             },
+                             originalz);
+                       } };
   std::thread thread2{ [this]
-                        {
-                          map3.erase_if(
-                              [](auto pair)
-                              {
-                                auto [key, hook] = pair;
-                                return key == "hook1" || key == "hook3";
-                              });
-                        } };
+                       {
+                         map3.erase_if(
+                             [](auto pair)
+                             {
+                               auto [key, hook] = pair;
+                               return key == "hook1" || key == "hook3";
+                             });
+                       } };
 
   thread1.join();
   thread2.join();
