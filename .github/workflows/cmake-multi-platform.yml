@@ -53,6 +53,10 @@ jobs:
       name: Get supported ${{ matrix.compiler }} version
       run: sudo ./scripts/install_compiler.sh ${{ matrix.compiler }} ${{ matrix.arch }}
 
+    - if: ${{ matrix.os_name == 'windows' }}
+      name: Get Ninja
+      uses: seanmiddleditch/gha-setup-ninja@v4
+
     - name: Configure CMake
       run: cmake --preset ${{ steps.strings.outputs.cmake-preset }}
 
