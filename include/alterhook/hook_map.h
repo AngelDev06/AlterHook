@@ -1202,27 +1202,23 @@ namespace alterhook
         utils::static_vector<hook_init_item, sizeof...(keys)>       tba_hooks{};
         utils::static_vector<typename T::iterator, sizeof...(keys)> sources{};
 
-        auto inserter = [&, trg](auto&& key, auto&& detour, auto& original)
-        {
-          typedef decltype(key)      key_t;
-          typedef decltype(detour)   detour_t;
-          typedef decltype(original) original_t;
-          auto [result, status] =
-              T::try_emplace(std::forward<key_t>(key), base::empty_ref_wrap());
-          if (!status)
-            return;
-          tba_hooks.emplace_back(
-              get_target_address<original_t>(std::forward<detour_t>(detour)),
-              helpers::original_wrapper(original));
-          sources.push_back(result);
-        };
-
         try
         {
-          (inserter(std::forward<keys>(std::get<indexes>(std::get<0>(args))),
-                    std::forward<detours>(std::get<indexes>(std::get<1>(args))),
-                    std::get<indexes>(std::get<2>(args))),
+          typename adapted::iterator result{};
+          bool                       status = false;
+
+          ((std::tie(result, status) = T::try_emplace(
+                std::forward<keys>(std::get<indexes>(std::get<0>(args))),
+                base::empty_ref_wrap()),
+            status ? (tba_hooks.emplace_back(
+                          get_target_address<originals>(std::forward<detours>(
+                              std::get<indexes>(std::get<1>(args)))),
+                          helpers::original_wrapper(
+                              std::get<indexes>(std::get<2>(args)))),
+                      sources.push_back(result), void())
+                   : void()),
            ...);
+
           base::append_list(trg,
                             { tba_hooks.raw_begin(), tba_hooks.raw_end() });
         }

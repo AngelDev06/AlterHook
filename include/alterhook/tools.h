@@ -512,5 +512,26 @@ namespace alterhook
     template <typename... tuples>
     using extract_detour_sequence_from_tuples_t =
         typename extract_detour_sequence_from_tuples<tuples...>::type;
+
+    template <template <typename> typename alloc>
+    struct alloc_wrapper
+    {
+      template <typename T>
+      class allocator : public alloc<T>
+      {
+      public:
+        template <typename U>
+        struct rebind
+        {
+          typedef allocator<U> other;
+        };
+
+        template <typename U, typename... types>
+        void construct(U* ptr, types&&... args)
+        {
+          new (ptr) U{ std::forward<types>(args)... };
+        }
+      };
+    };
   } // namespace helpers
 } // namespace alterhook

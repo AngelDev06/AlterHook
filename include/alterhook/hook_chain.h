@@ -59,6 +59,10 @@ namespace alterhook
     };
     /// Alias of @ref alterhook::hook_chain::transfer
     typedef transfer include;
+    typedef typename helpers::alloc_wrapper<std::allocator>::template allocator<
+        hook>
+                                            allocator_type;
+    typedef std::list<hook, allocator_type> hook_list;
 
     /**
      * @name List Iterators
@@ -80,10 +84,11 @@ namespace alterhook
      * @{
      */
 
-    typedef std::list<hook>::const_iterator         const_list_iterator;
-    typedef std::list<hook>::iterator               list_iterator;
-    typedef std::list<hook>::const_reverse_iterator const_reverse_list_iterator;
-    typedef std::list<hook>::reverse_iterator       reverse_list_iterator;
+    typedef typename hook_list::const_iterator const_list_iterator;
+    typedef typename hook_list::iterator       list_iterator;
+    typedef
+        typename hook_list::const_reverse_iterator const_reverse_list_iterator;
+    typedef typename hook_list::reverse_iterator   reverse_list_iterator;
 
     /// @}
 
@@ -1106,26 +1111,7 @@ namespace alterhook
 #ifdef __alterhook_expose_impl
     friend struct injectors;
 #endif
-    // needed to invoke private constructors of `hook`
-    template <typename T>
-    class alloc_wrapper : public std::allocator<T>
-    {
-    public:
-      template <typename U>
-      struct rebind
-      {
-        typedef alloc_wrapper<U> other;
-      };
-
-      template <typename U, typename... types>
-      void construct(U* ptr, types&&... args)
-      {
-        new (ptr) U{ std::forward<types>(args)... };
-      }
-    };
-
     typedef std::array<std::byte, detail::constants::backup_size> backup_t;
-    typedef std::list<hook, alloc_wrapper<hook>>                  hook_list;
 
     backup_t  backup{};
     hook_list disabled{};
@@ -1349,7 +1335,8 @@ namespace alterhook
 
   private:
     friend class hook_chain;
-    friend struct hook_chain::unbind_range_callback;
+    template <template <typename> typename alloc>
+    friend class helpers::alloc_wrapper;
     template <typename T, size_t N>
     friend class utils::static_vector;
     typedef std::reference_wrapper<hook_chain> chain_ref_t;
