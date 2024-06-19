@@ -175,6 +175,11 @@ namespace alterhook::utils
     {
     };
 
+    template <size_t i>
+    struct type_at_impl<i>
+    {
+    };
+
     template <typename first, typename... rest>
     struct type_at_impl<0, first, rest...>
     {

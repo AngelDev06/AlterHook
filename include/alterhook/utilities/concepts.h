@@ -357,6 +357,9 @@ namespace alterhook::utils
           std::initializer_list<typename T::value_type> list,
           typename T::iterator itr, typename T::const_iterator citr,
           const typename T::key_type& key, const typename T::mapped_type& obj) {
+        {
+          instance.insert(val)
+        } -> std::same_as<typename T::iterator>;
         instance.insert(itr, itr);
         instance.insert(list);
         {
@@ -894,7 +897,7 @@ namespace alterhook::utils
     template <typename first_key, typename key, typename detour,
               typename original>
     utils_concept key_detour_and_original_requirements =
-        std::is_convertible_v<key, first_key> &&
+        std::is_convertible_v<std::decay_t<key>, std::decay_t<first_key>> &&
         detour_and_original_requirements<detour, original>;
 
     template <typename seq, bool = true>

@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "macros.h"
+#include <cstdint>
 
 namespace alterhook::detail::constants
 {

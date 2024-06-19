@@ -40,6 +40,7 @@ add_executable(
 	AlterHookTests
 	"hooks.cpp"
     "hook_chains.cpp"
+	"hook_maps.cpp"
 	"modifiers.cpp"
 	"testcls.h"
 	"modifiers.h"

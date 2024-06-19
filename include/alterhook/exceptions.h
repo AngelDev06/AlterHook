@@ -348,13 +348,19 @@ namespace alterhook::exceptions
 
   inline namespace os
   {
+    utils_generate_exception(page_allocation_fail, os_exception,
+                             stdattr(ALTERHOOK_API), base_args((int, flag)));
+
+    utils_generate_exception(protection_update_fail, os_exception,
+                             stdattr(ALTERHOOK_API), base_args((int, flag)));
+
 #if utils_windows || defined(RUNNING_DOXYGEN)
     /**
      * @class alterhook::exceptions::os::virtual_alloc_exception
      * @note Part of the windows implementation only
      */
     utils_generate_exception(
-        virtual_alloc_exception, os_exception, stdattr(ALTERHOOK_API),
+        virtual_alloc_exception, page_allocation_fail, stdattr(ALTERHOOK_API),
         fields((const std::byte*, target_address), (size_t, size),
                (uint64_t, allocation_type), (uint64_t, protection)),
         base_args((int, flag)),
@@ -378,7 +384,8 @@ namespace alterhook::exceptions
      * @note Part of the windows implementation only
      */
     utils_generate_exception(
-        virtual_protect_exception, os_exception, stdattr(ALTERHOOK_API),
+        virtual_protect_exception, protection_update_fail,
+        stdattr(ALTERHOOK_API),
         fields((const std::byte*, address), (size_t, size),
                (size_t, protection), (uintptr_t, old_protection)),
         base_args((int, flag)),
@@ -393,7 +400,7 @@ namespace alterhook::exceptions
      * @note Part of the linux implementation only
      */
     utils_generate_exception(
-        mmap_exception, os_exception, stdattr(ALTERHOOK_API),
+        mmap_exception, page_allocation_fail, stdattr(ALTERHOOK_API),
         fields((const std::byte*, target_address), (size_t, size),
                (int, protection), (int, flags), (int, fd), (uint64_t, offset)),
         base_args((int, flag)),
@@ -415,7 +422,7 @@ namespace alterhook::exceptions
      * @class alterhook::exceptions::os::mprotect_exception
      * @note Part of the linux implementation only
      */
-    utils_generate_exception(mprotect_exception, os_exception,
+    utils_generate_exception(mprotect_exception, protection_update_fail,
                              stdattr(ALTERHOOK_API),
                              fields((const std::byte*, address),
                                     (size_t, length), (int, protection)),
@@ -474,6 +481,7 @@ namespace alterhook::exceptions
  * @throws alterhook::exceptions::disassembler::disassembler_init_fail
  * @throws alterhook::exceptions::disassembler::disassembler_iter_init_fail
  * @throws alterhook::exceptions::disassembler::disassembler_disasm_fail
+ * @throws alterhook::exceptions::os::page_allocation_fail
  * @throws alterhook::exceptions::os::virtual_alloc_exception windows specific
  * @throws alterhook::exceptions::os::mmap_exception linux specific
  * @throws alterhook::exceptions::misc::invalid_address
@@ -483,6 +491,7 @@ namespace alterhook::exceptions
 /**
  * @defgroup trampoline-copy-exceptions Trampoline Copy Exceptions
  * @throws alterhook::exceptions::os_exception
+ * @throws alterhook::exceptions::os::page_allocation_fail
  * @throws alterhook::exceptions::os::virtual_alloc_exception windows specific
  * @throws alterhook::exceptions::os::mmap_exception linux specific
  * @throws alterhook::exceptions::disassembler_exception x86 specific
@@ -507,6 +516,7 @@ namespace alterhook::exceptions
 /**
  * @defgroup target-injection-exceptions Target Injection Exceptions
  * @throws alterhook::exceptions::os_exception
+ * @throws alterhook::exceptions::os::protection_update_fail
  * @throws alterhook::exceptions::os::virtual_protect_exception windows specific
  * @throws alterhook::exceptions::os::mprotect_exception linux specific
  */
@@ -516,6 +526,7 @@ namespace alterhook::exceptions
  * @defgroup memalloc-and-address-validation Memory Allocation and Address Validation Exceptions
  * @throws alterhook::exceptions::os_exception
  * @throws alterhook::exceptions::misc_exception
+ * @throws alterhook::exceptions::os::page_allocation_fail
  * @throws alterhook::exceptions::os::virtual_alloc_exception windows specific
  * @throws alterhook::exceptions::os::mmap_exception linux specific
  * @throws alterhook::exceptions::misc::invalid_address

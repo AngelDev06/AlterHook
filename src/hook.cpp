@@ -162,7 +162,7 @@ namespace alterhook
     pdetour = detour;
   }
 
-  void hook::set_original(const helpers::orig_buff_t& original)
+  void hook::set_original(helpers::orig_buff_t original)
   {
     thread_freezer freeze{};
     if (enabled)

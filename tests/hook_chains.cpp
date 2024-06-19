@@ -1,4 +1,5 @@
 #include "testcls.h"
+#include <alterhook/hook_chain.h>
 
 class HookChainTest : public testing::Test
 {
@@ -264,14 +265,14 @@ TEST_F(HookChainTest, Modifiers)
 
   chain1.insert(
       std::next(chain1.ebegin()),
-      [](originalcls* self) -> put_cc
+      [](originalcls* self) -> fastcall_void
       {
         std::cout << "lambda1\n";
-        call_stack.push(func_called::lambda);
-        original9(self);
-        lambda_ret;
+        call_stack.push_back(func_called::lambda);
+        originalx(self);
+        return fastcall_void();
       },
-      original9, include::enabled);
+      originalx, include::enabled);
   EXPECT_EQ(chain1.enabled_size(), 6);
   EXPECT_EQ(chain1.disabled_size(), 0);
 

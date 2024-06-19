@@ -46,6 +46,20 @@ namespace alterhook
       // clang-format on
     }
 
+    std::optional<uintptr_t> get_absolute_address(const cs_insn& instr) noexcept
+    {
+      const auto& detail = instr.detail->aarch64;
+      const auto  begin =
+                     std::reverse_iterator(detail.operands + detail.op_count),
+                 end = std::reverse_iterator(detail.operands);
+      auto result    = std::find_if(begin, end,
+                                    [](const cs_aarch64_op& operand)
+                                    { return operand.type == AArch64_OP_IMM; });
+      if (result == end)
+        return std::nullopt;
+      return result->imm;
+    }
+
     bool ldr_relative(const cs_insn& instr) noexcept
     {
       if (!utils::any_of(instr.id, AArch64_INS_LDR, AArch64_INS_LDRSW))
@@ -874,11 +888,11 @@ namespace alterhook
       }
       else if (aarch64.is_relative_branch(instr))
       {
-        assert(aarch64.get_immediate(instr.detail->aarch64).has_value());
+        assert(get_absolute_address(instr));
         session.break_pc_handling();
-        const auto dest = aarch64.get_immediate(instr.detail->aarch64).value();
-        const bool in_overriden_area  = ctx.is_in_overriden_area(dest);
-        const uintptr_t reloc_address = session.next_reloc_address();
+        const auto      dest              = get_absolute_address(instr).value();
+        const bool      in_overriden_area = ctx.is_in_overriden_area(dest);
+        const uintptr_t reloc_address     = session.next_reloc_address();
         const ptrdiff_t relative_address =
             dest - (in_overriden_area ? instr.address : reloc_address);
         bool      is_conditional_or_call = false;
@@ -1016,71 +1030,9 @@ namespace alterhook
         const ptrdiff_t prev_relative_address = load_address - instr.address;
         ptrdiff_t new_relative_address = load_address - ctx.trampoline.uend;
 
-        if ((raw & aarch64::LDR_LITERAL::opcode) ==
-            aarch64::LDR_LITERAL::opcode)
+        if ((raw & aarch64::LDRV_LITERAL::opcode) ==
+            aarch64::LDRV_LITERAL::opcode)
         {
-          auto ldr =
-              *reinterpret_cast<const aarch64::LDR_LITERAL*>(instr.bytes);
-          aarch64::reg_t reg{};
-
-          if (aarch64::LDR_LITERAL::offset_fits(new_relative_address))
-          {
-            ldr.set_offset(new_relative_address);
-            session.add_instruction(ldr);
-          }
-          else if (ldr.register_size() == 4)
-          {
-            reg = static_cast<aarch64::reg_t>(
-                ldr.template get_register<aarch64::wregisters>());
-
-            if (aarch64::LDRu32::offset_fits(prev_relative_address))
-              session.add_instruction(
-                  aarch64::LDRu32(reg, aarch64::X0, prev_relative_address));
-            else
-              session.add_instruction(aarch64::custom::LDR32_ABS(
-                  reg, aarch64::X0, session.use_pc_handling(load_address)));
-          }
-          else
-          {
-            reg = static_cast<aarch64::reg_t>(
-                ldr.template get_register<aarch64::xregisters>());
-
-            if (aarch64::LDRu64::offset_fits(prev_relative_address))
-              session.add_instruction(
-                  aarch64::LDRu64(reg, aarch64::X0, prev_relative_address));
-            else
-              session.add_instruction(aarch64::custom::LDR64_ABS(
-                  reg, aarch64::X0, session.use_pc_handling(load_address)));
-          }
-        }
-        else if ((raw & aarch64::LDRSW_LITERAL::opcode) ==
-                 aarch64::LDRSW_LITERAL::opcode)
-        {
-          auto ldrsw =
-              *reinterpret_cast<const aarch64::LDRSW_LITERAL*>(instr.bytes);
-
-          if (aarch64::LDRSW_LITERAL::offset_fits(new_relative_address))
-          {
-            ldrsw.set_offset(new_relative_address);
-            session.add_instruction(ldrsw);
-          }
-          else
-          {
-            aarch64::reg_t reg = ldrsw.get_register();
-
-            if (aarch64::LDRSWu::offset_fits(prev_relative_address))
-              session.add_instruction(
-                  aarch64::LDRSWu(reg, aarch64::X0, prev_relative_address));
-            else
-              session.add_instruction(aarch64::custom::LDRSW_ABS(
-                  reg, aarch64::X0, session.use_pc_handling(load_address)));
-          }
-        }
-        else
-        {
-          utils_assert((raw & aarch64::LDRV_LITERAL::opcode) ==
-                           aarch64::LDRV_LITERAL::opcode,
-                       "unhandled relative load");
           auto ldrv =
               *reinterpret_cast<const aarch64::LDRV_LITERAL*>(instr.bytes);
           aarch64::reg_t reg{};
@@ -1129,6 +1081,67 @@ namespace alterhook
               break;
             default: assert(!"unhandled relative simd ldr");
             }
+          }
+        }
+        else if ((raw & aarch64::LDRSW_LITERAL::opcode) ==
+                 aarch64::LDRSW_LITERAL::opcode)
+        {
+          auto ldrsw =
+              *reinterpret_cast<const aarch64::LDRSW_LITERAL*>(instr.bytes);
+
+          if (aarch64::LDRSW_LITERAL::offset_fits(new_relative_address))
+          {
+            ldrsw.set_offset(new_relative_address);
+            session.add_instruction(ldrsw);
+          }
+          else
+          {
+            aarch64::reg_t reg = ldrsw.get_register();
+
+            if (aarch64::LDRSWu::offset_fits(prev_relative_address))
+              session.add_instruction(
+                  aarch64::LDRSWu(reg, aarch64::X0, prev_relative_address));
+            else
+              session.add_instruction(aarch64::custom::LDRSW_ABS(
+                  reg, aarch64::X0, session.use_pc_handling(load_address)));
+          }
+        }
+        else
+        {
+          assert((raw & aarch64::LDR_LITERAL::opcode) ==
+                 aarch64::LDR_LITERAL::opcode);
+          auto ldr =
+              *reinterpret_cast<const aarch64::LDR_LITERAL*>(instr.bytes);
+          aarch64::reg_t reg{};
+
+          if (aarch64::LDR_LITERAL::offset_fits(new_relative_address))
+          {
+            ldr.set_offset(new_relative_address);
+            session.add_instruction(ldr);
+          }
+          else if (ldr.register_size() == 4)
+          {
+            reg = static_cast<aarch64::reg_t>(
+                ldr.template get_register<aarch64::wregisters>());
+
+            if (aarch64::LDRu32::offset_fits(prev_relative_address))
+              session.add_instruction(
+                  aarch64::LDRu32(reg, aarch64::X0, prev_relative_address));
+            else
+              session.add_instruction(aarch64::custom::LDR32_ABS(
+                  reg, aarch64::X0, session.use_pc_handling(load_address)));
+          }
+          else
+          {
+            reg = static_cast<aarch64::reg_t>(
+                ldr.template get_register<aarch64::xregisters>());
+
+            if (aarch64::LDRu64::offset_fits(prev_relative_address))
+              session.add_instruction(
+                  aarch64::LDRu64(reg, aarch64::X0, prev_relative_address));
+            else
+              session.add_instruction(aarch64::custom::LDR64_ABS(
+                  reg, aarch64::X0, session.use_pc_handling(load_address)));
           }
         }
       }

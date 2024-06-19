@@ -709,7 +709,7 @@ namespace alterhook::aarch64
                                     offset_type::uimm12_10_pad3>;
 
   using LDRSWu = templates::LDR_PRE<AArch64_INS_LDRSW, 0xB9'80'00'00,
-                                    offset_type::uimm12_10_pad3>;
+                                    offset_type::uimm12_10_pad2>;
 
   using LDRVu8   = templates::LDR_PRE<AArch64_INS_LDR, 0x3D'40'00'00,
                                     offset_type::uimm12_10>;
@@ -1096,7 +1096,7 @@ namespace alterhook::aarch64
       typedef JMP_LIKE                     jmp_like_t;
 
       JMP_LIKE(types... args, int32_t ldr_offset)
-          : main_instr(args...), jmp(ldr_offset)
+          : main_instr(args...), jmp(ldr_offset - sizeof(main_instr))
       {
       }
 
@@ -1118,7 +1118,8 @@ namespace alterhook::aarch64
     struct CONDITIONAL_JMP : JMP_LIKE<B_cond, int32_t, AArch64CC_CondCode>
     {
       CONDITIONAL_JMP(AArch64CC_CondCode condition, int32_t ldr_offset)
-          : jmp_like_t(8, condition, ldr_offset)
+          : jmp_like_t(sizeof(B_cond) + sizeof(JMP),
+                       AArch64CC_getInvertedCondCode(condition), ldr_offset)
       {
       }
     };
@@ -1126,7 +1127,8 @@ namespace alterhook::aarch64
     struct JMP_IF_ZERO : JMP_LIKE<CBNZ, CBNZ>
     {
       JMP_IF_ZERO(CBZ cbz, int32_t ldr_offset)
-          : jmp_like_t((cbz.set_offset(8), cbz), ldr_offset)
+          : jmp_like_t((cbz.set_offset(sizeof(cbz) + sizeof(JMP)), cbz),
+                       ldr_offset)
       {
       }
     };
@@ -1134,7 +1136,8 @@ namespace alterhook::aarch64
     struct JMP_IF_NOT_ZERO : JMP_LIKE<CBZ, CBZ>
     {
       JMP_IF_NOT_ZERO(CBNZ cbnz, int32_t ldr_offset)
-          : jmp_like_t((cbnz.set_offset(8), cbnz), ldr_offset)
+          : jmp_like_t((cbnz.set_offset(sizeof(cbnz) + sizeof(JMP)), cbnz),
+                       ldr_offset)
       {
       }
     };
@@ -1142,7 +1145,8 @@ namespace alterhook::aarch64
     struct TEST_JMP_ON_ZERO : JMP_LIKE<TBNZ, TBNZ>
     {
       TEST_JMP_ON_ZERO(TBZ tbz, int32_t ldr_offset)
-          : jmp_like_t((tbz.set_offset(8), tbz), ldr_offset)
+          : jmp_like_t((tbz.set_offset(sizeof(tbz) + sizeof(JMP)), tbz),
+                       ldr_offset)
       {
       }
     };
@@ -1150,7 +1154,8 @@ namespace alterhook::aarch64
     struct TEST_JMP_ON_NON_ZERO : JMP_LIKE<TBZ, TBZ>
     {
       TEST_JMP_ON_NON_ZERO(TBNZ tbnz, int32_t ldr_offset)
-          : jmp_like_t((tbnz.set_offset(8), tbnz), ldr_offset)
+          : jmp_like_t((tbnz.set_offset(sizeof(tbnz) + sizeof(JMP)), tbnz),
+                       ldr_offset)
       {
       }
     };

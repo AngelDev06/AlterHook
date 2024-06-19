@@ -1,17 +1,17 @@
 #include "testcls.h"
+#include <alterhook/hook.h>
 
 class HookTest : public testing::Test
 {
 protected:
   //! [hook::hook example]
-  typedef alterhook::utils::fastcall<void> fastcall_void;
   alterhook::hook hook1{ &originalcls::func, &detourcls::func, original,
                          false };
   alterhook::hook hook2{ &originalcls::func2,
                          [](originalcls* self) -> fastcall_void
                          {
                            std::cout << "lambda\n";
-                           call_stack.push(func_called::lambda);
+                           call_stack.push_back(func_called::lambda);
                            original2(self);
                            return fastcall_void();
                          },
@@ -62,7 +62,7 @@ TEST(StandaloneHookTest, Constructors)
                           [](auto* instance_ptr, __cc_specific(auto, ) auto arg)
                           {
                             std::cout << "generic lambda\n";
-                            call_stack.push(func_called::generic_lambda);
+                            call_stack.push_back(func_called::generic_lambda);
                             custom_original1(instance_ptr,
                                              __cc_specific(nullptr, ) arg * 2);
                           },
@@ -212,11 +212,11 @@ TEST_F(HookTest, Setters)
           [](originalcls* self) -> put_cc
           {
             std::cout << "lambda2\n";
-            call_stack.push(func_called::lambda2);
-            original9(self);
+            call_stack.push_back(func_called::lambda2);
+            originalx(self);
             lambda_ret;
           })
-      .set_original(original9);
+      .set_original(originalx);
 
   instance.func2();
   verify_call_stack(func_called::originalcls_func2, func_called::lambda2);

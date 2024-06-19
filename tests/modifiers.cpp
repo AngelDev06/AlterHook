@@ -1,4 +1,5 @@
 #include "modifiers.h"
+#include <alterhook/modifier.h>
 
 class modifier(modifier1, originalcls, func, func2)
 {
@@ -6,14 +7,14 @@ public:
   void func()
   {
     std::cout << "modifier1::func\n";
-    call_stack.push(func_called::modifier1_func);
+    call_stack.push_back(func_called::modifier1_func);
     original::func();
   }
 
   void func2()
   {
     std::cout << "modifier1::func2\n";
-    call_stack.push(func_called::modifier1_func2);
+    call_stack.push_back(func_called::modifier1_func2);
     original::func2();
   }
 };
@@ -24,14 +25,14 @@ public:
   void func()
   {
     std::cout << "second_modifier1::func\n";
-    call_stack.push(func_called::second_modifier1_func);
+    call_stack.push_back(func_called::second_modifier1_func);
     original::func();
   }
 
   void func2()
   {
     std::cout << "second_modifier1::func2\n";
-    call_stack.push(func_called::second_modifier1_func2);
+    call_stack.push_back(func_called::second_modifier1_func2);
     original::func2();
   }
 };
@@ -43,28 +44,28 @@ public:
   void multiply_by(int count)
   {
     std::cout << "modifier2::multiply_by(int)\n";
-    call_stack.push(func_called::modifier2_multiply_by_int);
+    call_stack.push_back(func_called::modifier2_multiply_by_int);
     original::multiply_by(count * 2);
   }
 
   void multiply_by(float count)
   {
     std::cout << "modifier2::multiply_by(float)\n";
-    call_stack.push(func_called::modifier2_multiply_by_float);
+    call_stack.push_back(func_called::modifier2_multiply_by_float);
     original::multiply_by(count * 2);
   }
 
   void private_power_all()
   {
     std::cout << "modifier2::private_power_all\n";
-    call_stack.push(func_called::modifier2_private_power_all);
+    call_stack.push_back(func_called::modifier2_private_power_all);
     original::private_power_all();
   }
 
   int return_sum()
   {
     std::cout << "modifier2::return_sum\n";
-    call_stack.push(func_called::modifier2_return_sum);
+    call_stack.push_back(func_called::modifier2_return_sum);
     return original::return_sum() * 2;
   }
 };

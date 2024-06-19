@@ -45,6 +45,10 @@ namespace alterhook::utils
     typedef T&&                                   rvalue_reference;
     typedef std::reverse_iterator<iterator>       reverse_iterator;
     typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+    typedef T*                                    raw_iterator;
+    typedef const T*                              raw_const_iterator;
+    typedef std::reverse_iterator<T*>             raw_reverse_iterator;
+    typedef std::reverse_iterator<const T*>       raw_const_reverse_iterator;
 
 #if utils_cpp20
     template <typename itr, typename U = void>
@@ -101,6 +105,19 @@ namespace alterhook::utils
     const_iterator         cend() const noexcept;
     const_reverse_iterator crbegin() const noexcept;
     const_reverse_iterator crend() const noexcept;
+
+    raw_iterator               raw_begin() noexcept;
+    raw_const_iterator         raw_begin() const noexcept;
+    raw_iterator               raw_end() noexcept;
+    raw_const_iterator         raw_end() const noexcept;
+    raw_reverse_iterator       raw_rbegin() noexcept;
+    raw_const_reverse_iterator raw_rbegin() const noexcept;
+    raw_reverse_iterator       raw_rend() noexcept;
+    raw_const_reverse_iterator raw_rend() const noexcept;
+    raw_const_iterator         raw_cbegin() const noexcept;
+    raw_const_iterator         raw_cend() const noexcept;
+    raw_const_reverse_iterator raw_crbegin() const noexcept;
+    raw_const_reverse_iterator raw_crend() const noexcept;
 
     bool empty() const noexcept { return !count; }
 
@@ -208,20 +225,6 @@ namespace alterhook::utils
         throw(std::length_error(stream.str()));
       }
     }
-
-#ifndef NDEBUG
-    template <typename itr_t>
-    static auto unwrap(const itr_t& itr)
-    {
-      return itr.unwrap();
-    }
-#else
-    template <typename itr_t>
-    static auto unwrap(itr_t ptr)
-    {
-      return ptr;
-    }
-#endif
   };
 
   template <typename first, typename... rest>
@@ -670,6 +673,138 @@ namespace alterhook::utils
   }
 
   template <typename T, size_t N>
+  typename static_vector<T, N>::raw_iterator
+      static_vector<T, N>::raw_begin() noexcept
+  {
+#ifndef NDEBUG
+    return begin().unwrap();
+#else
+    return begin();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_iterator
+      static_vector<T, N>::raw_begin() const noexcept
+  {
+#ifndef NDEBUG
+    return begin().unwrap();
+#else
+    return begin();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_iterator
+      static_vector<T, N>::raw_end() noexcept
+  {
+#ifndef NDEBUG
+    return end().unwrap();
+#else
+    return end();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_iterator
+      static_vector<T, N>::raw_end() const noexcept
+  {
+#ifndef NDEBUG
+    return end().unwrap();
+#else
+    return end();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_reverse_iterator
+      static_vector<T, N>::raw_rbegin() noexcept
+  {
+#ifndef NDEBUG
+    return raw_reverse_iterator(end().unwrap());
+#else
+    return rbegin();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_reverse_iterator
+      static_vector<T, N>::raw_rbegin() const noexcept
+  {
+#ifndef NDEBUG
+    return raw_const_reverse_iterator(end().unwrap());
+#else
+    return rbegin();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_reverse_iterator
+      static_vector<T, N>::raw_rend() noexcept
+  {
+#ifndef NDEBUG
+    return raw_reverse_iterator(begin().unwrap());
+#else
+    return rend();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_reverse_iterator
+      static_vector<T, N>::raw_rend() const noexcept
+  {
+#ifndef NDEBUG
+    return raw_const_reverse_iterator(begin().unwrap());
+#else
+    return rend();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_iterator
+      static_vector<T, N>::raw_cbegin() const noexcept
+  {
+#ifndef NDEBUG
+    return begin().unwrap();
+#else
+    return begin();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_iterator
+      static_vector<T, N>::raw_cend() const noexcept
+  {
+#ifndef NDEBUG
+    return end().unwrap();
+#else
+    return end();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_reverse_iterator
+      static_vector<T, N>::raw_crbegin() const noexcept
+  {
+#ifndef NDEBUG
+    return raw_const_reverse_iterator(end().unwrap());
+#else
+    return rbegin();
+#endif
+  }
+
+  template <typename T, size_t N>
+  typename static_vector<T, N>::raw_const_reverse_iterator
+      static_vector<T, N>::raw_crend() const noexcept
+  {
+#ifndef NDEBUG
+    return raw_const_reverse_iterator(begin().unwrap());
+#else
+    return rend();
+#endif
+  }
+
+  template <typename T, size_t N>
   typename static_vector<T, N>::reference
       static_vector<T, N>::push_back(const_reference value)
   {
@@ -710,13 +845,13 @@ namespace alterhook::utils
     {
       std::uninitialized_move(
           where, end(),
-          std::uninitialized_fill_n(unwrap(end()),
-                                    insert_count - affected_elements, value));
+          std::uninitialized_fill_n(raw_end(), insert_count - affected_elements,
+                                    value));
       std::fill(where, end(), value);
     }
     else
     {
-      std::uninitialized_move((end() - insert_count), end(), unwrap(end()));
+      std::uninitialized_move((end() - insert_count), end(), raw_end());
       auto where_end = std::move_backward(where, (end() - insert_count), end());
       std::fill(where, where_end, value);
     }
@@ -736,7 +871,7 @@ namespace alterhook::utils
       iterator where) noexcept(std::is_nothrow_move_assignable_v<T>)
   {
     std::move((where + 1), end(), where);
-    std::destroy_at(unwrap(end() - 1));
+    std::destroy_at(raw_end() - 1);
     --count;
     return where;
   }
@@ -758,7 +893,7 @@ namespace alterhook::utils
   typename static_vector<T, N>::iterator static_vector<T, N>::pop_back()
   {
     --count;
-    std::destroy_at(unwrap(end()));
+    std::destroy_at(raw_end());
     return end();
   }
 
@@ -781,7 +916,7 @@ namespace alterhook::utils
     if (new_size > count)
     {
       std::fill(begin(), end(), value);
-      std::uninitialized_fill_n(unwrap(end()), new_size - count, value);
+      std::uninitialized_fill_n(raw_end(), new_size - count, value);
     }
     else
     {
@@ -799,7 +934,7 @@ namespace alterhook::utils
     if (new_size > count)
     {
       verify_len(new_size, "new_size");
-      std::uninitialized_value_construct_n(unwrap(end()), new_size - count);
+      std::uninitialized_value_construct_n(raw_end(), new_size - count);
     }
     else
       std::destroy((begin() + new_size), end());
@@ -814,7 +949,7 @@ namespace alterhook::utils
     if (new_size > count)
     {
       verify_len(new_size, "new_size");
-      std::uninitialized_fill_n(unwrap(end()), new_size - count, value);
+      std::uninitialized_fill_n(raw_end(), new_size - count, value);
     }
     else
       std::destroy((begin() + new_size), end());
@@ -829,13 +964,13 @@ namespace alterhook::utils
     if (other.count > count)
     {
       auto other_loc = std::swap_ranges(begin(), end(), other.begin());
-      std::move(other_loc, other.end(), unwrap(end()));
+      std::move(other_loc, other.end(), raw_end());
       std::destroy(other_loc, other.end());
     }
     else if (other.count < count)
     {
       auto current_loc = std::swap_ranges(other.begin(), other.end(), begin());
-      std::move(current_loc, end(), unwrap(other.end()));
+      std::move(current_loc, end(), other.raw_end());
       std::destroy(current_loc, end());
     }
     else
@@ -862,8 +997,7 @@ namespace alterhook::utils
     if (other.count > count)
     {
       std::move(other.begin(), (other.begin() + count), begin());
-      std::uninitialized_move((other.begin() + count), other.end(),
-                              unwrap(end()));
+      std::uninitialized_move((other.begin() + count), other.end(), raw_end());
     }
     else
     {
@@ -889,7 +1023,7 @@ namespace alterhook::utils
       static_vector<T, N>::emplace_back(types&&... values)
   {
     verify_len(count + 1, "(count + 1)");
-    pointer res = new (unwrap(end())) T{ std::forward<types>(values)... };
+    pointer res = new (raw_end()) T{ std::forward<types>(values)... };
     ++count;
     return *res;
   }
@@ -902,12 +1036,12 @@ namespace alterhook::utils
     verify_len(count + 1, "(count + 1)");
     if (where != end())
     {
-      new (unwrap(end())) T{ std::move(*(end() - 1)) };
+      new (raw_end()) T{ std::move(*(end() - 1)) };
       std::move_backward(where, (end() - 1), end());
       *where = T{ std::forward<types>(values)... };
     }
     else
-      new (unwrap(end())) T{ std::forward<types>(values)... };
+      new (raw_end()) T{ std::forward<types>(values)... };
     ++count;
     return where;
   }
@@ -922,12 +1056,17 @@ namespace alterhook::utils
       return where;
     verify_len(count + len, "count + std::distance(first, last)");
     const size_t affected_elements = end() - where;
+#ifndef NDEBUG
+    auto uwhere = where.unwrap();
+#else
+    auto uwhere = where;
+#endif
     if (len < affected_elements)
     {
       pointer new_last =
-          std::uninitialized_move((end() - len), end(), unwrap(end()));
-      pointer new_loc = std::move_backward(where, (end() - len), unwrap(end()));
-      std::destroy(unwrap(where), new_loc);
+          std::uninitialized_move((end() - len), end(), raw_end());
+      pointer new_loc = std::move_backward(where, (end() - len), raw_end());
+      std::destroy(uwhere, new_loc);
 
       try
       {
@@ -937,7 +1076,7 @@ namespace alterhook::utils
       {
         try
         {
-          std::uninitialized_move(new_loc, unwrap(end()), where);
+          std::uninitialized_move(new_loc, raw_end(), where);
         }
         catch (...)
         {
@@ -945,20 +1084,19 @@ namespace alterhook::utils
           count = where - begin();
           throw;
         }
-        std::destroy(unwrap(end()), new_last);
+        std::destroy(raw_end(), new_last);
         throw;
       }
     }
     else
     {
-      pointer new_loc  = unwrap(where) + len;
+      pointer new_loc  = uwhere + len;
       pointer new_last = std::uninitialized_move(where, end(), new_loc);
       std::destroy(where, end());
 
       try
       {
-        std::uninitialized_copy(std::move(first), std::move(last),
-                                unwrap(where));
+        std::uninitialized_copy(std::move(first), std::move(last), uwhere);
       }
       catch (...)
       {
@@ -996,7 +1134,7 @@ namespace alterhook::utils
     {
       std::copy_n(first, count, begin());
       std::advance(first, count);
-      std::uninitialized_copy(std::move(first), std::move(last), unwrap(end()));
+      std::uninitialized_copy(std::move(first), std::move(last), raw_end());
     }
     else
     {

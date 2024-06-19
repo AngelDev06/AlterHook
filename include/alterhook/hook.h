@@ -51,40 +51,18 @@ namespace alterhook
      * @{
      */
 
-    /**
-     * @tparam dtr the callable type of the detour instance (must satisfy
-     * @ref alterhook::utils::callable_type)
-     * @tparam orig the function-like type of the original callback (must
-     * satisfy @ref alterhook::utils::function_type)
-     * @param target the target to use
-     * @param detour the detour to redirect execution to
-     * @param original the reference to the original callback which will be used
-     * to pass control back to the original function
-     * @param enable_hook an optional flag determining whether the hook should
-     * be immediately enabled after construction (defaults to true)
-     */
+    /// @brief Construct with a raw pointer to the target, the detour and the
+    /// reference to the original callback. Optionally specifying whether to
+    /// enable the hook (default is true).
     template <
         typename dtr, typename orig,
         typename = std::enable_if_t<utils::detours_and_originals<dtr, orig&>>>
     hook(std::byte* target, dtr&& detour, orig& original,
          bool enable_hook = true);
 
-    /**
-     * @tparam trg the callable type of the target (must satisfy
-     * @ref alterhook::utils::callable_type)
-     * @tparam dtr the callable type of the detour instance (must satisfy
-     * @ref alterhook::utils::callable_type)
-     * @tparam orig the function-like type of the original callback (must
-     * satisfy @ref alterhook::utils::function_type)
-     * @param target the target to use
-     * @param detour the detour to redirect execution to
-     * @param original the reference to the original callback which will be used
-     * to pass control back to the original function
-     * @param enable_hook an optional flag determining whether the hook should
-     * be immediately enabled after construction (defaults to true)
-     * @par Example
-     * @snippet hooks.cpp hook::hook example
-     */
+    /// @brief Construct with the target the detour and the reference to the
+    /// original callback. Optionally specifying whether to enable the hook
+    /// (default is true)
     template <
         typename trg, typename dtr, typename orig,
         typename = std::enable_if_t<utils::callable_type<trg> &&
@@ -105,28 +83,14 @@ namespace alterhook
      * @{
      */
 
-    /**
-     * @tparam dtr the callable type of the detour instance (must satisfy
-     * @ref alterhook::utils::callable_type)
-     * @param target the target to use
-     * @param detour the detour to redirect execution to
-     * @param enable_hook an optional flag determining whether the hook should
-     * be immediately enabled after construction (defaults to true)
-     */
+    /// @brief Construct with a raw pointer to the target and the detour.
+    /// Optionally specifying whether to enable the hook (default is true).
     template <typename dtr,
               typename = std::enable_if_t<utils::callable_type<dtr>>>
     hook(std::byte* target, dtr&& detour, bool enable_hook = true);
 
-    /**
-     * @tparam trg the callable type of the target (must satisfy
-     * @ref alterhook::utils::callable_type)
-     * @tparam dtr the callable type of the detour instance (must satisfy
-     * @ref alterhook::utils::callable_type)
-     * @param target the target to use
-     * @param detour the detour to redirect execution to
-     * @param enable_hook an optional flag determining whether the hook should
-     * be immediately enabled after construction (defaults to true)
-     */
+    /// @brief Construct with the target and the detour. Optionally specifying
+    /// whether to enable the hook (default is true).
     template <typename trg, typename dtr,
               typename = std::enable_if_t<utils::callable_type<trg> &&
                                           utils::callable_type<dtr>>>
@@ -416,18 +380,18 @@ namespace alterhook
     helpers::original*   original_wrap = nullptr;
 
     void set_detour(std::byte* detour);
-    void set_original(const helpers::orig_buff_t& original);
+    void set_original(helpers::orig_buff_t original);
   };
 
   template <typename dtr, typename orig, typename>
   hook::hook(std::byte* target, dtr&& detour, orig& original, bool enable_hook)
       : trampoline(target),
         pdetour(get_target_address<orig>(std::forward<dtr>(detour))),
+        original_buffer(helpers::original_wrapper(original)),
         original_wrap(std::launder(
             reinterpret_cast<helpers::original*>(&original_buffer)))
   {
     helpers::assert_valid_detour_original_pair<dtr, orig>();
-    new (&original_buffer) helpers::original_wrapper(original);
     helpers::make_backup(target, backup.data(), patch_above);
     original = function_cast<orig>(
         helpers::resolve_original(target, ptrampoline.get()));
@@ -476,11 +440,9 @@ namespace alterhook
   template <typename orig, typename>
   hook& hook::set_original(orig& original)
   {
-    if (original_wrap && original_wrap->contains_ref(original))
+    if (original_wrap && *original_wrap == original)
       return *this;
-    helpers::orig_buff_t origbuff{};
-    new (&origbuff) helpers::original_wrapper(original);
-    set_original(origbuff);
+    set_original(helpers::original_wrapper(original));
     return *this;
   }
 } // namespace alterhook

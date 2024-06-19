@@ -123,8 +123,11 @@ namespace alterhook
   /// @ref alterhook::disambiguate(callable&&) or just calls the other overload
   /// if that's not possible
   template <typename func, typename T,
-            typename = std::enable_if_t<utils::callable_type<T> ||
-                                        utils::disambiguatable_with<T, func>>>
+            typename =
+                std::enable_if_t<!std::is_same_v<utils::remove_cvref_t<T>,
+                                                 utils::remove_cvref_t<func>> &&
+                                 (utils::callable_type<T> ||
+                                  utils::disambiguatable_with<T, func>)>>
   constexpr std::byte* get_target_address(T&& fn) noexcept;
 
   /**
@@ -285,14 +288,17 @@ namespace alterhook
   {
     struct original
     {
-      virtual original& operator=(std::nullptr_t null)      = 0;
-      virtual original& operator=(const std::byte* address) = 0;
+      virtual original&   operator=(std::nullptr_t null)      = 0;
+      virtual original&   operator=(const std::byte* address) = 0;
+      virtual const void* raw() const noexcept                = 0;
+      virtual ~original()                                     = default;
 
-      // not needed but put nevertheless to prevent any compiler warnings
-      virtual ~original() {}
-
-      template <typename T>
-      bool contains_ref(T& orig);
+      template <typename T,
+                typename = std::enable_if_t<utils::function_type<T>>>
+      bool operator==(T& orig) const noexcept
+      {
+        return raw() == reinterpret_cast<void*>(&orig);
+      }
     };
 
     template <typename T>
@@ -313,6 +319,13 @@ namespace alterhook
         val = function_cast<T>(address);
         return *this;
       }
+
+      const void* raw() const noexcept override
+      {
+        return reinterpret_cast<const void*>(&val);
+      }
+
+      operator auto() const noexcept;
     };
 
     typedef std::aligned_storage_t<
@@ -320,13 +333,22 @@ namespace alterhook
         alignof(original_wrapper<std::function<void()>>)>
         orig_buff_t;
 
+#if utils_clang
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
+#endif
+
     template <typename T>
-    bool original::contains_ref(T& orig)
+    original_wrapper<T>::operator auto() const noexcept
     {
-      if (auto* wrapper = dynamic_cast<original_wrapper<T>*>(this))
-        return &wrapper->val == &orig;
-      return false;
+      orig_buff_t buffer{};
+      memcpy(&buffer, this, sizeof(original_wrapper));
+      return buffer;
     }
+
+#if utils_clang
+  #pragma clang diagnostic pop
+#endif
 
     template <typename dtr, typename orig>
     utils_consteval void assert_valid_detour_original_pair()

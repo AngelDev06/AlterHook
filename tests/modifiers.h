@@ -9,7 +9,7 @@ struct target
   {
     origresult = { x * count, y * count, z * count };
     std::cout << "target::multiply_by(int)\n";
-    call_stack.push(func_called::target_multiply_by_int);
+    call_stack.push_back(func_called::target_multiply_by_int);
   }
 
   // overloaded method
@@ -17,7 +17,7 @@ struct target
   {
     forigresult = { x * count, y * count, z * count };
     std::cout << "target::multiply_by(float)\n";
-    call_stack.push(func_called::target_multiply_by_float);
+    call_stack.push_back(func_called::target_multiply_by_float);
   }
 
   void power_all() { private_power_all(); }
@@ -25,7 +25,7 @@ struct target
   noinline int return_sum()
   {
     std::cout << "target::return_sum\n";
-    call_stack.push(func_called::target_return_sum);
+    call_stack.push_back(func_called::target_return_sum);
     return x + y + z;
   }
 
@@ -34,6 +34,6 @@ private:
   {
     origresult = { x * x, y * y, z * z };
     std::cout << "target::private_power_all\n";
-    call_stack.push(func_called::target_private_power_all);
+    call_stack.push_back(func_called::target_private_power_all);
   }
 };
