@@ -1,7 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "boilerplate.h"
+#include "boilerplate.hpp"
 #include <cassert>
 
 // intellisense fucks up completely for some reason

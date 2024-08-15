@@ -1,10 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "trampoline.h"
-#include "exceptions.h"
-#include "injection.h"
-#include "instructions.h"
+#include <pch.hpp>
+#include "trampoline.hpp"
+#include "exceptions.hpp"
+#include "injection.hpp"
+#include "instructions.hpp"
 #pragma GCC visibility push(hidden)
 
 namespace alterhook

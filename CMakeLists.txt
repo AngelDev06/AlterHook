@@ -235,6 +235,7 @@ target_include_directories(
   AlterHook
   PUBLIC "${PROJECT_SOURCE_DIR}/include"
   PRIVATE "${PROJECT_SOURCE_DIR}/include/alterhook"
+          "${PROJECT_SOURCE_DIR}/src"
           "${PROJECT_SOURCE_DIR}/src/${ALTERHOOK_TARGET_ARCH}"
           "${PROJECT_SOURCE_DIR}/src/${OS_STR}"
           "${PROJECT_SOURCE_DIR}/pch/${OS_STR}"

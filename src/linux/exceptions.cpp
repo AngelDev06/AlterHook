@@ -1,7 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
 
 namespace alterhook::exceptions
 {
@@ -45,4 +45,4 @@ namespace alterhook::exceptions
            << m_length << ", " << m_protection << ')';
     return stream.str();
   }
-}
+} // namespace alterhook::exceptions

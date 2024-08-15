@@ -1,7 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "macros.h"
+#include "../utilities/macros.hpp"
 #include <cstdint>
 
 namespace alterhook::detail::constants

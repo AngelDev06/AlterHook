@@ -1,11 +1,11 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
-#include "disassembler.h"
-#include "instructions.h"
-#include "buffer.h"
-#include "trampoline.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
+#include "disassembler.hpp"
+#include "instructions.hpp"
+#include "buffer.hpp"
+#include "trampoline.hpp"
 
 #if !utils_msvc
   #pragma GCC diagnostic push
@@ -892,8 +892,9 @@ namespace alterhook
       }
 
       template <typename T>
-      auto handle_it_block() -> std::enable_if_t<
-          has_custom_instruction_tag<utils::remove_cvref_t<T>>>
+      auto handle_it_block()
+          -> std::enable_if_t<
+              has_custom_instruction_tag<utils::remove_cvref_t<T>>>
       {
         typedef utils::remove_cvref_t<T> clean_t;
         constexpr size_t instr_count = clean_t::instruction_count;
@@ -944,8 +945,9 @@ namespace alterhook
 
       // no handling required for non-custom tagged instructions
       template <typename T>
-      auto handle_it_block() -> std::enable_if_t<
-          !has_custom_instruction_tag<utils::remove_cvref_t<T>>>
+      auto handle_it_block()
+          -> std::enable_if_t<
+              !has_custom_instruction_tag<utils::remove_cvref_t<T>>>
       {
       }
 

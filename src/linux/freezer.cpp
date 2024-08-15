@@ -1,9 +1,9 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
-#include "thread_handler.h"
-#include "tools.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
+#include "thread_handler.hpp"
+#include "tools.hpp"
 
 #if utils_arm
   #define report_any_errors() handle_errors()

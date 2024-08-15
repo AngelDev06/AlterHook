@@ -1,9 +1,9 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
-#include "disassembler.h"
-#include "instructions.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
+#include "disassembler.hpp"
+#include "instructions.hpp"
 
 namespace alterhook::exceptions
 {

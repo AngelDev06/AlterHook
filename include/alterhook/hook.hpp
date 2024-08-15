@@ -2,8 +2,8 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <array>
-#include "detail/constants.h"
-#include "trampoline.h"
+#include "detail/constants.hpp"
+#include "trampoline.hpp"
 
 namespace alterhook
 {

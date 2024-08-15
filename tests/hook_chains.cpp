@@ -1,5 +1,5 @@
 #include "testcls.h"
-#include <alterhook/hook_chain.h>
+#include <alterhook/hook_chain.hpp>
 
 class HookChainTest : public testing::Test
 {

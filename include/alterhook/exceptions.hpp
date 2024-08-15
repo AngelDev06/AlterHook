@@ -3,7 +3,7 @@
 #pragma once
 #include <system_error>
 #include <array>
-#include "detail/macros.h"
+#include "detail/macros.hpp"
 #if utils_msvc
   #pragma warning(push)
   #pragma warning(disable : 4275 4251)

@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <shared_mutex>
-#include "hook_chain.h"
+#include "hook_chain.hpp"
 
 #if utils_msvc
   #pragma warning(push)
@@ -1065,7 +1065,7 @@ namespace alterhook
 
   template <typename trg, typename... types>
   hook_map(trg, types&&...) -> hook_map<typename helpers::get_all_keys<
-      types...>::template to<std::common_type_t>>;
+                                types...>::template to<std::common_type_t>>;
 
   /*
    * TEMPLATE DEFINITIONS (ignore them)

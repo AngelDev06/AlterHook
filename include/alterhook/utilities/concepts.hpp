@@ -3,9 +3,9 @@
 #pragma once
 #include <utility>
 #include <initializer_list>
-#include "utils_macros.h"
-#include "type_sequence.h"
-#include "function_traits.h"
+#include "macros.hpp"
+#include "type_sequence.hpp"
+#include "function_traits.hpp"
 
 #if utils_msvc
   #pragma warning(push)
@@ -108,24 +108,12 @@ namespace alterhook::utils
   concept forward_iterable = requires(T& instance, const T& cinstance) {
     typename T::iterator;
     typename T::const_iterator;
-    {
-      instance.begin()
-    } -> std::convertible_to<typename T::iterator>;
-    {
-      instance.end()
-    } -> std::convertible_to<typename T::iterator>;
-    {
-      cinstance.begin()
-    } -> std::convertible_to<typename T::const_iterator>;
-    {
-      cinstance.end()
-    } -> std::convertible_to<typename T::const_iterator>;
-    {
-      cinstance.cbegin()
-    } -> std::convertible_to<typename T::const_iterator>;
-    {
-      cinstance.cend()
-    } -> std::convertible_to<typename T::const_iterator>;
+    { instance.begin() } -> std::convertible_to<typename T::iterator>;
+    { instance.end() } -> std::convertible_to<typename T::iterator>;
+    { cinstance.begin() } -> std::convertible_to<typename T::const_iterator>;
+    { cinstance.end() } -> std::convertible_to<typename T::const_iterator>;
+    { cinstance.cbegin() } -> std::convertible_to<typename T::const_iterator>;
+    { cinstance.cend() } -> std::convertible_to<typename T::const_iterator>;
   };
 
   template <typename T>
@@ -141,28 +129,18 @@ namespace alterhook::utils
                                         // template parameter of the allocator?
         requires std::convertible_to<helpers::member_or_pointer_t<T>,
                                      helpers::member_or_const_pointer_t<T>>;
-        {
-          instance.allocate(n)
-        } -> helpers::allocator_pointer<T>;
+        { instance.allocate(n) } -> helpers::allocator_pointer<T>;
         {
           *p
         } -> std::same_as<std::add_lvalue_reference_t<typename T::value_type>>;
         {
           *cp
         } -> std::same_as<std::add_lvalue_reference_t<
-            std::add_const_t<typename T::value_type>>>;
-        {
-          static_cast<helpers::member_or_pointer_t<T>>(vp)
-        };
-        {
-          static_cast<helpers::member_or_const_pointer_t<T>>(cvp)
-        };
-        {
-          instance == instance
-        } -> std::same_as<bool>;
-        {
-          instance != instance
-        } -> std::same_as<bool>;
+              std::add_const_t<typename T::value_type>>>;
+        { static_cast<helpers::member_or_pointer_t<T>>(vp) };
+        { static_cast<helpers::member_or_const_pointer_t<T>>(cvp) };
+        { instance == instance } -> std::same_as<bool>;
+        { instance != instance } -> std::same_as<bool>;
         instance.deallocate(p, n);
         T(instance);
         T(std::move(instance));
@@ -171,9 +149,7 @@ namespace alterhook::utils
   template <typename T, typename k>
   concept hash_type = std::copy_constructible<T> && std::destructible<T> &&
                       requires(T instance, k key) {
-                        {
-                          instance(key)
-                        } -> std::same_as<size_t>;
+                        { instance(key) } -> std::same_as<size_t>;
                       };
 
   template <typename T>
@@ -218,42 +194,20 @@ namespace alterhook::utils
         {
           instance.get_allocator()
         } -> std::same_as<typename T::allocator_type>;
-        {
-          instance.empty()
-        } -> std::same_as<bool>;
-        {
-          instance.size()
-        } -> std::same_as<typename T::size_type>;
-        {
-          instance.max_size()
-        } -> std::same_as<typename T::size_type>;
-        {
-          instance.hash_function()
-        } -> std::same_as<typename T::hasher>;
-        {
-          instance.key_eq()
-        } -> std::same_as<typename T::key_equal>;
-        {
-          instance.count(key)
-        } -> std::same_as<typename T::size_type>;
-        {
-          instance.bucket_count()
-        } -> std::same_as<typename T::size_type>;
-        {
-          instance.load_factor()
-        } -> std::same_as<float>;
-        {
-          instance.max_load_factor()
-        } -> std::same_as<float>;
+        { instance.empty() } -> std::same_as<bool>;
+        { instance.size() } -> std::same_as<typename T::size_type>;
+        { instance.max_size() } -> std::same_as<typename T::size_type>;
+        { instance.hash_function() } -> std::same_as<typename T::hasher>;
+        { instance.key_eq() } -> std::same_as<typename T::key_equal>;
+        { instance.count(key) } -> std::same_as<typename T::size_type>;
+        { instance.bucket_count() } -> std::same_as<typename T::size_type>;
+        { instance.load_factor() } -> std::same_as<float>;
+        { instance.max_load_factor() } -> std::same_as<float>;
         instance.max_load_factor(z);
         instance.rehash(n);
         instance.reserve(n);
-        {
-          instance == instance
-        } -> std::same_as<bool>;
-        {
-          instance != instance
-        } -> std::same_as<bool>;
+        { instance == instance } -> std::same_as<bool>;
+        { instance != instance } -> std::same_as<bool>;
         instance.swap(instance);
       };
 
@@ -268,33 +222,15 @@ namespace alterhook::utils
           std::add_lvalue_reference_t<std::add_const_t<typename T::value_type>>
                                                         val,
           std::initializer_list<typename T::value_type> list) {
-        {
-          cinstance.visit(key, func)
-        } -> std::same_as<size_t>;
-        {
-          cinstance.cvisit(key, func)
-        } -> std::same_as<size_t>;
-        {
-          cinstance.visit_all(func)
-        } -> std::same_as<size_t>;
-        {
-          cinstance.cvisit_all(func)
-        } -> std::same_as<size_t>;
-        {
-          instance.insert(val)
-        } -> std::same_as<bool>;
-        {
-          instance.insert(list)
-        };
-        {
-          instance.insert_or_visit(val, func)
-        } -> std::same_as<bool>;
-        {
-          instance.insert_or_cvisit(val, func)
-        } -> std::same_as<bool>;
-        {
-          cinstance.max_load()
-        } -> std::same_as<typename T::size_type>;
+        { cinstance.visit(key, func) } -> std::same_as<size_t>;
+        { cinstance.cvisit(key, func) } -> std::same_as<size_t>;
+        { cinstance.visit_all(func) } -> std::same_as<size_t>;
+        { cinstance.cvisit_all(func) } -> std::same_as<size_t>;
+        { instance.insert(val) } -> std::same_as<bool>;
+        { instance.insert(list) };
+        { instance.insert_or_visit(val, func) } -> std::same_as<bool>;
+        { instance.insert_or_cvisit(val, func) } -> std::same_as<bool>;
+        { cinstance.max_load() } -> std::same_as<typename T::size_type>;
       };
 
   template <typename T>
@@ -322,18 +258,12 @@ namespace alterhook::utils
         {
           instance.insert_or_assign(citr, key, obj)
         } -> std::convertible_to<typename T::iterator>;
-        {
-          instance.erase(citr)
-        } -> std::convertible_to<typename T::iterator>;
-        {
-          instance.erase(key)
-        } -> std::same_as<typename T::size_type>;
+        { instance.erase(citr) } -> std::convertible_to<typename T::iterator>;
+        { instance.erase(key) } -> std::same_as<typename T::size_type>;
         instance.swap(instance);
         instance.clear();
         instance.merge(instance);
-        {
-          instance.find(key)
-        } -> std::convertible_to<typename T::iterator>;
+        { instance.find(key) } -> std::convertible_to<typename T::iterator>;
         {
           cinstance.find(key)
         } -> std::convertible_to<typename T::const_iterator>;
@@ -343,8 +273,8 @@ namespace alterhook::utils
         -> std::same_as<std::pair<typename T::iterator, typename T::iterator>>;
         {
           cinstance.equal_range(key)
-        } -> std::same_as<
-            std::pair<typename T::const_iterator, typename T::const_iterator>>;
+        } -> std::same_as<std::pair<typename T::const_iterator,
+                                    typename T::const_iterator>>;
         instance.at(key) = obj;
         instance[key]    = obj;
       };
@@ -357,24 +287,16 @@ namespace alterhook::utils
           std::initializer_list<typename T::value_type> list,
           typename T::iterator itr, typename T::const_iterator citr,
           const typename T::key_type& key, const typename T::mapped_type& obj) {
-        {
-          instance.insert(val)
-        } -> std::same_as<typename T::iterator>;
+        { instance.insert(val) } -> std::same_as<typename T::iterator>;
         instance.insert(itr, itr);
         instance.insert(list);
-        {
-          instance.erase(citr)
-        } -> std::convertible_to<typename T::iterator>;
-        {
-          instance.erase(key)
-        } -> std::same_as<typename T::size_type>;
+        { instance.erase(citr) } -> std::convertible_to<typename T::iterator>;
+        { instance.erase(key) } -> std::same_as<typename T::size_type>;
         instance.swap(instance);
         instance.clear();
         instance.merge(instance);
         instance.merge(instance);
-        {
-          instance.find(key)
-        } -> std::convertible_to<typename T::iterator>;
+        { instance.find(key) } -> std::convertible_to<typename T::iterator>;
         {
           cinstance.find(key)
         } -> std::convertible_to<typename T::const_iterator>;
@@ -384,44 +306,30 @@ namespace alterhook::utils
         -> std::same_as<std::pair<typename T::iterator, typename T::iterator>>;
         {
           cinstance.equal_range(key)
-        } -> std::same_as<
-            std::pair<typename T::const_iterator, typename T::const_iterator>>;
+        } -> std::same_as<std::pair<typename T::const_iterator,
+                                    typename T::const_iterator>>;
       };
 
   template <typename T>
   concept closed_addressing =
-      (regular_hash_map<T> || multi_hash_map<T>)&&requires(
-          T& instance, const T& cinstance, typename T::size_type n,
-          const typename T::key_type& key) {
+      (regular_hash_map<T> || multi_hash_map<T>) &&
+      requires(T& instance, const T& cinstance, typename T::size_type n,
+               const typename T::key_type& key) {
         typename T::local_iterator;
         typename T::const_local_iterator;
-        {
-          instance.begin(n)
-        } -> std::same_as<typename T::local_iterator>;
-        {
-          instance.end(n)
-        } -> std::same_as<typename T::local_iterator>;
+        { instance.begin(n) } -> std::same_as<typename T::local_iterator>;
+        { instance.end(n) } -> std::same_as<typename T::local_iterator>;
         {
           cinstance.begin(n)
         } -> std::same_as<typename T::const_local_iterator>;
-        {
-          cinstance.end(n)
-        } -> std::same_as<typename T::const_local_iterator>;
+        { cinstance.end(n) } -> std::same_as<typename T::const_local_iterator>;
         {
           cinstance.cbegin(n)
         } -> std::same_as<typename T::const_local_iterator>;
-        {
-          cinstance.cend(n)
-        } -> std::same_as<typename T::const_local_iterator>;
-        {
-          cinstance.max_bucket_count()
-        } -> std::same_as<typename T::size_type>;
-        {
-          cinstance.bucket_size(n)
-        } -> std::same_as<typename T::size_type>;
-        {
-          cinstance.bucket(key)
-        } -> std::same_as<typename T::size_type>;
+        { cinstance.cend(n) } -> std::same_as<typename T::const_local_iterator>;
+        { cinstance.max_bucket_count() } -> std::same_as<typename T::size_type>;
+        { cinstance.bucket_size(n) } -> std::same_as<typename T::size_type>;
+        { cinstance.bucket(key) } -> std::same_as<typename T::size_type>;
       };
 #else
   namespace helpers
@@ -821,14 +729,12 @@ namespace alterhook::utils
                                    (find, typename T::iterator)) &&
         __utils_const_convertible_checks((find, typename T::const_iterator));
 
-    template <
-        typename T,
-        bool =
-            (regular_hash_map_impl<T> ||
-             multi_hash_map_impl<T>)&&__utils_has_types(local_iterator,
-                                                        const_local_iterator) &&
-            __utils_has_const_methods(bbegin, bend, bcbegin, bcend,
-                                      max_bucket_count, bucket_size, bucket)>
+    template <typename T,
+              bool = (regular_hash_map_impl<T> || multi_hash_map_impl<T>) &&
+                     __utils_has_types(local_iterator, const_local_iterator) &&
+                     __utils_has_const_methods(bbegin, bend, bcbegin, bcend,
+                                               max_bucket_count, bucket_size,
+                                               bucket)>
     inline constexpr bool closed_addressing_impl = false;
     template <typename T>
     inline constexpr bool closed_addressing_impl<T, true> =

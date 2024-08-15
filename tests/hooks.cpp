@@ -1,5 +1,5 @@
 #include "testcls.h"
-#include <alterhook/hook.h>
+#include <alterhook/hook.hpp>
 
 class HookTest : public testing::Test
 {

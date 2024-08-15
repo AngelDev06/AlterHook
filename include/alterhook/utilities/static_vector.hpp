@@ -4,7 +4,7 @@
 #include <iterator>
 #include <algorithm>
 #include <sstream>
-#include "other.h"
+#include "other.hpp"
 
 #if utils_msvc
   #pragma warning(push)

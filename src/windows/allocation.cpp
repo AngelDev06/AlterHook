@@ -1,8 +1,8 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "buffer.h"
-#include "exceptions.h"
+#include <pch.hpp>
+#include "buffer.hpp"
+#include "exceptions.hpp"
 #pragma GCC visibility push(hidden)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"

@@ -4,8 +4,8 @@
 #if utils_cpp20
   #include <concepts>
 #endif
-#include "detail/macros.h"
-#include "utilities/utils.h"
+#include "detail/macros.hpp"
+#include "utilities/utils.hpp"
 
 namespace alterhook
 {
@@ -50,9 +50,7 @@ namespace alterhook
   /// tells whether `instanceptrof<T>{}()` is a valid expression that returns T*
   template <typename T>
   concept has_instanceptrof = requires {
-    {
-      instanceptrof<T>{}()
-    } -> std::same_as<T*>;
+    { instanceptrof<T>{}() } -> std::same_as<T*>;
   };
 #else
   namespace helpers
@@ -202,7 +200,7 @@ namespace alterhook
     uintptr_t adjustment   = adjustmentof(memfuncptr);
     uintptr_t address      = *reinterpret_cast<uintptr_t*>(
         *reinterpret_cast<uintptr_t*>(reinterpret_cast<uintptr_t>(inst) +
-                                      adjustment) +
+                                           adjustment) +
         vtable_index);
     return follow_thunk_function(address);
   }
@@ -217,7 +215,7 @@ namespace alterhook
   uintptr_t addresser::vtableindexof(T memfuncptr)
   {
     typedef utils::fn_class_t<T> cls;
-    typedef uintptr_t            (cls::*method_t)();
+    typedef uintptr_t (cls::*method_t)();
     return (reinterpret_cast<cls*>(instance())
                 ->*reinterpret_cast<method_t>(memfuncptr))();
   }

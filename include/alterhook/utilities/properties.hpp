@@ -1,8 +1,8 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "type_sequence.h"
-#include "other.h"
+#include "type_sequence.hpp"
+#include "other.hpp"
 
 namespace alterhook::utils
 {

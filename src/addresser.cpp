@@ -1,9 +1,9 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "addresser.h"
+#include <pch.hpp>
+#include "addresser.hpp"
 #if utils_windows
-  #include "instructions.h"
+  #include "instructions.hpp"
 #endif
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
@@ -80,23 +80,17 @@ namespace alterhook
   &virtual_function_array::vfunction##hex
 
 #define __alterhook_custom_vtable_set()                                        \
-  {                                                                            \
-    __alterhook_for_hex_digit(__alterhook_vtable_element,                      \
-                              __alterhook_comma_seperator)                     \
-  }
+  { __alterhook_for_hex_digit(__alterhook_vtable_element,                      \
+                              __alterhook_comma_seperator) }
 #define __alterhook_vpointer_array_set()                                       \
-  {                                                                            \
-    __alterhook_for_hex_digit(__alterhook_instance_vpointer,                   \
-                              __alterhook_comma_seperator)                     \
-  }
+  { __alterhook_for_hex_digit(__alterhook_instance_vpointer,                   \
+                              __alterhook_comma_seperator) }
 #define __alterhook_generate_virtual_functions()                               \
   __alterhook_for_hex_digit(__alterhook_virtual_function_def,                  \
                             __alterhook_noseperator)
 #define __alterhook_virtual_function_array_set()                               \
-  {                                                                            \
-    __alterhook_for_hex_digit(__alterhook_function_array_element,              \
-                              __alterhook_comma_seperator)                     \
-  }
+  { __alterhook_for_hex_digit(__alterhook_function_array_element,              \
+                              __alterhook_comma_seperator) }
 
   namespace
   {

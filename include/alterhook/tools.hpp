@@ -1,10 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "detail/macros.h"
-#include "detail/constants.h"
-#include "utilities/utils.h"
-#include "addresser.h"
+#include "detail/macros.hpp"
+#include "detail/constants.hpp"
+#include "utilities/utils.hpp"
+#include "addresser.hpp"
 #include <cstring>
 
 namespace alterhook
@@ -404,7 +404,8 @@ namespace alterhook
                            utils::fn_return_t<utils::clean_type_t<detours>>> &&
             std::is_same_v<
                 utils::fn_return_t<coriginal>,
-                utils::fn_return_t<utils::clean_type_t<originals>>>)&&...) &&
+                utils::fn_return_t<utils::clean_type_t<originals>>>) &&
+           ...) &&
               std::is_same_v<utils::fn_return_t<cdetour>,
                              utils::fn_return_t<coriginal>>,
           "The return types of the detours and the original function need to "
@@ -416,7 +417,8 @@ namespace alterhook
             utils::compatible_calling_convention_with<
                 cdetour, utils::clean_type_t<originals>> &&
             utils::compatible_calling_convention_with<
-                utils::clean_type_t<detours>, coriginal>)&&...) &&
+                utils::clean_type_t<detours>, coriginal>) &&
+           ...) &&
               utils::compatible_calling_convention_with<cdetour, coriginal>,
           "The calling conventions of the detours and the original function "
           "aren't compatible");
@@ -425,7 +427,8 @@ namespace alterhook
           ((utils::compatible_function_arguments_with<
                 utils::clean_type_t<detours>, utils::clean_type_t<originals>> &&
             utils::compatible_function_arguments_with<
-                utils::clean_type_t<detours>, coriginal>)&&...) &&
+                utils::clean_type_t<detours>, coriginal>) &&
+           ...) &&
               utils::compatible_function_arguments_with<cdetour, coriginal>,
           "The arguments of the detours and the original function aren't "
           "compatible");

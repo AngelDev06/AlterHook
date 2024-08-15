@@ -1,8 +1,8 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "hook.h"
-#include "injection.h"
+#include <pch.hpp>
+#include "hook.hpp"
+#include "injection.hpp"
 
 #if utils_msvc
   #pragma warning(push)

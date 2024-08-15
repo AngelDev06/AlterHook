@@ -1,5 +1,5 @@
 #include "modifiers.h"
-#include <alterhook/modifier.h>
+#include <alterhook/modifier.hpp>
 
 class modifier(modifier1, originalcls, func, func2)
 {

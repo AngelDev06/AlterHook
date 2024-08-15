@@ -4,10 +4,10 @@
 #include <cstddef>
 #include <utility>
 #include <functional>
-#include "other.h"
-#include "type_sequence.h"
-#include "calling_conventions.h"
-#include "type_name.h"
+#include "other.hpp"
+#include "type_sequence.hpp"
+#include "calling_conventions.hpp"
+#include "type_name.hpp"
 
 namespace alterhook::utils
 {
@@ -644,7 +644,7 @@ namespace alterhook::utils
     static auto process(                                                       \
         type_identity<thiscall_pfn_tag<R2> (cls2::*)(args2...)>,               \
         type_identity<R(cv original_arg*, original_args...)>)                  \
-        -> type_identity<R2 (__thiscall cls2::*)(args2...) cv ref exception>;
+        ->type_identity<R2 (__thiscall cls2::*)(args2...) cv ref exception>;
 #else
   #define __utils_func_patcher_thiscall_extra_overload_impl(cv, ref, exception)
 #endif
@@ -654,7 +654,7 @@ namespace alterhook::utils
             typename original_arg, typename... original_args>                  \
   static auto process(type_identity<R2 (cls2::*)(args2...)>,                   \
                       type_identity<R(cv original_arg*, original_args...)>)    \
-      -> type_identity<R2 (cc cls2::*)(args2...) cv ref exception>;            \
+      ->type_identity<R2 (cc cls2::*)(args2...) cv ref exception>;             \
   __utils_func_patcher_thiscall_extra_overload_impl(cv, ref, exception)
 #define __utils_func_patcher_extra_overloads(cc, ref, exception)               \
   __utils_func_patcher_extra_overloads_impl(cc, , ref, exception)              \
@@ -667,7 +667,7 @@ namespace alterhook::utils
 #define __utils_func_no_cv_overloads(cc, ref, exception)                       \
   template <typename T1, typename T2>                                          \
   static auto process(type_identity<T1>, type_identity<T2>)                    \
-      -> decltype(process(std::declval<type_identity<T1>>()));                 \
+      ->decltype(process(std::declval<type_identity<T1>>()));                  \
   __utils_func_patcher_extra_overloads(cc, ref, exception) typedef             \
       typename decltype(process(                                               \
           std::declval<type_identity<patcher<R(args...)>>>(),                  \
@@ -682,7 +682,7 @@ namespace alterhook::utils
     template <typename R2, typename cls2, typename... args2>                   \
     static auto process(                                                       \
         type_identity<thiscall_pfn_tag<R2> (cls2::*)(args2...)>)               \
-        -> type_identity<R2 (__thiscall cls2::*)(args2...) cv ref exception>;
+        ->type_identity<R2 (__thiscall cls2::*)(args2...) cv ref exception>;
 #else
   #define __utils_thiscall_process_overload(cv, ref, exception)
 #endif
@@ -793,8 +793,8 @@ namespace alterhook::utils
       template <typename callable = callable_t, typename func = func_t>
       static constexpr auto check_impl(rank<0>) -> rank<0>;
       template <typename callable = callable_t, typename func = func_t>
-      static constexpr auto check_impl(rank<2>)
-          -> decltype(&callable::operator(), rank<2>{});
+      static constexpr auto
+          check_impl(rank<2>) -> decltype(&callable::operator(), rank<2>{});
     };
 
     template <typename lambda_t, typename func_t>
@@ -839,8 +839,9 @@ namespace alterhook::utils
           typename callable_t = callable, typename func_t = func,
           std::enable_if_t<disambiguatable_callable_with<callable_t, func_t>,
                            size_t> = 0>
-      static auto select(rank<0>) -> type_identity<
-          generic_callable_disambiguation_type_t<callable_t, func_t>>;
+      static auto select(rank<0>)
+          -> type_identity<
+              generic_callable_disambiguation_type_t<callable_t, func_t>>;
 
       template <
           typename callable_t = callable, typename func_t = func,

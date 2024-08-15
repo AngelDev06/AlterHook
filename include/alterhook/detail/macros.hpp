@@ -1,7 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "../utilities/utils_macros.h"
+#include "../utilities/macros.hpp"
 
 #if (defined(ALTERHOOK_SHARED) &&                                              \
      (defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)))

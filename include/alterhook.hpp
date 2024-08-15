@@ -8,8 +8,8 @@
  */
 
 // detail
-#include "alterhook/detail/macros.h"
-#include "alterhook/detail/constants.h"
+#include "alterhook/detail/macros.hpp"
+#include "alterhook/detail/constants.hpp"
 
 // standard headers
 #include <cstddef>
@@ -34,14 +34,14 @@
 #endif
 
 // utilities
-#include "alterhook/utilities/utils.h"
+#include "alterhook/utilities/utils.hpp"
 
 // api
-#include "alterhook/addresser.h"
-#include "alterhook/exceptions.h"
-#include "alterhook/tools.h"
-#include "alterhook/trampoline.h"
-#include "alterhook/hook.h"
-#include "alterhook/hook_chain.h"
-#include "alterhook/hook_map.h"
-#include "alterhook/modifier.h"
+#include "alterhook/addresser.hpp"
+#include "alterhook/exceptions.hpp"
+#include "alterhook/tools.hpp"
+#include "alterhook/trampoline.hpp"
+#include "alterhook/hook.hpp"
+#include "alterhook/hook_chain.hpp"
+#include "alterhook/hook_map.hpp"
+#include "alterhook/modifier.hpp"

@@ -1,7 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "trampoline.h"
+#include <pch.hpp>
+#include "trampoline.hpp"
 #pragma GCC visibility push(hidden)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wrange-loop-construct"

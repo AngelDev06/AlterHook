@@ -2,7 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <list>
-#include "hook.h"
+#include "hook.hpp"
 
 #if utils_msvc
   #pragma warning(push)
@@ -1593,9 +1593,9 @@ namespace alterhook
         utils::type_sequence<detours...>(),
         utils::type_sequence<originals...>());
     hook_init_list arg_list = {
-      {get_target_address<originals>(
+      { get_target_address<originals>(
             std::forward<detours>(std::get<indexes>(args.first))),
-       helpers::original_wrapper(std::get<indexes>(args.second))}
+       helpers::original_wrapper(std::get<indexes>(args.second)) }
       ...
     };
     init_with_list({ arg_list.begin(), arg_list.end() });
@@ -1627,9 +1627,9 @@ namespace alterhook
         utils::type_sequence<detours...>(),
         utils::type_sequence<originals...>());
     hook_init_list arg_list = {
-      {get_target_address<originals>(
+      { get_target_address<originals>(
             std::forward<detours>(std::get<indexes>(args.first))),
-       helpers::original_wrapper(std::get<indexes>(args.second))}
+       helpers::original_wrapper(std::get<indexes>(args.second)) }
       ...
     };
     return append_list(to, { arg_list.begin(), arg_list.end() });

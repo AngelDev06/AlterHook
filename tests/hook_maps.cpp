@@ -1,6 +1,6 @@
 #include "testcls.h"
 #include <thread>
-#include <alterhook/hook_map.h>
+#include <alterhook/hook_map.hpp>
 
 class HookMapTest : public testing::Test
 {

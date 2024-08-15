@@ -1,11 +1,11 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
-#include "disassembler.h"
-#include "instructions.h"
-#include "buffer.h"
-#include "trampoline.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
+#include "disassembler.hpp"
+#include "instructions.hpp"
+#include "buffer.hpp"
+#include "trampoline.hpp"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wrange-loop-construct"
 
@@ -52,8 +52,7 @@ namespace alterhook
       const auto  begin =
                      std::reverse_iterator(detail.operands + detail.op_count),
                  end = std::reverse_iterator(detail.operands);
-      auto result    = std::find_if(begin, end,
-                                    [](const cs_aarch64_op& operand)
+      auto result    = std::find_if(begin, end, [](const cs_aarch64_op& operand)
                                     { return operand.type == AArch64_OP_IMM; });
       if (result == end)
         return std::nullopt;
@@ -70,8 +69,7 @@ namespace alterhook
       // the PC register is encoded implicitly on pc-relative loads and
       // therefore capstone does not include it in the operands list. so we
       // check if there is no memory operand provided
-      return std::find_if(begin, end,
-                          [](const cs_aarch64_op& operand)
+      return std::find_if(begin, end, [](const cs_aarch64_op& operand)
                           { return operand.type == AArch64_OP_MEM; }) == end;
     }
 
@@ -126,8 +124,8 @@ namespace alterhook
     using state_updaters     = utils::type_sequence<aarch64::ADD, aarch64::SUB>;
     using instruction_tags   = aarch64::custom::tagged_instructions;
     using all_modifiables    = typename simple_branches::template merge<
-        custom_far_branches, custom_far_loads, relative_loads, preindexed_loads,
-        stack_manipulators, state_updaters, instruction_tags>;
+           custom_far_branches, custom_far_loads, relative_loads, preindexed_loads,
+           stack_manipulators, state_updaters, instruction_tags>;
     using modifiables_variant = typename all_modifiables::template apply<
         std::add_pointer_t>::template to<std::variant>;
 
@@ -272,8 +270,7 @@ namespace alterhook
         // the overriden area of the target function and we haven't reached it
         // yet to set it. Therefore this determines whether there is a branch
         // destination ahead (inside the trampoline).
-        return std::find_if(begin(), end(),
-                            [](const branch_destination& entry)
+        return std::find_if(begin(), end(), [](const branch_destination& entry)
                             { return !entry.dest; }) != end();
       }
     };

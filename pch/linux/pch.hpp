@@ -31,9 +31,9 @@
 #include <variant>
 #include <optional>
 #include <numeric>
-#include "detail/macros.h"
-#include "detail/constants.h"
-#include "utilities/utils.h"
+#include "detail/macros.hpp"
+#include "detail/constants.hpp"
+#include "utilities/utils.hpp"
 
 #if defined(ALTERHOOK_ALWAYS_USE_RELAY) && utils_x64
   #define always_use_relay true

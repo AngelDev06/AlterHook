@@ -2,7 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <atomic>
-#include "hook_map.h"
+#include "hook_map.hpp"
 
 #if utils_clang
   #pragma clang diagnostic push

@@ -1,9 +1,9 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "hook_chain.h"
-#include "injection.h"
-#include "exceptions.h"
+#include <pch.hpp>
+#include "hook_chain.hpp"
+#include "injection.hpp"
+#include "exceptions.hpp"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnon-virtual-dtor"
 #pragma clang diagnostic ignored "-Wshadow"

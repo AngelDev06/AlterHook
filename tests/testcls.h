@@ -3,8 +3,8 @@
 #include <vector>
 #include <functional>
 #include <sstream>
-#include <alterhook/utilities/utils.h>
-#include <alterhook/tools.h>
+#include <alterhook/utilities/utils.hpp>
+#include <alterhook/tools.hpp>
 #include <gtest/gtest.h>
 
 #if utils_msvc
@@ -31,9 +31,7 @@
   }
 
 #define __gen_address_table_impl(name)                                         \
-  {                                                                            \
-    #name, alterhook::get_target_address(&name)                                \
-  }
+  { #name, alterhook::get_target_address(&name) }
 
 #define gen_address_table(...)                                                 \
   inline std::unordered_map<std::string_view, std::byte*> address_table = {    \

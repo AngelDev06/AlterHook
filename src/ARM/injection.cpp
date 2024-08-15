@@ -1,10 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
-#include "tools.h"
-#include "instructions.h"
-#include "injection.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
+#include "tools.hpp"
+#include "instructions.hpp"
+#include "injection.hpp"
 #pragma GCC visibility push(hidden)
 
 namespace alterhook
@@ -34,7 +34,7 @@ namespace alterhook
 
     if (flags.enable)
     {
-      const auto    detour    = reinterpret_cast<uintptr_t>(backup_or_detour);
+      const auto detour = reinterpret_cast<uintptr_t>(backup_or_detour);
       if (flags.patch_above)
       {
         assert(!(reinterpret_cast<uintptr_t>(target) % sizeof(uintptr_t)));

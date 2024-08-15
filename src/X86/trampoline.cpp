@@ -1,12 +1,12 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
-#include <pch.h>
-#include "exceptions.h"
-#include "disassembler.h"
-#include "buffer.h"
-#include "tools.h"
-#include "trampoline.h"
-#include "instructions.h"
+#include <pch.hpp>
+#include "exceptions.hpp"
+#include "disassembler.hpp"
+#include "buffer.hpp"
+#include "tools.hpp"
+#include "trampoline.hpp"
+#include "instructions.hpp"
 
 namespace alterhook
 {
@@ -98,9 +98,9 @@ namespace alterhook
 
 #pragma warning(push)
 #pragma warning(disable : 4244 4018 4267)
-#pragma GCC diagnostic   push
-#pragma GCC diagnostic   ignored "-Wsign-compare"
-#pragma GCC diagnostic   ignored "-Wstrict-overflow"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wstrict-overflow"
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 
   inline namespace init_impl
@@ -153,8 +153,7 @@ namespace alterhook
     {
       iterator get_entry(uint8_t id) noexcept
       {
-        return std::find_if(begin(), end(),
-                            [=](trampoline_entry& item)
+        return std::find_if(begin(), end(), [=](trampoline_entry& item)
                             { return item.id == id; });
       }
 

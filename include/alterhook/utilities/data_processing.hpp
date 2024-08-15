@@ -1,8 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "utils_macros.h"
-#include <tuple>
+#include "macros.hpp"
 #include <optional>
 #include <limits>
 #include <array>

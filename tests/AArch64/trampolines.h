@@ -1,7 +1,7 @@
 #include <iostream>
 #include <optional>
 #include <gtest/gtest.h>
-#include <alterhook/trampoline.h>
+#include <alterhook/trampoline.hpp>
 
 template <typename T>
 void print_arg(T&& arg)
@@ -143,5 +143,5 @@ namespace aarch64
 
     static const volatile auto func_ptr =
         reinterpret_cast<void (*)(size_t)>(func);
-  }
+  } // namespace test5
 } // namespace aarch64

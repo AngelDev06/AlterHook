@@ -2,9 +2,9 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #define __alterhook_expose_impl
-#include "detail/macros.h"
-#include "detail/constants.h"
-#include <utilities/utils.h>
+#include "detail/macros.hpp"
+#include "detail/constants.hpp"
+#include <utilities/utils.hpp>
 #include <Windows.h>
 #include <TlHelp32.h>
 #include <array>
