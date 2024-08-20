@@ -249,9 +249,9 @@ target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH})
 source_group("Include\\General" FILES ${ALTERHOOK_API})
 source_group("Include\\Utilities" FILES ${ALTERHOOK_UTILITIES})
 source_group("Include\\Details" FILES ${ALTERHOOK_DETAILS})
-source_group("Source Files\\General" ${ALTERHOOK_IMPL})
-source_group("Source Files\\Arch" ${ALTERHOOK_ARCH_IMPL})
-source_group("Source Files\\OS" ${ALTERHOOK_OS_IMPL})
+source_group("Source Files\\General" FILES ${ALTERHOOK_IMPL})
+source_group("Source Files\\Arch" FILES ${ALTERHOOK_ARCH_IMPL})
+source_group("Source Files\\OS" FILES ${ALTERHOOK_OS_IMPL})
 source_group("PCH" FILES ${ALTERHOOK_PCH})
 
 # warnings config

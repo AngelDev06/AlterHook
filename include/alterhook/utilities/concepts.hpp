@@ -3,6 +3,7 @@
 #pragma once
 #include <utility>
 #include <initializer_list>
+#include <unordered_map>
 #include "macros.hpp"
 #include "type_sequence.hpp"
 #include "function_traits.hpp"
@@ -108,12 +109,24 @@ namespace alterhook::utils
   concept forward_iterable = requires(T& instance, const T& cinstance) {
     typename T::iterator;
     typename T::const_iterator;
-    { instance.begin() } -> std::convertible_to<typename T::iterator>;
-    { instance.end() } -> std::convertible_to<typename T::iterator>;
-    { cinstance.begin() } -> std::convertible_to<typename T::const_iterator>;
-    { cinstance.end() } -> std::convertible_to<typename T::const_iterator>;
-    { cinstance.cbegin() } -> std::convertible_to<typename T::const_iterator>;
-    { cinstance.cend() } -> std::convertible_to<typename T::const_iterator>;
+    {
+      instance.begin()
+    } -> std::convertible_to<typename T::iterator>;
+    {
+      instance.end()
+    } -> std::convertible_to<typename T::iterator>;
+    {
+      cinstance.begin()
+    } -> std::convertible_to<typename T::const_iterator>;
+    {
+      cinstance.end()
+    } -> std::convertible_to<typename T::const_iterator>;
+    {
+      cinstance.cbegin()
+    } -> std::convertible_to<typename T::const_iterator>;
+    {
+      cinstance.cend()
+    } -> std::convertible_to<typename T::const_iterator>;
   };
 
   template <typename T>
@@ -129,18 +142,27 @@ namespace alterhook::utils
                                         // template parameter of the allocator?
         requires std::convertible_to<helpers::member_or_pointer_t<T>,
                                      helpers::member_or_const_pointer_t<T>>;
-        { instance.allocate(n) } -> helpers::allocator_pointer<T>;
+        {
+          instance.allocate(n)
+        } -> helpers::allocator_pointer<T>;
         {
           *p
-        } -> std::same_as<std::add_lvalue_reference_t<typename T::value_type>>;
+        } -> std::same_as<typename T::value_type&>;
         {
           *cp
-        } -> std::same_as<std::add_lvalue_reference_t<
-              std::add_const_t<typename T::value_type>>>;
-        { static_cast<helpers::member_or_pointer_t<T>>(vp) };
-        { static_cast<helpers::member_or_const_pointer_t<T>>(cvp) };
-        { instance == instance } -> std::same_as<bool>;
-        { instance != instance } -> std::same_as<bool>;
+        } -> std::same_as<const typename T::value_type&>;
+        {
+          static_cast<helpers::member_or_pointer_t<T>>(vp)
+        };
+        {
+          static_cast<helpers::member_or_const_pointer_t<T>>(cvp)
+        };
+        {
+          instance == instance
+        } -> std::same_as<bool>;
+        {
+          instance != instance
+        } -> std::same_as<bool>;
         instance.deallocate(p, n);
         T(instance);
         T(std::move(instance));
@@ -149,7 +171,9 @@ namespace alterhook::utils
   template <typename T, typename k>
   concept hash_type = std::copy_constructible<T> && std::destructible<T> &&
                       requires(T instance, k key) {
-                        { instance(key) } -> std::same_as<size_t>;
+                        {
+                          instance(key)
+                        } -> std::same_as<size_t>;
                       };
 
   template <typename T>
@@ -194,59 +218,89 @@ namespace alterhook::utils
         {
           instance.get_allocator()
         } -> std::same_as<typename T::allocator_type>;
-        { instance.empty() } -> std::same_as<bool>;
-        { instance.size() } -> std::same_as<typename T::size_type>;
-        { instance.max_size() } -> std::same_as<typename T::size_type>;
-        { instance.hash_function() } -> std::same_as<typename T::hasher>;
-        { instance.key_eq() } -> std::same_as<typename T::key_equal>;
-        { instance.count(key) } -> std::same_as<typename T::size_type>;
-        { instance.bucket_count() } -> std::same_as<typename T::size_type>;
-        { instance.load_factor() } -> std::same_as<float>;
-        { instance.max_load_factor() } -> std::same_as<float>;
+        {
+          instance.empty()
+        } -> std::same_as<bool>;
+        {
+          instance.size()
+        } -> std::same_as<typename T::size_type>;
+        {
+          instance.max_size()
+        } -> std::same_as<typename T::size_type>;
+        {
+          instance.hash_function()
+        } -> std::same_as<typename T::hasher>;
+        {
+          instance.key_eq()
+        } -> std::same_as<typename T::key_equal>;
+        {
+          instance.count(key)
+        } -> std::same_as<typename T::size_type>;
+        {
+          instance.bucket_count()
+        } -> std::same_as<typename T::size_type>;
+        {
+          instance.load_factor()
+        } -> std::same_as<float>;
+        {
+          instance.max_load_factor()
+        } -> std::same_as<float>;
         instance.max_load_factor(z);
         instance.rehash(n);
         instance.reserve(n);
-        { instance == instance } -> std::same_as<bool>;
-        { instance != instance } -> std::same_as<bool>;
+        {
+          instance == instance
+        } -> std::same_as<bool>;
+        {
+          instance != instance
+        } -> std::same_as<bool>;
         instance.swap(instance);
       };
 
   template <typename T>
   concept concurrent_hash_map =
       hash_map<T> &&
-      requires(
-          const T& cinstance, T& instance,
-          std::add_lvalue_reference_t<std::add_const_t<typename T::key_type>>
-                               key,
-          helpers::visit_dummy func,
-          std::add_lvalue_reference_t<std::add_const_t<typename T::value_type>>
-                                                        val,
-          std::initializer_list<typename T::value_type> list) {
-        { cinstance.visit(key, func) } -> std::same_as<size_t>;
-        { cinstance.cvisit(key, func) } -> std::same_as<size_t>;
-        { cinstance.visit_all(func) } -> std::same_as<size_t>;
-        { cinstance.cvisit_all(func) } -> std::same_as<size_t>;
-        { instance.insert(val) } -> std::same_as<bool>;
-        { instance.insert(list) };
-        { instance.insert_or_visit(val, func) } -> std::same_as<bool>;
-        { instance.insert_or_cvisit(val, func) } -> std::same_as<bool>;
-        { cinstance.max_load() } -> std::same_as<typename T::size_type>;
+      requires(const T& cinstance, T& instance, const typename T::key_type& key,
+               helpers::visit_dummy func, const typename T::value_type& val,
+               std::initializer_list<typename T::value_type> list) {
+        {
+          cinstance.visit(key, func)
+        } -> std::same_as<size_t>;
+        {
+          cinstance.cvisit(key, func)
+        } -> std::same_as<size_t>;
+        {
+          cinstance.visit_all(func)
+        } -> std::same_as<size_t>;
+        {
+          cinstance.cvisit_all(func)
+        } -> std::same_as<size_t>;
+        {
+          instance.insert(val)
+        } -> std::same_as<bool>;
+        {
+          instance.insert(list)
+        };
+        {
+          instance.insert_or_visit(val, func)
+        } -> std::same_as<bool>;
+        {
+          instance.insert_or_cvisit(val, func)
+        } -> std::same_as<bool>;
+        {
+          cinstance.max_load()
+        } -> std::same_as<typename T::size_type>;
       };
 
   template <typename T>
   concept regular_hash_map =
       hash_map<T> && forward_iterable<T> &&
-      requires(
-          const T& cinstance, T& instance,
-          std::add_lvalue_reference_t<std::add_const_t<typename T::value_type>>
-                                                        val,
-          typename T::iterator                          itr,
-          std::initializer_list<typename T::value_type> list,
-          std::add_lvalue_reference_t<std::add_const_t<typename T::mapped_type>>
-              obj,
-          std::add_lvalue_reference_t<std::add_const_t<typename T::key_type>>
-                                     key,
-          typename T::const_iterator citr) {
+      requires(const T& cinstance, T& instance,
+               const typename T::value_type& val, typename T::iterator itr,
+               std::initializer_list<typename T::value_type> list,
+               const typename T::mapped_type&                obj,
+               const typename T::key_type&                   key,
+               typename T::const_iterator                    citr) {
         {
           instance.insert(val)
         } -> std::same_as<std::pair<typename T::iterator, bool>>;
@@ -258,12 +312,18 @@ namespace alterhook::utils
         {
           instance.insert_or_assign(citr, key, obj)
         } -> std::convertible_to<typename T::iterator>;
-        { instance.erase(citr) } -> std::convertible_to<typename T::iterator>;
-        { instance.erase(key) } -> std::same_as<typename T::size_type>;
+        {
+          instance.erase(citr)
+        } -> std::convertible_to<typename T::iterator>;
+        {
+          instance.erase(key)
+        } -> std::same_as<typename T::size_type>;
         instance.swap(instance);
         instance.clear();
         instance.merge(instance);
-        { instance.find(key) } -> std::convertible_to<typename T::iterator>;
+        {
+          instance.find(key)
+        } -> std::convertible_to<typename T::iterator>;
         {
           cinstance.find(key)
         } -> std::convertible_to<typename T::const_iterator>;
@@ -273,8 +333,8 @@ namespace alterhook::utils
         -> std::same_as<std::pair<typename T::iterator, typename T::iterator>>;
         {
           cinstance.equal_range(key)
-        } -> std::same_as<std::pair<typename T::const_iterator,
-                                    typename T::const_iterator>>;
+        } -> std::same_as<
+            std::pair<typename T::const_iterator, typename T::const_iterator>>;
         instance.at(key) = obj;
         instance[key]    = obj;
       };
@@ -287,16 +347,24 @@ namespace alterhook::utils
           std::initializer_list<typename T::value_type> list,
           typename T::iterator itr, typename T::const_iterator citr,
           const typename T::key_type& key, const typename T::mapped_type& obj) {
-        { instance.insert(val) } -> std::same_as<typename T::iterator>;
+        {
+          instance.insert(val)
+        } -> std::same_as<typename T::iterator>;
         instance.insert(itr, itr);
         instance.insert(list);
-        { instance.erase(citr) } -> std::convertible_to<typename T::iterator>;
-        { instance.erase(key) } -> std::same_as<typename T::size_type>;
+        {
+          instance.erase(citr)
+        } -> std::convertible_to<typename T::iterator>;
+        {
+          instance.erase(key)
+        } -> std::same_as<typename T::size_type>;
         instance.swap(instance);
         instance.clear();
         instance.merge(instance);
         instance.merge(instance);
-        { instance.find(key) } -> std::convertible_to<typename T::iterator>;
+        {
+          instance.find(key)
+        } -> std::convertible_to<typename T::iterator>;
         {
           cinstance.find(key)
         } -> std::convertible_to<typename T::const_iterator>;
@@ -306,30 +374,85 @@ namespace alterhook::utils
         -> std::same_as<std::pair<typename T::iterator, typename T::iterator>>;
         {
           cinstance.equal_range(key)
-        } -> std::same_as<std::pair<typename T::const_iterator,
-                                    typename T::const_iterator>>;
+        } -> std::same_as<
+            std::pair<typename T::const_iterator, typename T::const_iterator>>;
       };
 
   template <typename T>
   concept closed_addressing =
-      (regular_hash_map<T> || multi_hash_map<T>) &&
-      requires(T& instance, const T& cinstance, typename T::size_type n,
-               const typename T::key_type& key) {
+      (regular_hash_map<T> || multi_hash_map<T>)&&requires(
+          T& instance, const T& cinstance, typename T::size_type n,
+          const typename T::key_type& key, typename T::const_iterator citr) {
         typename T::local_iterator;
         typename T::const_local_iterator;
-        { instance.begin(n) } -> std::same_as<typename T::local_iterator>;
-        { instance.end(n) } -> std::same_as<typename T::local_iterator>;
+        typename T::node_type;
+        typename T::insert_return_type;
+        {
+          instance.extract(citr)
+        } -> std::same_as<typename T::node_type>;
+        {
+          instance.extract(key)
+        } -> std::same_as<typename T::node_type>;
+        {
+          instance.insert(instance.extract(key))
+        } -> std::same_as<typename T::insert_return_type>;
+        {
+          instance.begin(n)
+        } -> std::same_as<typename T::local_iterator>;
+        {
+          instance.end(n)
+        } -> std::same_as<typename T::local_iterator>;
         {
           cinstance.begin(n)
         } -> std::same_as<typename T::const_local_iterator>;
-        { cinstance.end(n) } -> std::same_as<typename T::const_local_iterator>;
+        {
+          cinstance.end(n)
+        } -> std::same_as<typename T::const_local_iterator>;
         {
           cinstance.cbegin(n)
         } -> std::same_as<typename T::const_local_iterator>;
-        { cinstance.cend(n) } -> std::same_as<typename T::const_local_iterator>;
-        { cinstance.max_bucket_count() } -> std::same_as<typename T::size_type>;
-        { cinstance.bucket_size(n) } -> std::same_as<typename T::size_type>;
-        { cinstance.bucket(key) } -> std::same_as<typename T::size_type>;
+        {
+          cinstance.cend(n)
+        } -> std::same_as<typename T::const_local_iterator>;
+        {
+          cinstance.max_bucket_count()
+        } -> std::same_as<typename T::size_type>;
+        {
+          cinstance.bucket_size(n)
+        } -> std::same_as<typename T::size_type>;
+        {
+          cinstance.bucket(key)
+        } -> std::same_as<typename T::size_type>;
+      } &&
+      requires(typename T::node_type& node, const typename T::node_type& cnode,
+               typename T::insert_return_type& insert_ret,
+               const typename T::key_type&     key,
+               const typename T::mapped_type&  value) {
+        typename T::node_type::key_type;
+        typename T::node_type::mapped_type;
+        typename T::node_type::allocator_type;
+        requires std::default_initializable<typename T::node_type>;
+        requires std::move_constructible<typename T::node_type>;
+        requires std::assignable_from<typename T::node_type&,
+                                      typename T::node_type>;
+        {
+          cnode.empty()
+        } -> std::same_as<bool>;
+        {
+          cnode.get_allocator()
+        } -> std::same_as<typename T::node_type::allocator_type>;
+        cnode.key()    = key;
+        cnode.mapped() = value;
+        node.swap(node);
+        {
+          insert_ret.position
+        } -> std::same_as<typename T::iterator&>;
+        {
+          insert_ret.inserted
+        } -> std::same_as<bool&>;
+        {
+          insert_ret.node
+        } -> std::same_as<typename T::node_type&>;
       };
 #else
   namespace helpers
@@ -340,45 +463,19 @@ namespace alterhook::utils
     /*
      * IMPLEMENTATION CODE GENERATORS
      */
-  #define __utils_gen_checker(name)                                            \
-    template <typename T, typename = void>                                     \
-    inline constexpr bool has_##name##_v = false;                              \
-    template <typename T>                                                      \
-    inline constexpr bool                                                      \
-        has_##name##_v<T, std::void_t<decltype(std::declval<T&>().name())>> =  \
-            true;                                                              \
-    template <typename T, typename = void>                                     \
-    inline constexpr bool has_const_##name##_v = false;                        \
-    template <typename T>                                                      \
-    inline constexpr bool has_const_##name##_v<                                \
-        T, std::void_t<decltype(std::declval<const T&>().name())>> = true;     \
-    template <typename T>                                                      \
-    using name##_ret_t = decltype(std::declval<T&>().name());                  \
-    template <typename T>                                                      \
-    using const_##name##_ret_t = decltype(std::declval<const T&>().name());
-
-  #define __utils_gen_args_checker2(name, unique_name, ...)                    \
-    template <typename T, typename = void>                                     \
-    inline constexpr bool has_##unique_name##_v = false;                       \
-    template <typename T>                                                      \
-    inline constexpr bool has_##unique_name##_v<                               \
-        T, std::void_t<decltype(std::declval<T&>().name(__VA_ARGS__))>> =      \
-        true;                                                                  \
-    template <typename T, typename = void>                                     \
-    inline constexpr bool has_const_##unique_name##_v = false;                 \
-    template <typename T>                                                      \
-    inline constexpr bool has_const_##unique_name##_v<                         \
-        T,                                                                     \
-        std::void_t<decltype(std::declval<const T&>().name(__VA_ARGS__))>> =   \
-        true;                                                                  \
-    template <typename T>                                                      \
-    using unique_name##_ret_t =                                                \
-        decltype(std::declval<T&>().name(__VA_ARGS__));                        \
-    template <typename T>                                                      \
-    using const_##unique_name##_ret_t =                                        \
-        decltype(std::declval<const T&>().name(__VA_ARGS__));
-
-  #define __utils_gen_args_checker(args) __utils_gen_args_checker2 args
+  #define __utils_gen_method_checker(name)                                     \
+    template <typename T, typename... args>                                    \
+    using name##_method_ret_t =                                                \
+        decltype(std::declval<T&>().name(std::declval<args>()...));            \
+    template <typename T, typename args, typename = void>                      \
+    inline constexpr bool has_##name##_method_impl_v = false;                  \
+    template <typename T, typename... args>                                    \
+    inline constexpr bool has_##name##_method_impl_v<                          \
+        T, type_sequence<args...>,                                             \
+        std::void_t<name##_method_ret_t<T, args...>>> = true;                  \
+    template <typename T, typename... args>                                    \
+    inline constexpr bool has_##name##_method_v =                              \
+        has_##name##_method_impl_v<T, type_sequence<args...>>;
 
   #define __utils_gen_member_type_checker(name)                                \
     template <typename T, typename = void>                                     \
@@ -390,108 +487,106 @@ namespace alterhook::utils
     /*
      * CHECKS GENERATORS
      */
-  #define __utils_gen_convertible_checker2(name, type)                         \
-    std::is_convertible_v<name##_ret_t<T>, type>
-  #define __utils_gen_convertible_checker(args)                                \
-    __utils_gen_convertible_checker2 args
+  #define __utils_has_method_noargs(cls, name) has_##name##_method_v<cls>
 
-  #define __utils_gen_const_convertible_checker2(name, type)                   \
-    std::is_convertible_v<const_##name##_ret_t<T>, type>
-  #define __utils_gen_const_convertible_checker(args)                          \
-    __utils_gen_const_convertible_checker2 args
+  #define __utils_has_method_args_impl(cls, name, args)                        \
+    has_##name##_method_v<cls, utils_expand args>
 
-  #define __utils_gen_same_types_checker2(name, type)                          \
-    std::is_same_v<name##_ret_t<T>, type>
-  #define __utils_gen_same_types_checker(args)                                 \
-    __utils_gen_same_types_checker2 args
+  #define __utils_has_method_args(cls, pair)                                   \
+    __utils_call(__utils_has_method_args_impl, (cls, utils_expand pair))
 
-  #define __utils_gen_const_same_types_checker2(name, type)                    \
-    std::is_same_v<const_##name##_ret_t<T>, type>
-  #define __utils_gen_const_same_types_checker(args)                           \
-    __utils_gen_const_same_types_checker2 args
+  #define __utils_has_method(name, cls)                                        \
+    utils_if(utils_is_call_operator(name))(                                    \
+        __utils_has_method_args, __utils_has_method_noargs)(cls, name)
 
-  #define __utils_gen_method_checker(name)       has_##name##_v<T>
-  #define __utils_gen_const_method_checker(name) has_const_##name##_v<T>
+  #define __utils_has_member_type(name, cls) has_##name##_member_type_v<cls>
 
-  #define __utils_gen_type_member_checker(name) has_##name##_member_type_v<T>
+  #define __utils_same_method_return_type_noargs(cls, name, type)              \
+    std::is_same_v<name##_method_ret_t<cls>, type>
+
+  #define __utils_same_method_return_type_args_impl(cls, name, args, type)     \
+    std::is_same_v<name##_method_ret_t<cls, utils_expand args>, type>
+
+  #define __utils_same_method_return_type_args(cls, pair, type)                \
+    __utils_call(__utils_same_method_return_type_args_impl,                    \
+                 (cls, utils_expand pair, type))
+
+  #define __utils_same_method_return_type_impl(cls, name, type)                \
+    utils_if(utils_is_call_operator(name))(                                    \
+        __utils_same_method_return_type_args,                                  \
+        __utils_same_method_return_type_noargs)(cls, name, type)
+
+  #define __utils_same_method_return_type(pair, cls)                           \
+    __utils_call2(__utils_same_method_return_type_impl,                        \
+                  (cls, utils_expand pair))
+
+  #define __utils_convertible_method_return_type_noargs(cls, name, type)       \
+    std::is_convertible_v<name##_method_ret_t<cls>, type>
+
+  #define __utils_convertible_method_return_type_args_impl(cls, name, args,    \
+                                                           type)               \
+    std::is_convertible_v<name##_method_ret_t<cls, utils_expand args>, type>
+
+  #define __utils_convertible_method_return_type_args(cls, pair, type)         \
+    __utils_call(__utils_convertible_method_return_type_args_impl,             \
+                 (cls, utils_expand pair, type))
+
+  #define __utils_convertible_method_return_type_impl(cls, name, type)         \
+    utils_if(utils_is_call_operator(name))(                                    \
+        __utils_convertible_method_return_type_args,                           \
+        __utils_convertible_method_return_type_noargs)(cls, name, type)
+
+  #define __utils_convertible_method_return_type(pair, cls)                    \
+    __utils_call2(__utils_convertible_method_return_type_impl,                 \
+                  (cls, utils_expand pair))
 
     /*
      * ABSTRACTED GENERATORS
      */
-  #define __utils_convertible_checks(...)                                      \
-    utils_map_separated(__utils_gen_convertible_checker, &&, __VA_ARGS__)
+  #define __utils_has_methods(cls, ...)                                        \
+    utils_map_separated_ud(__utils_has_method, &&, cls, __VA_ARGS__)
 
-  #define __utils_const_convertible_checks(...)                                \
-    utils_map_separated(__utils_gen_const_convertible_checker, &&, __VA_ARGS__)
+  #define __utils_has_member_types(cls, ...)                                   \
+    utils_map_separated_ud(__utils_has_member_type, &&, cls, __VA_ARGS__)
 
-  #define __utils_same_method_return_types(...)                                \
-    utils_map_separated(__utils_gen_same_types_checker, &&, __VA_ARGS__)
+  #define __utils_same_method_return_types(cls, ...)                           \
+    utils_map_separated_ud(__utils_same_method_return_type, &&, cls,           \
+                           __VA_ARGS__)
 
-  #define __utils_same_const_method_return_types(...)                          \
-    utils_map_separated(__utils_gen_const_same_types_checker, &&, __VA_ARGS__)
-
-  #define __utils_has_methods(...)                                             \
-    utils_map_separated(__utils_gen_method_checker, &&, __VA_ARGS__)
-  #define __utils_has_const_methods(...)                                       \
-    utils_map_separated(__utils_gen_const_method_checker, &&, __VA_ARGS__)
-
-  #define __utils_has_types(...)                                               \
-    utils_map_separated(__utils_gen_type_member_checker, &&, __VA_ARGS__)
+  #define __utils_convertible_method_return_types(cls, ...)                    \
+    utils_map_separated_ud(__utils_convertible_method_return_type, &&, cls,    \
+                           __VA_ARGS__)
 
     /*
      * IMPLEMENTATION GENERATION
      */
-    // clang-format off
-    utils_map(__utils_gen_checker, begin, end, cbegin, cend, get_allocator,
-              empty, size, max_size, hash_function, key_eq, bucket_count,
-              load_factor, max_load_factor, max_load, clear, max_bucket_count)
+    // exception
+    template <typename T, typename arg>
+    using access_operator_ret_t =
+        decltype(std::declval<T&>()[std::declval<arg>()]);
+    template <typename T, typename arg, typename = void>
+    inline constexpr bool has_access_operator_v = false;
+    template <typename T, typename arg>
+    inline constexpr bool has_access_operator_v<
+        T, arg, std::void_t<access_operator_ret_t<T, arg>>> = true;
 
-    utils_map(
+    // clang-format off
+    utils_map(__utils_gen_method_checker, begin, end, cbegin, cend,
+              get_allocator, empty, size, max_size, hash_function, key_eq,
+              bucket_count, bucket_size, bucket, load_factor, max_load_factor,
+              max_load, clear, max_bucket_count, allocate, deallocate, count,
+              rehash, reserve, swap, visit, cvisit, visit_all, cvisit_all,
+              insert, insert_or_visit, insert_or_cvisit, insert_or_assign,
+              erase, merge, find, equal_range, at)
+
+    /*utils_map(
         __utils_gen_args_checker,
-        (allocate, allocate, __utils_make_args(member_or_size_t_t<T>)),
-        (deallocate, deallocate,
-         __utils_make_args(member_or_pointer_t<T>, member_or_size_t_t<T>)),
-        (count, count, __utils_make_args(const typename T::key_type&)),
-        (max_load_factor, max_load_factorf, __utils_make_args(float)),
-        (rehash, rehash, __utils_make_args(typename T::size_type)),
-        (reserve, reserve, __utils_make_args(typename T::size_type)),
-        (swap, swap, __utils_make_args(T&)),
-        (visit, visit,
-         __utils_make_args(const typename T::key_type&, visit_dummy)),
-        (cvisit, cvisit,
-         __utils_make_args(const typename T::key_type&, visit_dummy)),
-        (visit_all, visit_all, __utils_make_args(visit_dummy)),
-        (cvisit_all, cvisit_all, __utils_make_args(visit_dummy)),
-        (insert, insert, __utils_make_args(const typename T::value_type&)),
-        (insert, inserti,
-         __utils_make_args(std::initializer_list<typename T::value_type>)),
-        (insert, insertr,
-         __utils_make_args(typename T::iterator, typename T::iterator)),
-        (insert_or_visit, insert_or_visit,
-         __utils_make_args(const typename T::value_type&, visit_dummy)),
-        (insert_or_cvisit, insert_or_cvisit,
-         __utils_make_args(const typename T::value_type&, visit_dummy)),
-        (insert_or_assign, insert_or_assign,
-         __utils_make_args(const typename T::key_type&,
-                           const typename T::mapped_type&)),
-        (insert_or_assign, insert_or_assignr,
-         __utils_make_args(typename T::const_iterator,
-                           const typename T::key_type&,
-                           const typename T::mapped_type&)),
-        (erase, erase, __utils_make_args(typename T::const_iterator)),
-        (erase, erasek, __utils_make_args(const typename T::key_type&)),
-        (merge, merge, __utils_make_args(T&)),
-        (find, find, __utils_make_args(const typename T::key_type&)),
-        (equal_range, equal_range,
-         __utils_make_args(const typename T::key_type&)),
-        (at, at, __utils_make_args(const typename T::key_type&)),
-        (operator[], access, __utils_make_args(const typename T::key_type&)),
         (begin, bbegin, __utils_make_args(typename T::size_type)),
         (end, bend, __utils_make_args(typename T::size_type)),
         (cbegin, bcbegin, __utils_make_args(typename T::size_type)),
         (cend, bcend, __utils_make_args(typename T::size_type)),
         (bucket_size, bucket_size, __utils_make_args(typename T::size_type)),
-        (bucket, bucket, __utils_make_args(const typename T::key_type&)))
+        (bucket, bucket, __utils_make_args(const typename T::key_type&)))*/
 
     utils_map(__utils_gen_member_type_checker, iterator, const_iterator,
               value_type, key_type, mapped_type, hasher, key_equal,
@@ -558,21 +653,24 @@ namespace alterhook::utils
      * IMPLEMENTATION
      */
     template <typename T,
-              bool = __utils_has_const_methods(begin, end, cbegin, cend) &&
-                     __utils_has_types(iterator, const_iterator)>
+              bool = __utils_has_methods(T, begin, end, cbegin, cend) &&
+                     __utils_has_member_types(T, iterator, const_iterator)>
     inline constexpr bool forward_iterable_impl = false;
-
     template <typename T>
     inline constexpr bool forward_iterable_impl<T, true> =
-        __utils_convertible_checks((begin, typename T::iterator),
-                                   (end, typename T::iterator)) &&
-        __utils_const_convertible_checks((begin, typename T::const_iterator),
-                                         (end, typename T::const_iterator),
-                                         (cbegin, typename T::const_iterator),
-                                         (cend, typename T::const_iterator));
+        __utils_convertible_method_return_types(
+            T, (begin, typename T::iterator), (end, typename T::iterator)) &&
+        __utils_convertible_method_return_types(
+            const T, (begin, typename T::const_iterator),
+            (end, typename T::const_iterator),
+            (cbegin, typename T::const_iterator),
+            (cend, typename T::const_iterator));
 
-    template <typename T, bool = __utils_has_types(value_type) &&
-                                 __utils_has_methods(allocate, deallocate)>
+    template <typename T,
+              bool = __utils_has_member_types(T, value_type) &&
+                     __utils_has_methods(T, (allocate, (member_or_size_t_t<T>)),
+                                         (deallocate, (member_or_pointer_t<T>,
+                                                       member_or_size_t_t<T>)))>
     inline constexpr bool allocator_type_impl = false;
     template <typename T>
     inline constexpr bool allocator_type_impl<T, true> =
@@ -614,20 +712,19 @@ namespace alterhook::utils
     inline constexpr bool takes_hasher_param<hash_map<T1, T2, T3, T4, T5>> =
         hash_type_impl<T3, T1>;
 
-    template <
-        typename T,
-        bool = takes_alloc_param<T> && takes_hasher_param<T> &&
-               __utils_has_types(key_type, mapped_type, value_type, hasher,
-                                 key_equal, allocator_type, pointer,
-                                 const_pointer, reference, const_reference,
-                                 size_type, difference_type) &&
-               __utils_has_const_methods(
-                   get_allocator, empty, size, max_size, hash_function, key_eq,
-                   count, max_load_factor, load_factor, bucket_count) &&
-               __utils_has_methods(max_load_factorf, rehash, reserve, swap)>
-    inline constexpr bool hash_map_impl = false;
+    template <typename T,
+              bool = __utils_has_methods(const T, get_allocator, empty, size,
+                                         max_size, hash_function, key_eq,
+                                         (count, (const typename T::key_type&)),
+                                         max_load_factor, load_factor,
+                                         bucket_count) &&
+                     __utils_has_methods(T, (max_load_factor, (float)),
+                                         (rehash, (typename T::size_type)),
+                                         (reserve, (typename T::size_type)),
+                                         (swap, (T&)))>
+    inline constexpr bool has_map_impl2 = false;
     template <typename T>
-    inline constexpr bool hash_map_impl<T, true> =
+    inline constexpr bool has_map_impl2<T, true> =
         std::is_default_constructible_v<T> &&
         std::is_constructible_v<
             T, typename T::size_type, const typename T::hasher&,
@@ -658,28 +755,62 @@ namespace alterhook::utils
         std::is_copy_assignable_v<T> &&
         std::is_assignable_v<T&,
                              std::initializer_list<typename T::value_type>> &&
-        __utils_same_const_method_return_types(
-            (get_allocator, typename T::allocator_type), (empty, bool),
+        __utils_same_method_return_types(
+            const T, (get_allocator, typename T::allocator_type), (empty, bool),
             (size, typename T::size_type), (hash_function, typename T::hasher),
-            (key_eq, typename T::key_equal), (count, typename T::size_type),
+            (key_eq, typename T::key_equal),
+            ((count, (const typename T::key_type&)), typename T::size_type),
             (bucket_count, typename T::size_type), (load_factor, float),
             (max_load_factor, float)) &&
         equal_comparable<T> && not_equal_comparable<T>;
 
-    template <typename T,
-              bool = __utils_has_const_methods(visit, cvisit, visit_all,
-                                               cvisit_all, max_load) &&
-                     __utils_has_methods(insert, inserti, insert_or_visit,
-                                         insert_or_cvisit) &&
-                     hash_map_impl<T>>
+    template <typename T, bool = takes_alloc_param<T> &&
+                                 takes_hasher_param<T> &&
+                                 __utils_has_member_types(
+                                     T, key_type, mapped_type, value_type,
+                                     hasher, key_equal, allocator_type, pointer,
+                                     const_pointer, reference, const_reference,
+                                     size_type, difference_type)>
+    inline constexpr bool hash_map_impl = false;
+    template <typename T>
+    inline constexpr bool hash_map_impl<T, true> = has_map_impl2<T>;
+
+    template <
+        typename T,
+        bool =
+            __utils_has_methods(
+                const T, (visit, (const typename T::key_type&, visit_dummy)),
+                (cvisit, (const typename T::key_type&, visit_dummy)),
+                (visit_all, (visit_dummy)), (cvisit_all, (visit_dummy)),
+                max_load) &&
+            __utils_has_methods(
+                T, (insert, (const typename T::value_type&)),
+                (insert, (std::initializer_list<typename T::value_type>)),
+                (insert_or_visit, (const typename T::value_type&, visit_dummy)),
+                (insert_or_cvisit,
+                 (const typename T::value_type&, visit_dummy)))>
+    inline constexpr bool concurrent_hash_map_impl2 = false;
+    template <typename T>
+    inline constexpr bool concurrent_hash_map_impl2<T, true> =
+        __utils_same_method_return_types(
+            const T,
+            ((visit, (const typename T::key_type&, visit_dummy)), size_t),
+            ((cvisit, (const typename T::key_type&, visit_dummy)), size_t),
+            ((visit_all, (visit_dummy)), size_t),
+            ((cvisit_all, (visit_dummy)), size_t),
+            (max_load, typename T::size_type)) &&
+        __utils_same_method_return_types(
+            T, ((insert, (const typename T::value_type&)), bool),
+            ((insert_or_visit, (const typename T::value_type&, visit_dummy)),
+             bool),
+            ((insert_or_cvisit, (const typename T::value_type&, visit_dummy)),
+             bool));
+
+    template <typename T, bool = hash_map_impl<T>>
     inline constexpr bool concurrent_hash_map_impl = false;
     template <typename T>
     inline constexpr bool concurrent_hash_map_impl<T, true> =
-        __utils_same_const_method_return_types(
-            (visit, size_t), (cvisit, size_t), (visit_all, size_t),
-            (cvisit_all, size_t), (max_load, typename T::size_type)) &&
-        __utils_same_method_return_types(
-            (insert, bool), (insert_or_visit, bool), (insert_or_cvisit, bool));
+        concurrent_hash_map_impl2<T>;
 
     template <typename T>
     using itr_bool_pair_t = std::pair<typename T::iterator, bool>;
@@ -691,63 +822,128 @@ namespace alterhook::utils
         std::pair<typename T::const_iterator, typename T::const_iterator>;
 
     template <typename T,
-              bool = __utils_has_methods(insert, inserti, insertr,
-                                         insert_or_assign, insert_or_assignr,
-                                         erase, erasek, merge, access) &&
-                     __utils_has_const_methods(equal_range, at) &&
-                     hash_map_impl<T> && forward_iterable_impl<T>>
+              bool =
+                  __utils_has_methods(
+                      T, (insert, (const typename T::value_type&)),
+                      (insert, (std::initializer_list<typename T::value_type>)),
+                      (insert, (typename T::iterator, typename T::iterator)),
+                      (insert_or_assign, (const typename T::key_type&,
+                                          const typename T::mapped_type&)),
+                      (insert_or_assign,
+                       (typename T::const_iterator, const typename T::key_type&,
+                        const typename T::mapped_type&)),
+                      (erase, (typename T::const_iterator)),
+                      (erase, (const typename T::key_type&)), (merge, (T&))) &&
+                  __utils_has_methods(
+                      const T, (equal_range, (const typename T::key_type&)),
+                      (at, (const typename T::key_type&)),
+                      (find, (const typename T::key_type&))) &&
+                  has_access_operator_v<T, const typename T::key_type&>>
+    inline constexpr bool regular_hash_map_impl2 = false;
+    template <typename T>
+    inline constexpr bool regular_hash_map_impl2<T, true> =
+        __utils_same_method_return_types(
+            T, ((insert, (const typename T::value_type&)), itr_bool_pair_t<T>),
+            ((insert_or_assign,
+              (const typename T::key_type&, const typename T::mapped_type&)),
+             itr_bool_pair_t<T>),
+            ((erase, (const typename T::key_type&)), typename T::size_type),
+            ((equal_range, (const typename T::key_type&)), itr_itr_pair_t<T>),
+            ((at, (const typename T::key_type&)), typename T::mapped_type&)) &&
+        __utils_same_method_return_types(
+            const T,
+            ((equal_range, (const typename T::key_type&)), citr_citr_pair_t<T>),
+            ((at, (const typename T::key_type&)),
+             const typename T::mapped_type&)) &&
+        __utils_convertible_method_return_types(
+            T, ((erase, (typename T::const_iterator)), typename T::iterator),
+            ((insert_or_assign,
+              (typename T::const_iterator, const typename T::key_type&,
+               const typename T::mapped_type&)),
+             typename T::iterator),
+            ((find, (const typename T::key_type&)), typename T::iterator)) &&
+        __utils_convertible_method_return_types(
+            const T, ((find, (const typename T::key_type&)),
+                      typename T::const_iterator)) &&
+        std::is_same_v<access_operator_ret_t<T, const typename T::key_type&>,
+                       typename T::mapped_type&>;
+
+    template <typename T, bool = hash_map_impl<T> && forward_iterable_impl<T>>
     inline constexpr bool regular_hash_map_impl = false;
     template <typename T>
     inline constexpr bool regular_hash_map_impl<T, true> =
-        __utils_same_method_return_types((insert, itr_bool_pair_t<T>),
-                                         (insert_or_assign, itr_bool_pair_t<T>),
-                                         (erasek, typename T::size_type),
-                                         (equal_range, itr_itr_pair_t<T>),
-                                         (at, typename T::mapped_type&),
-                                         (access, typename T::mapped_type&)) &&
-        __utils_same_const_method_return_types(
-            (equal_range, citr_citr_pair_t<T>),
-            (at, const typename T::mapped_type&)) &&
-        __utils_convertible_checks((erase, typename T::iterator),
-                                   (insert_or_assignr, typename T::iterator),
-                                   (find, typename T::iterator)) &&
-        __utils_const_convertible_checks((find, typename T::const_iterator));
+        regular_hash_map_impl2<T>;
 
-    template <typename T, bool = __utils_has_methods(insert, inserti, insertr,
-                                                     erase, erasek, merge) &&
-                                 __utils_has_const_methods(equal_range) &&
-                                 hash_map_impl<T> && forward_iterable_impl<T>>
+    template <typename T,
+              bool =
+                  __utils_has_methods(
+                      T, (insert, (const typename T::value_type&)),
+                      (insert, (std::initializer_list<typename T::value_type>)),
+                      (insert, (typename T::iterator, typename T::iterator)),
+                      (erase, (typename T::const_iterator)),
+                      (erase, (const typename T::key_type&)), (merge, (T&))) &&
+                  __utils_has_methods(
+                      const T, (equal_range, (const typename T::key_type&)),
+                      (find, (const typename T::key_type&)))>
+    inline constexpr bool multi_hash_map_impl2 = false;
+    template <typename T>
+    inline constexpr bool multi_hash_map_impl2<T, true> =
+        __utils_same_method_return_types(
+            T,
+            ((insert, (const typename T::value_type&)), typename T::iterator),
+            ((erase, (const typename T::key_type&)), typename T::size_type),
+            ((equal_range, (const typename T::key_type&)),
+             itr_itr_pair_t<T>)) &&
+        __utils_same_method_return_types(
+            const T, ((equal_range, (const typename T::key_type&)),
+                      citr_citr_pair_t<T>)) &&
+        __utils_convertible_method_return_types(
+            T, ((erase, (typename T::const_iterator)), typename T::iterator),
+            ((find, (const typename T::key_type&)), typename T::iterator)) &&
+        __utils_convertible_method_return_types(
+            const T, ((find, (const typename T::key_type&)),
+                      typename T::const_iterator));
+
+    template <typename T, bool = hash_map_impl<T> && forward_iterable_impl<T>>
     inline constexpr bool multi_hash_map_impl = false;
     template <typename T>
     inline constexpr bool multi_hash_map_impl<T, true> =
-        __utils_same_method_return_types((insert, typename T::iterator),
-                                         (erasek, typename T::size_type),
-                                         (equal_range, itr_itr_pair_t<T>)) &&
-        __utils_same_const_method_return_types(
-            (equal_range, citr_citr_pair_t<T>)) &&
-        __utils_convertible_checks((erase, typename T::iterator),
-                                   (find, typename T::iterator)) &&
-        __utils_const_convertible_checks((find, typename T::const_iterator));
+        multi_hash_map_impl2<T>;
 
     template <typename T,
-              bool = (regular_hash_map_impl<T> || multi_hash_map_impl<T>) &&
-                     __utils_has_types(local_iterator, const_local_iterator) &&
-                     __utils_has_const_methods(bbegin, bend, bcbegin, bcend,
-                                               max_bucket_count, bucket_size,
-                                               bucket)>
+              bool = __utils_has_methods(
+                  const T, (begin, (typename T::size_type)),
+                  (end, (typename T::size_type)),
+                  (cbegin, (typename T::size_type)),
+                  (cend, (typename T::size_type)),
+                  (bucket_size, (typename T::size_type)),
+                  (bucket, (const typename T::key_type&)), max_bucket_count)>
+    inline constexpr bool closed_addressing_impl2 = false;
+    template <typename T>
+    inline constexpr bool closed_addressing_impl2<T, true> =
+        __utils_same_method_return_types(
+            T, ((begin, (typename T::size_type)), typename T::local_iterator),
+            ((end, (typename T::size_type)), typename T::local_iterator)) &&
+        __utils_same_method_return_types(
+            const T,
+            ((begin, (typename T::size_type)),
+             typename T::const_local_iterator),
+            ((end, (typename T::size_type)), typename T::const_local_iterator),
+            ((cbegin, (typename T::size_type)),
+             typename T::const_local_iterator),
+            ((cend, (typename T::size_type)), typename T::const_local_iterator),
+            ((bucket_size, (typename T::size_type)), typename T::size_type),
+            ((bucket, (const typename T::key_type&)), typename T::size_type),
+            (max_bucket_count, typename T::size_type));
+
+    template <typename T,
+              bool = __utils_has_member_types(T, local_iterator,
+                                              const_local_iterator) &&
+                     (regular_hash_map_impl<T> || multi_hash_map_impl<T>)>
     inline constexpr bool closed_addressing_impl = false;
     template <typename T>
     inline constexpr bool closed_addressing_impl<T, true> =
-        __utils_same_method_return_types((bbegin, typename T::local_iterator),
-                                         (bend, typename T::local_iterator)) &&
-        __utils_same_const_method_return_types(
-            (bbegin, typename T::const_local_iterator),
-            (bend, typename T::const_local_iterator),
-            (bcbegin, typename T::const_local_iterator),
-            (bcend, typename T::const_local_iterator),
-            (max_bucket_count, typename T::size_type),
-            (bucket_size, typename T::size_type),
-            (bucket, typename T::size_type));
+        closed_addressing_impl2<T>;
   } // namespace helpers
 
   template <typename T>
