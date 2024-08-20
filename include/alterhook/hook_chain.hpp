@@ -1180,12 +1180,6 @@ namespace alterhook
 
     const trampoline& get_trampoline() const { return *this; }
 
-    void set_trampoline(const hook_chain& other)
-    {
-      trampoline::operator=(other);
-      memcpy(backup.data(), other.backup.data(), backup.size());
-    }
-
     void        init_with_list(hook_init_range range);
     list_range  append_list(transfer to, hook_init_range range);
     hook&       happend(const hook& src, bool enable_hook);

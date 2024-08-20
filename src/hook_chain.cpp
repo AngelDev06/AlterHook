@@ -127,12 +127,6 @@ namespace alterhook
       trampoline::operator=(other);
       inject_back(enabled.begin(), enabled.end());
       helpers::make_backup(ptarget, backup.data(), patch_above);
-      if (!enabled.empty())
-      {
-        std::unique_lock lock{ hook_lock };
-        thread_freezer   freeze{ *this, true };
-        inject(enabled.back().pdetour, true);
-      }
     }
     catch (...)
     {
@@ -1666,6 +1660,8 @@ namespace alterhook
   void hook_chain::inject_range(list_iterator pos, list_iterator first,
                                 list_iterator last)
   {
+    if (first == last)
+      return;
     const list_iterator lastprev = std::prev(last);
     if (pos != enabled.end())
     {
@@ -1693,6 +1689,8 @@ namespace alterhook
 
   void hook_chain::inject_back(list_iterator first, list_iterator last)
   {
+    if (first == last)
+      return;
     const list_iterator lastprev = std::prev(last);
 
     if (first == enabled.begin())

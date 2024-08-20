@@ -1,9 +1,14 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include <algorithm>
+#include <functional>
+#include <tuple>
 #include <unordered_map>
 #include <mutex>
 #include <shared_mutex>
+#include <utility>
+#include "alterhook/utilities/concepts.hpp"
 #include "hook_chain.hpp"
 
 #if utils_msvc
@@ -261,6 +266,401 @@ namespace alterhook
                      std::tuple<std::tuple<keys...>, std::tuple<detours...>,
                                 std::tuple<originals...>>&& args);
   };
+
+  namespace map_adapters
+  {
+    // basic adapter is the base for each instantiation of `hook_map` so it
+    // provides members that are independent of the hash map that is adapted
+    // (mainly constructors and getters)
+    template <typename T>
+    class basic : protected hook_chain,
+                  protected T
+    {
+    public:
+      using hook_chain::const_list_iterator;
+      using hook_chain::const_reverse_list_iterator;
+      using hook_chain::hook;
+      using hook_chain::include;
+      using hook_chain::list_iterator;
+      using hook_chain::reverse_list_iterator;
+      using hook_chain::transfer;
+      using typename T::allocator_type;
+      using typename T::const_pointer;
+      using typename T::difference_type;
+      using typename T::hasher;
+      using typename T::key_equal;
+      using typename T::key_type;
+      using typename T::mapped_type;
+      using typename T::pointer;
+      using typename T::size_type;
+      using typename T::value_type;
+
+      typedef T                                          adapted;
+      typedef hook_chain::iterator                       chain_iterator;
+      typedef hook_chain::const_iterator                 const_chain_iterator;
+      typedef hook_chain::reference                      hook_reference;
+      typedef hook_chain::const_reference                const_hook_reference;
+      typedef std::pair<const key_type&, hook_reference> reference;
+      typedef std::pair<const key_type&, const_hook_reference> const_reference;
+
+      using adapted::adapted;
+
+      basic(std::byte* target);
+
+      template <typename trg,
+                typename = std::enable_if_t<utils::callable_type<trg>>>
+      basic(trg&& target);
+
+      template <typename key_t, typename dtr, typename orig, typename... types,
+                typename = std::enable_if_t<utils::keys_detours_and_originals<
+                    key_t, dtr, orig&, types...>>>
+      basic(std::byte* target, key_t&& key, dtr&& detour, orig& original,
+            types&&... rest);
+
+      template <typename trg, typename key_t, typename dtr, typename orig,
+                typename... types,
+                typename = std::enable_if_t<utils::callable_type<trg> &&
+                                            utils::keys_detours_and_originals<
+                                                key_t, dtr, orig&, types...>>>
+      basic(trg&& target, key_t&& key, dtr&& detour, orig& original,
+            types&&... rest);
+
+      template <typename tuple, typename... types,
+                typename = std::enable_if_t<
+                    utils::key_detour_and_original_triplets<tuple, types...>>>
+      basic(std::byte* target, tuple&& first, types&&... rest);
+
+      template <typename trg, typename tuple, typename... types,
+                typename = std::enable_if_t<
+                    utils::key_detour_and_original_triplets<tuple, types...>>>
+      basic(trg&& target, tuple&& first, types&&... rest);
+
+      basic(const basic& other);
+      basic(const basic& other, const allocator_type& alloc);
+      basic(basic&& other) noexcept;
+      basic(basic&& other, const allocator_type& alloc) noexcept;
+
+      basic& operator=(const basic& other);
+      basic& operator=(basic&& other) noexcept;
+      basic& operator=(const alterhook::trampoline& other);
+      basic& operator=(alterhook::trampoline&& other);
+
+      ~basic() = default;
+
+      // getters
+      using hook_chain::disabled_size;
+      using hook_chain::empty;
+      using hook_chain::empty_disabled;
+      using hook_chain::empty_enabled;
+      using hook_chain::enabled_size;
+      using hook_chain::get_target;
+      using hook_chain::operator bool;
+      using adapted::get_allocator;
+      using adapted::max_size;
+      using adapted::size;
+
+      // setters
+      using hook_chain::set_target;
+
+      // lookup
+      using adapted::count;
+
+      // status update
+      using hook_chain::disable_all;
+      using hook_chain::enable_all;
+
+      // modifiers
+      using hook_chain::swap;
+      void clear();
+      void swap(basic& other);
+
+      // bucket interface
+      using adapted::bucket_count;
+
+      // hash policy
+      using adapted::load_factor;
+      using adapted::max_load_factor;
+      using adapted::rehash;
+      using adapted::reserve;
+
+      // observers
+      using adapted::hash_function;
+      using adapted::key_eq;
+
+      // comparison
+      bool operator==(const basic& other) const noexcept;
+      bool operator!=(const basic& other) const noexcept;
+
+    private:
+      void swap(hook_chain&)                               = delete;
+      void swap(list_iterator, hook_chain&, list_iterator) = delete;
+
+      template <size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
+                typename... types>
+      basic(std::byte* target, std::index_sequence<k_indexes...>,
+            std::index_sequence<d_indexes...>,
+            std::index_sequence<o_indexes...>, std::tuple<types...>&& args);
+    };
+
+    template <typename T>
+    basic<T>::basic(std::byte* target) : hook_chain(target)
+    {
+    }
+
+    template <typename T>
+    template <typename trg, typename>
+    basic<T>::basic(trg&& target)
+        : hook_chain(get_target_address(std::forward<trg>(target)))
+    {
+    }
+
+    template <typename T>
+    template <typename key_t, typename dtr, typename orig, typename... types,
+              typename>
+    basic<T>::basic(std::byte* target, key_t&& key, dtr&& detour,
+                    orig& original, types&&... rest)
+        : basic(
+              target,
+              utils::make_index_sequence_with_step<sizeof...(rest) + 3, 0, 3>(),
+              utils::make_index_sequence_with_step<sizeof...(rest) + 3, 1, 3>(),
+              utils::make_index_sequence_with_step<sizeof...(rest) + 3, 2, 3>(),
+              std::forward_as_tuple(std::forward<key_t>(key),
+                                    std::forward<dtr>(detour), original,
+                                    std::forward<types>(rest)...))
+    {
+    }
+
+    template <typename T>
+    template <typename trg, typename key_t, typename dtr, typename orig,
+              typename... types, typename>
+    basic<T>::basic(trg&& target, key_t&& key, dtr&& detour, orig& original,
+                    types&&... rest)
+        : basic(get_target_address(std::forward<trg>(target)),
+                std::forward<key_t>(key), std::forward<dtr>(detour), original,
+                std::forward<types>(rest)...)
+    {
+    }
+
+    template <typename T>
+    template <typename tuple, typename... types, typename>
+    basic<T>::basic(std::byte* target, tuple&& first, types&&... rest)
+        : hook_chain(
+              target,
+              std::forward_as_tuple(
+                  std::forward<
+                      std::tuple_element_t<1, utils::remove_cvref_t<tuple>>>(
+                      std::get<1>(first)),
+                  std::forward<
+                      std::tuple_element_t<2, utils::remove_cvref_t<tuple>>>(
+                      std::get<2>(first))),
+              std::forward_as_tuple(
+                  std::forward<
+                      std::tuple_element_t<1, utils::remove_cvref_t<types>>>(
+                      std::get<1>(rest)),
+                  std::forward<
+                      std::tuple_element_t<2, utils::remove_cvref_t<types>>>(
+                      std::get<2>(rest)))...)
+    {
+      list_iterator itr = hook_chain::ebegin();
+      adapted::emplace(
+          std::forward<std::tuple_element_t<0, utils::remove_cvref_t<tuple>>>(
+              std::get<0>(first)),
+          std::ref(*(itr++)));
+      (adapted::emplace(
+           std::forward<std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
+               std::get<0>(rest)),
+           std::ref(*(itr++))),
+       ...);
+    }
+
+    template <typename T>
+    template <typename trg, typename tuple, typename... types, typename>
+    basic<T>::basic(trg&& target, tuple&& first, types&&... rest)
+        : basic(get_target_address(std::forward<trg>(target)),
+                std::forward<tuple>(first), std::forward<types>(rest)...)
+
+    {
+    }
+
+    template <typename T>
+    basic<T>::basic(const basic& other) : hook_chain(other.get_target())
+    {
+      for (const auto& [key, value] : static_cast<const adapted&>(other))
+        adapted::emplace(key, std::ref(happend(value, false)));
+    }
+
+    template <typename T>
+    basic<T>::basic(const basic& other, const allocator_type& alloc)
+        : hook_chain(other.get_target()), adapted(alloc)
+    {
+      for (const auto& [key, value] : static_cast<const adapted&>(other))
+        adapted::emplace(key, std::ref(happend(value, false)));
+    }
+
+    template <typename T>
+    basic<T>::basic(basic&& other) noexcept
+        : hook_chain(std::move(other)), adapted(std::move(other))
+    {
+    }
+
+    template <typename T>
+    basic<T>::basic(basic&& other, const allocator_type& alloc) noexcept
+        : hook_chain(std::move(other)), adapted(std::move(other), alloc)
+    {
+    }
+
+    template <typename T>
+    basic<T>& basic<T>::operator=(const basic& other)
+    {
+      if (this == &other)
+        return *this;
+
+      disable_all();
+      hook_chain::operator=(other.get_trampoline());
+
+      if constexpr (utils::multi_hash_map<adapted>)
+        adapted::clear();
+      else
+      {
+        typedef typename adapted::iterator map_itr_t;
+        for (map_itr_t itr = adapted::begin(), itrend = adapted::end();
+             itr != itrend;)
+        {
+          if (other.adapted::count(itr->first))
+            ++itr;
+          else
+            itr = adapted::erase(itr);
+        }
+      }
+
+      if (adapted::size() >= other.adapted::size())
+      {
+        list_iterator itr = hook_chain::dbegin();
+        for (const auto& [key, value] : static_cast<const adapted&>(other))
+        {
+          hcopy(*itr, value);
+          if constexpr (utils::multi_hash_map<adapted>)
+            adapted::insert({ key, std::ref(*(itr++)) });
+          else
+            adapted::insert_or_assign(key, std::ref(*(itr++)));
+        }
+
+        hook_chain::erase(itr, hook_chain::dend());
+        return *this;
+      }
+
+      typedef typename adapted::const_iterator map_const_itr_t;
+      map_const_itr_t otheritr = other.adapted::begin();
+      for (list_iterator itr    = hook_chain::dbegin(),
+                         itrend = hook_chain::dend();
+           itr != itrend; ++itr, ++otheritr)
+      {
+        hcopy(*itr, otheritr->second);
+        if constexpr (utils::multi_hash_map<adapted>)
+          adapted::insert({ otheritr->first, std::ref(*itr) });
+        else
+          adapted::insert_or_assign(otheritr->first, std::ref(*itr));
+      }
+
+      for (map_const_itr_t otherend = other.adapted::end();
+           otheritr != otherend; ++otheritr)
+      {
+        if constexpr (utils::multi_hash_map<adapted>)
+          adapted::insert(
+              { otheritr->first, std::ref(happend(otheritr->second, false)) });
+        else
+          adapted::insert_or_assign(otheritr->first,
+                                    std::ref(happend(otheritr->second, false)));
+      }
+
+      return *this;
+    }
+
+    template <typename T>
+    basic<T>& basic<T>::operator=(basic&& other) noexcept
+    {
+      if (this == &other)
+        return *this;
+      hook_chain::operator=(std::move(other));
+      adapted::operator=(std::move(other));
+      return *this;
+    }
+
+    template <typename T>
+    basic<T>& basic<T>::operator=(const alterhook::trampoline& other)
+    {
+      hook_chain::operator=(other);
+      return *this;
+    }
+
+    template <typename T>
+    basic<T>& basic<T>::operator=(alterhook::trampoline&& other)
+    {
+      hook_chain::operator=(std::move(other));
+      return *this;
+    }
+
+    template <typename T>
+    void basic<T>::clear()
+    {
+      hook_chain::clear();
+      adapted::clear();
+    }
+
+    template <typename T>
+    void basic<T>::swap(basic& other)
+    {
+      hook_chain::swap(other);
+      adapted::swap(other);
+    }
+
+    template <typename T>
+    bool basic<T>::operator==(const basic& other) const noexcept
+    {
+      if (adapted::size() != other.adapted::size())
+        return false;
+
+      typedef typename adapted::const_reference map_const_ref_t;
+      return std::equal(adapted::begin(), adapted::end(),
+                        other.adapted::begin(),
+                        [](map_const_ref_t left, map_const_ref_t right)
+                        {
+                          return std::tie(left.first, left.second.get()) ==
+                                 std::tie(right.first, right.second.get());
+                        });
+    }
+
+    template <typename T>
+    bool basic<T>::operator!=(const basic& other) const noexcept
+    {
+      return !operator==(other);
+    }
+
+    template <typename T>
+    template <size_t... k_indexes, size_t... d_indexes, size_t... o_indexes,
+              typename... types>
+    basic<T>::basic(std::byte* target, std::index_sequence<k_indexes...>,
+                    std::index_sequence<d_indexes...>,
+                    std::index_sequence<o_indexes...>,
+                    std::tuple<types...>&& args)
+        : hook_chain(
+              target,
+              std::forward_as_tuple(
+                  std::forward<
+                      std::tuple_element_t<d_indexes, std::tuple<types...>>>(
+                      std::get<d_indexes>(args)),
+                  std::forward<
+                      std::tuple_element_t<o_indexes, std::tuple<types...>>>(
+                      std::get<o_indexes>(args)))...)
+    {
+      list_iterator itr = hook_chain::ebegin();
+      (adapted::emplace(
+           std::forward<std::tuple_element_t<k_indexes, std::tuple<types...>>>(
+               std::get<k_indexes>(args)),
+           std::ref(*(itr++))),
+       ...);
+    }
+  } // namespace map_adapters
 
   template <typename T>
   class helpers::regular_hook_map_base : public helpers::hook_map_base<T>

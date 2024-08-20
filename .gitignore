@@ -7,5 +7,4 @@ compile_commands.json
 bin/
 build/
 out/
-docs/html
-docs/latex
+docs/*/
