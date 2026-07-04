@@ -4,6 +4,7 @@
     {
       "name": "linux-base",
       "hidden": true,
+      "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
@@ -22,39 +23,11 @@
       }
     },
     {
-      "name": "linux-so",
-      "hidden": true,
-      "cacheVariables": {
-        "ALTERHOOK_SHARED": "ON"
-      }
-    },
-    {
-      "name": "linux-gcc-base",
-      "hidden": true,
-      "inherits": "linux-base",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
-      }
-    },
-    {
-      "name": "linux-clang-base",
-      "hidden": true,
-      "inherits": "linux-base",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++"
-      }
-    },
-    {
       "name": "linux-x64-base",
       "hidden": true,
       "architecture": {
         "value": "x64",
         "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -74,9 +47,6 @@
         "CXXFLAGS": "-m32",
         "LDFLAGS": "-m32"
       },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
           "intelliSenseMode": "linux-gcc-x86"
@@ -84,96 +54,93 @@
       }
     },
     {
-      "name": "linux-gcc-x64-debug",
-      "displayName": "Linux GCC x64 Debug",
-      "inherits": [ "linux-gcc-base", "linux-x64-base" ]
-    },
-    {
-      "name": "linux-gcc-x64-debug-so",
-      "displayName": "Linux GCC x64 Debug SO",
-      "inherits": [ "linux-gcc-x64-debug", "linux-so" ]
-    },
-    {
-      "name": "linux-gcc-x64-release",
-      "displayName": "Linux GCC x64 Release",
-      "inherits": "linux-gcc-x64-debug",
+      "name": "linux-gcc-base",
+      "hidden": true,
+      "inherits": "linux-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
       }
     },
     {
-      "name": "linux-gcc-x64-release-so",
-      "displayName": "Linux GCC x64 Release SO",
-      "inherits": [ "linux-gcc-x64-release", "linux-so" ]
+      "name": "linux-gcc-x64",
+      "displayName": "Linux GCC x64 Static Library",
+      "inherits": [
+        "linux-gcc-base",
+        "linux-x64-base"
+      ]
     },
     {
-      "name": "linux-gcc-x86-debug",
-      "displayName": "Linux GCC x86 Debug",
-      "inherits": [ "linux-gcc-base", "linux-x86-base" ]
+      "name": "linux-gcc-x86",
+      "displayName": "Linux GCC x86 Static Library",
+      "inherits": [
+        "linux-gcc-base",
+        "linux-x86-base"
+      ]
     },
     {
-      "name": "linux-gcc-x86-debug-so",
-      "displayName": "Linux GCC x86 Debug SO",
-      "inherits": [ "linux-gcc-x86-debug", "linux-so" ]
-    },
-    {
-      "name": "linux-gcc-x86-release",
-      "displayName": "Linux GCC x86 Release",
-      "inherits": "linux-gcc-x86-debug",
+      "name": "linux-clang-base",
+      "hidden": true,
+      "inherits": "linux-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
       }
     },
     {
-      "name": "linux-gcc-x86-release-so",
-      "displayName": "Linux GCC x86 Release SO",
-      "inherits": [ "linux-gcc-x86-release", "linux-so" ]
+      "name": "linux-clang-x64",
+      "displayName": "Linux Clang x64 Static Library",
+      "inherits": [
+        "linux-clang-base",
+        "linux-x64-base"
+      ]
     },
     {
-      "name": "linux-clang-x64-debug",
-      "displayName": "Linux Clang x64 Debug",
-      "inherits": [ "linux-clang-base", "linux-x64-base" ]
+      "name": "linux-clang-x86",
+      "displayName": "Linux Clang x86 Static Library",
+      "inherits": [
+        "linux-clang-base",
+        "linux-x86-base"
+      ]
     },
     {
-      "name": "linux-clang-x64-debug-so",
-      "displayName": "Linux Clang x64 Debug SO",
-      "inherits": [ "linux-clang-x64-debug", "linux-so" ]
-    },
-    {
-      "name": "linux-clang-x64-release",
-      "displayName": "Linux Clang x64 Release",
-      "inherits": "linux-clang-x64-debug",
+      "name": "linux-so",
+      "hidden": true,
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "ALTERHOOK_SHARED": "ON"
       }
     },
     {
-      "name": "linux-clang-x64-release-so",
-      "displayName": "Linux Clang x64 Release SO",
-      "inherits": [ "linux-clang-x64-release", "linux-so" ]
+      "name": "linux-gcc-x64-so",
+      "displayName": "Linux GCC x64 Shared Library",
+      "inherits": [
+        "linux-gcc-x64",
+        "linux-so"
+      ]
     },
     {
-      "name": "linux-clang-x86-debug",
-      "displayName": "Linux Clang x86 Debug",
-      "inherits": [ "linux-clang-base", "linux-x86-base" ]
+      "name": "linux-gcc-x86-so",
+      "displayName": "Linux GCC x86 Shared Library",
+      "inherits": [
+        "linux-gcc-x86",
+        "linux-so"
+      ]
     },
     {
-      "name": "linux-clang-x86-debug-so",
-      "displayName": "Linux Clang x86 Debug SO",
-      "inherits": [ "linux-clang-x86-debug", "linux-so" ]
+      "name": "linux-clang-x64-so",
+      "displayName": "Linux Clang x64 Shared Library",
+      "inherits": [
+        "linux-clang-x64",
+        "linux-so"
+      ]
     },
     {
-      "name": "linux-clang-x86-release",
-      "displayName": "Linux Clang x86 Release",
-      "inherits": "linux-clang-x86-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "linux-clang-x86-release-so",
-      "displayName": "Linux Clang x86 Release SO",
-      "inherits": [ "linux-clang-x86-release", "linux-so" ]
+      "name": "linux-clang-x86-so",
+      "displayName": "Linux Clang x86 Shared Library",
+      "inherits": [
+        "linux-clang-x86",
+        "linux-so"
+      ]
     }
   ]
 }

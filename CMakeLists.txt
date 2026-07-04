@@ -1,11 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-include(FetchContent)
-# get capstone
-FetchContent_Declare(
-  capstone
-  GIT_REPOSITORY https://github.com/AngelDev06/capstone
-  GIT_TAG da74b9a3
-  GIT_SUBMODULES "")
+include(cmake/CPM.cmake)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(
@@ -137,23 +131,11 @@ if(NOT ALTERHOOK_TARGET_ARCH IN_LIST ALTERHOOK_TARGET_ARCHS)
   endif()
 endif()
 
-set(CAPSTONE_ARCHITECTURE_DEFAULT
-    OFF
-    CACHE BOOL "Whether architectures are enabled by default" FORCE)
 if(ALTERHOOK_TARGET_ARCH STREQUAL "X86")
-  set(CAPSTONE_X86_SUPPORT
-      ON
-      CACHE BOOL "x86 support" FORCE)
   message(STATUS "Enabling alterhook x86 support")
 elseif(ALTERHOOK_TARGET_ARCH STREQUAL "AArch64")
-  set(CAPSTONE_AARCH64_SUPPORT
-      ON
-      CACHE BOOL "AARCH64 support" FORCE)
   message(STATUS "Enabling alterhook aarch64 support")
 else()
-  set(CAPSTONE_ARM_SUPPORT
-      ON
-      CACHE BOOL "ARM support" FORCE)
   message(STATUS "Enabling alterhook armv7 support")
   list(APPEND ALTERHOOK_ARCH_IMPL "src/ARM/exceptions.cpp")
 endif()
@@ -204,8 +186,18 @@ set(ALTERHOOK_PCH "pch/${OS_STR}/pch.hpp")
 # setup capstone
 string(CONCAT GNU_WARNINGS_ONLY $<OR: $<CXX_COMPILER_ID:Clang>,
               $<NOT:$<BOOL:${MSVC}>> >)
+string(TOUPPER ${ALTERHOOK_TARGET_ARCH} CAPSTONE_ARCH)
 
-FetchContent_MakeAvailable(capstone)
+# fetch capstone
+cpmaddpackage(
+  URI
+  "gh:AngelDev06/capstone#da74b9a3"
+  GIT_SUBMODULES
+  ""
+  OPTIONS
+  "CAPSTONE_ARCHITECTURE_DEFAULT OFF"
+  "CAPSTONE_${CAPSTONE_ARCH}_SUPPORT ON")
+
 target_compile_options(
   capstone PRIVATE $<$<BOOL:${MSVC}>:/wd4715>
                    $<${GNU_WARNINGS_ONLY}:-Wno-return-type>)

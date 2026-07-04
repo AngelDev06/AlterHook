@@ -4,7 +4,7 @@
     {
       "name": "windows-base",
       "hidden": true,
-      "generator": "Ninja",
+      "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
@@ -18,87 +18,38 @@
       }
     },
     {
-      "name": "windows-dll",
-      "hidden": true,
-      "cacheVariables": {
-        "ALTERHOOK_SHARED": "ON"
-      }
-    },
-    {
-      "name": "windows-msvc-base",
-      "hidden": true,
+      "name": "windows-msvc-x64",
+      "displayName": "Windows MSVC x64 Static Library",
       "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
       "cacheVariables": {
         "CMAKE_C_COMPILER": "cl.exe",
         "CMAKE_CXX_COMPILER": "cl.exe"
       }
     },
     {
-      "name": "windows-clang-base",
-      "hidden": true,
-      "inherits": "windows-base",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "clang-cl.exe",
-        "CMAKE_CXX_COMPILER": "clang-cl.exe"
-      }
-    },
-    {
-      "name": "test-base",
-      "hidden": true,
-      "cacheVariables": {
-        "ALTERHOOK_BUILD_TESTS": "ON"
-      }
-    },
-    {
-      "name": "windows-msvc-x64-debug",
-      "displayName": "Windows MSVC x64 Debug",
-      "inherits": "windows-msvc-base",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "windows-msvc-x64-release",
-      "displayName": "Windows MSVC x64 Release",
-      "inherits": "windows-msvc-x64-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-msvc-x86-debug",
-      "displayName": "Windows MSVC x86 Debug",
-      "inherits": "windows-msvc-base",
+      "name": "windows-msvc-x86",
+      "displayName": "Windows MSVC x86 Static Library",
+      "inherits": "windows-msvc-x64",
       "architecture": {
         "value": "x86",
         "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
-      "name": "windows-msvc-x86-release",
-      "displayName": "Windows MSVC x86 Release",
-      "inherits": "windows-msvc-x86-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-clang-x64-debug",
-      "displayName": "Windows Clang x64 Debug",
-      "inherits": "windows-clang-base",
+      "name": "windows-clang-x64",
+      "displayName": "Windows Clang x64 Static Library",
+      "inherits": "windows-base",
       "architecture": {
         "value": "x64",
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_C_COMPILER": "clang-cl.exe",
+        "CMAKE_CXX_COMPILER": "clang-cl.exe"
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
@@ -107,23 +58,12 @@
       }
     },
     {
-      "name": "windows-clang-x64-release",
-      "displayName": "Windows Clang x64 Release",
-      "inherits": "windows-clang-x64-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-clang-x86-debug",
-      "displayName": "Windows Clang x86 Debug",
-      "inherits": "windows-clang-base",
+      "name": "windows-clang-x86",
+      "displayName": "Windows Clang x86 Static Library",
+      "inherits": "windows-clang-x64",
       "architecture": {
         "value": "x86",
         "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
       },
       "environment": {
         "CC": "clang-cl",
@@ -139,59 +79,38 @@
       }
     },
     {
-      "name": "windows-clang-x86-release",
-      "displayName": "Windows Clang x86 Release",
-      "inherits": "windows-clang-x86-debug",
+      "name": "windows-dll",
+      "hidden": true,
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "ALTERHOOK_SHARED": "ON"
       }
     },
     {
-      "name": "windows-msvc-x64-debug-dll",
-      "displayName": "Windows MSVC x64 Debug DLL",
-      "inherits": [ "windows-msvc-x64-debug", "windows-dll" ]
+      "name": "windows-msvc-x64-dll",
+      "displayName": "Windows MSVC x64 Dynamic Library",
+      "inherits": [ "windows-msvc-x64", "windows-dll" ]
     },
     {
-      "name": "windows-msvc-x64-release-dll",
-      "displayName": "Windows MSVC x64 Release DLL",
-      "inherits": [ "windows-msvc-x64-release", "windows-dll" ]
+      "name": "windows-msvc-x86-dll",
+      "displayName": "Windows MSVC x86 Dynamic Library",
+      "inherits": [ "windows-msvc-x86", "windows-dll" ]
     },
     {
-      "name": "windows-msvc-x86-debug-dll",
-      "displayName": "Windows MSVC x86 Debug DLL",
-      "inherits": [ "windows-msvc-x86-debug", "windows-dll" ]
+      "name": "windows-clang-x64-dll",
+      "displayName": "Windows Clang x64 Dynamic Library",
+      "inherits": [ "windows-clang-x64", "windows-dll" ]
     },
     {
-      "name": "windows-msvc-x86-release-dll",
-      "displayName": "Windows MSVC x86 Release DLL",
-      "inherits": [ "windows-msvc-x86-release", "windows-dll" ]
-    },
-    {
-      "name": "windows-clang-x64-debug-dll",
-      "displayName": "Windows Clang x64 Debug DLL",
-      "inherits": [ "windows-clang-x64-debug", "windows-dll" ]
-    },
-    {
-      "name": "windows-clang-x64-release-dll",
-      "displayName": "Windows Clang x64 Release DLL",
-      "inherits": [ "windows-clang-x64-release", "windows-dll" ]
-    },
-    {
-      "name": "windows-clang-x86-debug-dll",
-      "displayName": "Windows Clang x86 Debug DLL",
-      "inherits": [ "windows-clang-x86-debug", "windows-dll" ]
-    },
-    {
-      "name": "windows-clang-x86-release-dll",
-      "displayName": "Windows Clang x86 Release DLL",
-      "inherits": [ "windows-clang-x86-release", "windows-dll" ]
+      "name": "windows-clang-x86-dll",
+      "displayName": "Windows Clang x86 Dynamic Library",
+      "inherits": [ "windows-clang-x86", "windows-dll" ]
     }
   ],
   "testPresets": [
     {
       "name": "test-windows-dll",
       "displayName": "Windows DLL test",
-      "configurePreset": "windows-msvc-x64-debug-dll",
+      "configurePreset": "windows-msvc-x64-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
@@ -201,7 +120,7 @@
     {
       "name": "test-clang-windows-dll",
       "displayName": "Windows Clang DLL test",
-      "configurePreset": "windows-clang-x64-debug-dll",
+      "configurePreset": "windows-clang-x64-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
@@ -211,7 +130,7 @@
     {
       "name": "test-x86-windows-dll",
       "displayName": "Windows x86 DLL test",
-      "configurePreset": "windows-msvc-x86-debug-dll",
+      "configurePreset": "windows-msvc-x86-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
@@ -221,7 +140,7 @@
     {
       "name": "test-clang-x86-windows-dll",
       "displayName": "Windows Clang x86 DLL test",
-      "configurePreset": "windows-clang-x86-debug-dll",
+      "configurePreset": "windows-clang-x86-dll",
       "output": { "outputOnFailure": true },
       "execution": {
         "noTestsAction": "error",
