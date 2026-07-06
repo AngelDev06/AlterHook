@@ -1,8 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.hpp>
+#include <utility>
 #include "hook.hpp"
 #include "injection.hpp"
+#include "tools.hpp"
 
 #if utils_msvc
   #pragma warning(push)
@@ -13,11 +15,7 @@ namespace alterhook
 {
   hook::hook(const hook& other)
       : trampoline(other), pdetour(other.pdetour), backup(other.backup),
-        original_buffer(other.original_buffer),
-        original_wrap(other.original_wrap
-                          ? std::launder(reinterpret_cast<helpers::original*>(
-                                &original_buffer))
-                          : nullptr)
+        original_ref(other.original_ref)
   {
   }
 
@@ -25,11 +23,7 @@ namespace alterhook
       : trampoline(std::move(other)),
         pdetour(std::exchange(other.pdetour, nullptr)),
         enabled(std::exchange(other.enabled, false)), backup(other.backup),
-        original_buffer(other.original_buffer),
-        original_wrap(std::exchange(other.original_wrap, nullptr)
-                          ? std::launder(reinterpret_cast<helpers::original*>(
-                                &original_buffer))
-                          : nullptr)
+        original_ref(std::move(other.original_ref))
   {
   }
 
@@ -43,12 +37,9 @@ namespace alterhook
     pdetour = other.pdetour;
     backup  = other.backup;
 
-    if (!other.original_wrap)
+    if (!other.original_ref)
       return *this;
-
-    original_buffer = other.original_buffer;
-    original_wrap =
-        std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
+    original_ref = other.original_ref;
     return *this;
   }
 
@@ -64,13 +55,10 @@ namespace alterhook
     enabled = std::exchange(other.enabled, false);
     backup  = other.backup;
 
-    if (!other.original_wrap)
+    if (!other.original_ref)
       return *this;
 
-    original_buffer = other.original_buffer;
-    original_wrap =
-        std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
-    other.original_wrap = nullptr;
+    original_ref = std::move(other.original_ref);
     return *this;
   }
 
@@ -83,6 +71,9 @@ namespace alterhook
     disable();
     trampoline::operator=(other);
     helpers::make_backup(ptarget, backup.data(), patch_above);
+    if (original_ref)
+      original_ref.bind_original(
+          helpers::resolve_original(ptarget, ptrampoline.get()));
     if (should_enable)
       enable();
     return *this;
@@ -97,8 +88,9 @@ namespace alterhook
     disable();
     trampoline::operator=(std::move(other));
     helpers::make_backup(ptarget, backup.data(), patch_above);
-    if (original_wrap)
-      *original_wrap = helpers::resolve_original(ptarget, ptrampoline.get());
+    if (original_ref)
+      original_ref.bind_original(
+          helpers::resolve_original(ptarget, ptrampoline.get()));
     if (should_enable)
       enable();
     return *this;
@@ -107,8 +99,8 @@ namespace alterhook
   hook::~hook() noexcept
   {
     disable();
-    if (original_wrap)
-      *original_wrap = nullptr;
+    if (original_ref)
+      original_ref.unbind_original();
   }
 
   void hook::enable()
@@ -162,34 +154,27 @@ namespace alterhook
     pdetour = detour;
   }
 
-  void hook::set_original(helpers::orig_buff_t original)
+  void hook::set_original(const helpers::original_ref_handler& new_original)
   {
     thread_freezer freeze{};
     if (enabled)
       freeze.init(nullptr);
-    if (!original_wrap)
-    {
-      original_buffer = original;
-      original_wrap =
-          std::launder(reinterpret_cast<helpers::original*>(&original_buffer));
-      *original_wrap = helpers::resolve_original(ptarget, ptrampoline.get());
-      return;
-    }
-    helpers::orig_buff_t tmp = std::exchange(original_buffer, original);
-    *original_wrap = helpers::resolve_original(ptarget, ptrampoline.get());
-    *std::launder(reinterpret_cast<helpers::original*>(&tmp)) = nullptr;
+    if (original_ref)
+      original_ref.unbind_original();
+
+    original_ref = new_original;
+    original_ref.bind_original(
+        helpers::resolve_original(ptarget, ptrampoline.get()));
   }
 
   hook& hook::reset_original()
   {
-    if (original_wrap)
-    {
-      thread_freezer freeze{};
-      if (enabled)
-        freeze.init(nullptr);
-      *original_wrap = nullptr;
-      original_wrap  = nullptr;
-    }
+    if (!original_ref)
+      return *this;
+    thread_freezer freeze{};
+    if (enabled)
+      freeze.init(nullptr);
+    original_ref.unbind_original();
     return *this;
   }
 

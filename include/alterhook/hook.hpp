@@ -4,6 +4,7 @@
 #include <array>
 #include "detail/constants.hpp"
 #include "trampoline.hpp"
+#include "utilities/function_traits.hpp"
 
 namespace alterhook
 {
@@ -373,23 +374,20 @@ namespace alterhook
 
     typedef std::array<std::byte, detail::constants::backup_size> backup_t;
 
-    const std::byte*     pdetour = nullptr;
-    bool                 enabled = false;
-    backup_t             backup{};
-    helpers::orig_buff_t original_buffer{};
-    helpers::original*   original_wrap = nullptr;
+    const std::byte*              pdetour = nullptr;
+    bool                          enabled = false;
+    backup_t                      backup{};
+    helpers::original_ref_handler original_ref{};
 
     void set_detour(std::byte* detour);
-    void set_original(helpers::orig_buff_t original);
+    void set_original(const helpers::original_ref_handler& new_original);
   };
 
   template <typename dtr, typename orig, typename>
   hook::hook(std::byte* target, dtr&& detour, orig& original, bool enable_hook)
       : trampoline(target),
         pdetour(get_target_address<orig>(std::forward<dtr>(detour))),
-        original_buffer(helpers::original_wrapper(original)),
-        original_wrap(std::launder(
-            reinterpret_cast<helpers::original*>(&original_buffer)))
+        original_ref(original)
   {
     helpers::assert_valid_detour_original_pair<dtr, orig>();
     helpers::make_backup(target, backup.data(), patch_above);
@@ -440,9 +438,18 @@ namespace alterhook
   template <typename orig, typename>
   hook& hook::set_original(orig& original)
   {
-    if (original_wrap && *original_wrap == original)
-      return *this;
-    set_original(helpers::original_wrapper(original));
+    // Checking for both originals about whether they refer to an std::function
+    // instance is crutial because it's not possible to get the raw function
+    // address from such instances and therefore the comparison will fail. The
+    // process is only skipped when both address to the original function are
+    // accessible and equal.
+    if constexpr (!utils::stl_function_type<orig>)
+    {
+      if (!original_ref.is_stl_function_ref() && original_ref &&
+          original_ref == original)
+        return *this;
+    }
+    set_original(helpers::original_ref_handler(original));
     return *this;
   }
 } // namespace alterhook
