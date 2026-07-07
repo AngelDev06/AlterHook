@@ -3,6 +3,7 @@
 #pragma once
 #include <array>
 #include "detail/constants.hpp"
+#include "detail/injectable.hpp"
 #include "trampoline.hpp"
 #include "utilities/function_traits.hpp"
 
@@ -37,7 +38,8 @@ namespace alterhook
    * hook is enabled or not. Enabled means the redirection to the detour is
    * currently active, while disabled means the opposite.
    */
-  class ALTERHOOK_API hook : trampoline
+  class ALTERHOOK_API hook : trampoline,
+                             detail::injectable<hook>
   {
   public:
     /**

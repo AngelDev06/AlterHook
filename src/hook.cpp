@@ -4,6 +4,7 @@
 #include <utility>
 #include "hook.hpp"
 #include "injection.hpp"
+#include "thread_handler.hpp"
 #include "tools.hpp"
 
 #if utils_msvc

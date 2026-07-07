@@ -83,7 +83,7 @@ foreach(
   endif()
 endforeach()
 
-foreach(HEADER "macros" "constants")
+foreach(HEADER "macros" "constants" "injectable")
   list(APPEND ALTERHOOK_DETAILS "include/alterhook/detail/${HEADER}.hpp")
 endforeach()
 
@@ -94,7 +94,7 @@ foreach(ITEM "buffer" "disassembler" "injection")
   endif()
 endforeach()
 
-foreach(SRC "misc")
+foreach(SRC "misc" "injectable")
   list(APPEND ALTERHOOK_IMPL "src/${SRC}.cpp")
 endforeach()
 
