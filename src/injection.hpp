@@ -4,8 +4,6 @@
 #include "tools.hpp"
 #include <sys/mman.h>
 #pragma GCC visibility push(hidden)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
 namespace alterhook
 {
@@ -105,22 +103,6 @@ namespace alterhook
 #if !utils_x86
   void set_relay(std::byte* prelay, const std::byte* detour);
 #endif
-
-  // #define __inject3(other, backup_or_detour, enable) \
-  //   ::alterhook::injectors::inject(other, backup_or_detour, enable)
-  // #define __inject2(backup_or_detour, enable) \
-  //   ::alterhook::injectors::inject(*this, backup_or_detour, enable)
-  // #define inject(...) \
-  //   utils_if(utils_equal(utils_sizeof(__VA_ARGS__), 3))(__inject3, \
-  //                                                       __inject2)(__VA_ARGS__)
-  //
-  // #define __patch2(other, detour) ::alterhook::injectors::patch(other,
-  // detour) #define __patch1(detour) ::alterhook::injectors::patch(*this,
-  // detour)
-  // #define patch(...) \
-  //   utils_if(utils_equal(utils_sizeof(__VA_ARGS__), 2))(__patch2, \
-  //                                                       __patch1)(__VA_ARGS__)
 } // namespace alterhook
 
-#pragma GCC diagnostic pop
 #pragma GCC visibility pop

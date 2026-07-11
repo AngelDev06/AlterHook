@@ -4,6 +4,8 @@
 #include "hook_chain.hpp"
 #include "injection.hpp"
 #include "exceptions.hpp"
+#include "thread_handler.hpp"
+#include "tools.hpp"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnon-virtual-dtor"
 #pragma clang diagnostic ignored "-Wshadow"
@@ -14,14 +16,14 @@ namespace alterhook
 {
   hook_chain::hook_chain(alterhook::hook&& other) : trampoline(std::move(other))
   {
-    utils_assert(other.original_wrap,
+    utils_assert(other.original_ref,
                  "hook_chain::hook_chain: can't initialize hook chain with a "
                  "hook that doesn't hold a reference to the original");
     memcpy(backup.data(), other.backup.data(), backup.size());
     hook_list& target_list = other.enabled ? enabled : disabled;
 
     target_list.emplace_back(
-        *this, other.pdetour, other.original_buffer,
+        *this, other.pdetour, other.original_ref,
         helpers::resolve_original(ptarget, ptrampoline.get()), other.enabled);
     target_list.begin()->current = target_list.begin();
     starts_enabled               = other.enabled;
@@ -33,7 +35,7 @@ namespace alterhook
     for (const hook& h : other)
     {
       list_iterator itr =
-          disabled.emplace(disabled.end(), *this, h.pdetour, h.origbuff);
+          disabled.emplace(disabled.end(), *this, h.pdetour, h.original_ref);
       itr->current = itr;
     }
   }
@@ -72,8 +74,8 @@ namespace alterhook
       for (auto otheritr = other.begin(), otherend = other.end();
            otheritr != otherend; ++otheritr, ++thisitr)
       {
-        thisitr->pdetour  = otheritr->pdetour;
-        thisitr->origbuff = otheritr->origbuff;
+        thisitr->pdetour      = otheritr->pdetour;
+        thisitr->original_ref = otheritr->original_ref;
       }
       disabled.erase(thisitr, disabled.end());
     }
@@ -83,13 +85,13 @@ namespace alterhook
       for (auto thisitr = disabled.begin(), thisend = disabled.end();
            thisitr != thisend; ++thisitr, ++otheritr)
       {
-        thisitr->pdetour  = otheritr->pdetour;
-        thisitr->origbuff = otheritr->origbuff;
+        thisitr->pdetour      = otheritr->pdetour;
+        thisitr->original_ref = otheritr->original_ref;
       }
       for (auto otherend = other.end(); otheritr != otherend; ++otheritr)
       {
         auto itr = disabled.emplace(disabled.end(), *this, otheritr->pdetour,
-                                    otheritr->origbuff);
+                                    otheritr->original_ref);
         itr->current = itr;
       }
     }
@@ -237,7 +239,7 @@ namespace alterhook
     if (enabled.empty())
     {
       reverse_list_iterator rbegin = disabled.rbegin();
-      rbegin->redirect_originalref(
+      rbegin->redirect_original(
           helpers::resolve_original(ptarget, ptrampoline.get()));
       thread_freezer freeze{ *this, true };
       {
@@ -251,8 +253,8 @@ namespace alterhook
            itr != enditr; ++itr, ++prev)
       {
         itr->enabled = true;
-        itr->redirect_originalref(prev->poriginal);
-        prev->redirect_originalref(itr->pdetour);
+        itr->redirect_original(prev->poriginal);
+        prev->redirect_original(itr->pdetour);
       }
       enabled.splice(enabled.begin(), disabled);
     }
@@ -267,7 +269,7 @@ namespace alterhook
         hook& elast     = enabled.back();
         dlast.enabled   = true;
         elast.has_other = false;
-        dlast.redirect_originalref(elast.pdetour);
+        dlast.redirect_original(elast.pdetour);
 
         {
           std::unique_lock lock{ hook_lock };
@@ -405,7 +407,7 @@ namespace alterhook
       else
       {
         thread_freezer freeze{ nullptr };
-        itrnext->redirect_originalref(itr->poriginal);
+        itrnext->redirect_original(itr->poriginal);
       }
     };
 
@@ -681,7 +683,7 @@ namespace alterhook
           if (leftnext == enabled.end())
             patch(left->pdetour);
           else if (leftnext != left)
-            leftnext->redirect_originalref(left->pdetour);
+            leftnext->redirect_original(left->pdetour);
 #if !utils_64bit
           injected_first = true;
 #endif
@@ -690,9 +692,9 @@ namespace alterhook
         if (right->enabled)
         {
           if (rightnext == other.enabled.end())
-            patch(other, right->pdetour);
+            other.patch(right->pdetour);
           else if (rightnext != right)
-            rightnext->redirect_originalref(right->pdetour);
+            rightnext->redirect_original(right->pdetour);
         }
       }
 #if !utils_64bit
@@ -709,7 +711,7 @@ namespace alterhook
           if (leftnext == other.enabled.end())
             patch(left->pdetour);
           else
-            leftnext->redirect_originalref(left->pdetour);
+            leftnext->redirect_original(left->pdetour);
         }
         throw;
       }
@@ -739,7 +741,7 @@ namespace alterhook
       {
         patch(other.enabled.back().pdetour);
         hook& hfront = other.enabled.front();
-        hfront.redirect_originalref(
+        hfront.redirect_original(
             helpers::resolve_original(ptarget, ptrampoline.get()));
 #if !utils_64bit
         injected_first_range = true;
@@ -756,7 +758,7 @@ namespace alterhook
           {
             patch(other, enabled.back().pdetour);
             hook& hfront = enabled.front();
-            hfront.redirect_originalref(helpers::resolve_original(
+            hfront.redirect_original(helpers::resolve_original(
                 other.ptarget, other.ptrampoline.get()));
           }
           catch (...)
@@ -769,9 +771,9 @@ namespace alterhook
         else
 #endif
         {
-          patch(other, enabled.back().pdetour);
+          other.patch(enabled.back().pdetour);
           hook& hfront = enabled.front();
-          hfront.redirect_originalref(helpers::resolve_original(
+          hfront.redirect_original(helpers::resolve_original(
               other.ptarget, other.ptrampoline.get()));
         }
       }
@@ -988,7 +990,7 @@ namespace alterhook
     {
       for (auto prev = first, current = std::next(first); current != last;
            ++prev, ++current)
-        current->redirect_originalref(prev->pdetour);
+        current->redirect_original(prev->pdetour);
     }
 
     if (first->enabled)
@@ -1238,15 +1240,15 @@ namespace alterhook
           if (other.enabled.empty())
           {
             thread_freezer freeze{ other, false };
-            inject(other, other.backup.data(), false);
+            other.inject(other.backup.data(), false);
           }
           else
-            patch(other, first_enabled->poriginal);
+            other.patch(first_enabled->poriginal);
         }
         else
         {
           thread_freezer freeze{ nullptr };
-          enabledoldtrgpos->redirect_originalref(first_enabled->poriginal);
+          enabledoldtrgpos->redirect_original(first_enabled->poriginal);
         }
       }
       catch (...)
@@ -1258,12 +1260,12 @@ namespace alterhook
       hook& otherfront = *first_enabled;
       hook& otherback  = *last_enabled;
       if (first_enabled == enabled.begin())
-        otherfront.redirect_originalref(
+        otherfront.redirect_original(
             helpers::resolve_original(ptarget, ptrampoline.get()));
       else
       {
         list_iterator enabledprev = std::prev(first_enabled);
-        otherfront.redirect_originalref(enabledprev->pdetour);
+        otherfront.redirect_original(enabledprev->pdetour);
       }
 
       try
@@ -1282,7 +1284,7 @@ namespace alterhook
         else
         {
           thread_freezer freeze{ nullptr };
-          enablednewpos->redirect_originalref(otherback.pdetour);
+          enablednewpos->redirect_original(otherback.pdetour);
         }
       }
       catch (...)
@@ -1582,7 +1584,7 @@ namespace alterhook
     if (last != enabled.end())
     {
       thread_freezer freeze{ nullptr };
-      last->redirect_originalref(first->poriginal);
+      last->redirect_original(first->poriginal);
       return;
     }
 
@@ -1666,15 +1668,15 @@ namespace alterhook
     if (pos != enabled.end())
     {
       thread_freezer freeze{ nullptr };
-      first->redirect_originalref(pos->poriginal);
-      pos->redirect_originalref(lastprev->pdetour);
+      first->redirect_original(pos->poriginal);
+      pos->redirect_original(lastprev->pdetour);
       return;
     }
 
     std::unique_lock lock{ hook_lock };
     if (enabled.empty())
     {
-      first->redirect_originalref(
+      first->redirect_original(
           helpers::resolve_original(ptarget, ptrampoline.get()));
       thread_freezer freeze{ *this, true };
       inject(lastprev->pdetour, true);
@@ -1682,7 +1684,7 @@ namespace alterhook
     else
     {
       hook& elast = enabled.back();
-      first->redirect_originalref(elast.pdetour);
+      first->redirect_original(elast.pdetour);
       patch(lastprev->pdetour);
     }
   }
@@ -1694,18 +1696,18 @@ namespace alterhook
     const list_iterator lastprev = std::prev(last);
 
     if (first == enabled.begin())
-      first->redirect_originalref(
+      first->redirect_original(
           helpers::resolve_original(ptarget, ptrampoline.get()));
     else
     {
       const list_iterator firstprev = std::prev(first);
-      first->redirect_originalref(firstprev->pdetour);
+      first->redirect_original(firstprev->pdetour);
     }
 
     if (last != enabled.end())
     {
       thread_freezer freeze{ nullptr };
-      last->redirect_originalref(lastprev->pdetour);
+      last->redirect_original(lastprev->pdetour);
       return;
     }
 
@@ -1883,8 +1885,8 @@ namespace alterhook
       current_itr->enabled = !current_itr->enabled;
       if (src == include::disabled)
       {
-        current_itr->redirect_originalref(target_itr->poriginal);
-        target_itr->redirect_originalref(current_itr->pdetour);
+        current_itr->redirect_original(target_itr->poriginal);
+        target_itr->redirect_original(current_itr->pdetour);
       }
       other->splice(target_itr, *current, current_itr);
       previtr = current_itr;
@@ -1916,15 +1918,16 @@ namespace alterhook
   }
 
   typename hook_chain::hook&
-      hook_chain::push_back_impl(const std::byte*     detour,
-                                 helpers::orig_buff_t buffer, bool enable_hook)
+      hook_chain::push_back_impl(const std::byte*              detour,
+                                 helpers::original_ref_handler original_ref,
+                                 bool                          enable_hook)
   {
     auto [to, other] =
         enable_hook ? std::tie(enabled, disabled) : std::tie(disabled, enabled);
     const std::byte* const original =
         enabled.empty() ? helpers::resolve_original(ptarget, ptrampoline.get())
                         : enabled.back().pdetour;
-    to.emplace_back(*this, detour, buffer, original, enable_hook);
+    to.emplace_back(*this, detour, original_ref, original, enable_hook);
     const list_iterator itr = std::prev(to.end());
     itr->current            = itr;
     if (enable_hook)
@@ -1950,12 +1953,13 @@ namespace alterhook
   }
 
   typename hook_chain::hook&
-      hook_chain::push_front_impl(const std::byte*     detour,
-                                  helpers::orig_buff_t buffer, bool enable_hook)
+      hook_chain::push_front_impl(const std::byte*              detour,
+                                  helpers::original_ref_handler original_ref,
+                                  bool                          enable_hook)
   {
     auto [to, other] =
         enable_hook ? std::tie(enabled, disabled) : std::tie(disabled, enabled);
-    to.emplace_front(*this, detour, buffer,
+    to.emplace_front(*this, detour, original_ref,
                      helpers::resolve_original(ptarget, ptrampoline.get()),
                      enable_hook);
     const list_iterator itr = to.begin();
@@ -1975,7 +1979,8 @@ namespace alterhook
 
   typename hook_chain::hook&
       hook_chain::insert_impl(list_iterator pos, const std::byte* detour,
-                              helpers::orig_buff_t buffer, include trg)
+                              helpers::original_ref_handler original_ref,
+                              include                       trg)
   {
     auto [to, other] = trg == include::enabled ? std::tie(enabled, disabled)
                                                : std::tie(disabled, enabled);
@@ -1987,7 +1992,7 @@ namespace alterhook
                   : std::prev(pos)->pdetour
             : nullptr;
     list_iterator itr =
-        to.emplace(pos, *this, detour, buffer, original, enable_hook);
+        to.emplace(pos, *this, detour, original_ref, original, enable_hook);
     itr->current = itr;
     if (enable_hook)
       join(itr);
@@ -2116,7 +2121,7 @@ namespace alterhook
       {
         list_iterator  next = std::next(itr);
         thread_freezer freeze{ nullptr };
-        next->redirect_originalref(itr->pdetour);
+        next->redirect_original(itr->pdetour);
       }
     }
     catch (...)
@@ -2145,7 +2150,7 @@ namespace alterhook
       else
       {
         thread_freezer freeze{ nullptr };
-        itrnext->redirect_originalref(itr->pdetour);
+        itrnext->redirect_original(itr->pdetour);
       }
     }
     catch (...)
@@ -2198,25 +2203,26 @@ namespace alterhook
     std::unique_lock    lock{ hook_lock };
     const list_iterator next = std::next(current);
     if (next == chain.get().enabled.end())
-      patch(chain.get(), detour);
+      chain.get().patch(detour);
     else
     {
       thread_freezer freeze{ nullptr };
-      next->redirect_originalref(detour);
+      next->redirect_original(detour);
     }
 
     pdetour = detour;
   }
 
-  void hook_chain::hook::set_original(helpers::orig_buff_t original)
+  void hook_chain::hook::set_original(
+      const helpers::original_ref_handler& new_original_ref)
   {
     thread_freezer freeze{};
     if (enabled)
       freeze.init(nullptr);
 
-    *std::launder(reinterpret_cast<helpers::original*>(&original)) = poriginal;
-    originalref()                                                  = nullptr;
-    origbuff                                                       = original;
+    original_ref.unbind_original();
+    original_ref = new_original_ref;
+    original_ref.bind_original(poriginal);
   }
 
   void hook_chain::hook::swap(hook& right)
@@ -2227,14 +2233,14 @@ namespace alterhook
       auto [newprev, newnext] = poriginal == right.pdetour
                                     ? std::tie(*this, right)
                                     : std::tie(right, *this);
-      newprev.redirect_originalref(newnext.poriginal);
-      newnext.redirect_originalref(newprev.pdetour);
+      newprev.redirect_original(newnext.poriginal);
+      newnext.redirect_original(newprev.pdetour);
     }
     else
     {
       std::swap(poriginal, right.poriginal);
-      originalref()       = poriginal;
-      right.originalref() = right.poriginal;
+      original_ref.bind_original(poriginal);
+      right.original_ref.bind_original(right.poriginal);
     }
 
     std::swap(chain, right.chain);

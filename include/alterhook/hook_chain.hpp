@@ -2,7 +2,9 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <list>
+#include "detail/injectable.hpp"
 #include "hook.hpp"
+#include "tools.hpp"
 
 #if utils_msvc
   #pragma warning(push)
@@ -41,7 +43,8 @@ namespace alterhook
    * enabled hooks are invoked is **always** the reverse of the
    * **iteration order**.
    */
-  class ALTERHOOK_API hook_chain : trampoline
+  class ALTERHOOK_API hook_chain : trampoline,
+                                   detail::injectable<hook_chain>
   {
   public:
     class ALTERHOOK_API hook;
@@ -1108,9 +1111,9 @@ namespace alterhook
     /// @}
 
   private:
-#ifdef __alterhook_expose_impl
-    friend struct injectors;
-#endif
+    template <typename derived>
+    friend class detail::injectable;
+
     typedef std::array<std::byte, detail::constants::backup_size> backup_t;
 
     backup_t  backup{};
@@ -1155,12 +1158,14 @@ namespace alterhook
     void  toggle_status(list_iterator first, list_iterator last);
     void  toggle_status(list_iterator position);
     void  toggle_status_all(include src);
-    hook& push_back_impl(const std::byte* detour, helpers::orig_buff_t buffer,
-                         bool enable_hook);
-    hook& push_front_impl(const std::byte* detour, helpers::orig_buff_t buffer,
-                          bool enable_hook);
+    hook& push_back_impl(const std::byte*              detour,
+                         helpers::original_ref_handler original_ref,
+                         bool                          enable_hook);
+    hook& push_front_impl(const std::byte*              detour,
+                          helpers::original_ref_handler original_ref,
+                          bool                          enable_hook);
     hook& insert_impl(list_iterator pos, const std::byte* detour,
-                      helpers::orig_buff_t buffer, include trg);
+                      helpers::original_ref_handler original_ref, include trg);
     template <size_t... d_indexes, size_t... o_indexes, typename... types>
     list_range append_impl(transfer to, std::index_sequence<d_indexes...>,
                            std::index_sequence<o_indexes...>,
@@ -1171,7 +1176,8 @@ namespace alterhook
         std::pair<std::tuple<detours...>, std::tuple<originals...>>&& args);
 
   protected:
-    typedef std::pair<const std::byte*, helpers::orig_buff_t> hook_init_item;
+    typedef std::pair<const std::byte*, helpers::original_ref_handler>
+                                  hook_init_item;
     typedef const hook_init_item* hook_init_iterator;
     typedef std::pair<hook_init_iterator, hook_init_iterator> hook_init_range;
     typedef std::initializer_list<hook_init_item>             hook_init_list;
@@ -1305,9 +1311,9 @@ namespace alterhook
               typename = std::enable_if_t<utils::function_type<orig>>>
     hook& set_original(orig& original)
     {
-      if (originalref() == original)
+      if (original_ref.comparable_with<orig>() && original_ref == original)
         return *this;
-      set_original(helpers::original_wrapper(original));
+      set_original(helpers::original_ref_handler(original));
       return *this;
     }
 
@@ -1335,14 +1341,14 @@ namespace alterhook
     friend class utils::static_vector;
     typedef std::reference_wrapper<hook_chain> chain_ref_t;
 
-    chain_ref_t          chain;
-    list_iterator        current{};
-    list_iterator        other{};
-    const std::byte*     pdetour   = nullptr;
-    const std::byte*     poriginal = nullptr;
-    helpers::orig_buff_t origbuff{};
-    bool                 enabled   = false;
-    bool                 has_other = false;
+    chain_ref_t                   chain;
+    list_iterator                 current{};
+    list_iterator                 other{};
+    const std::byte*              pdetour   = nullptr;
+    const std::byte*              poriginal = nullptr;
+    helpers::original_ref_handler original_ref{};
+    bool                          enabled   = false;
+    bool                          has_other = false;
 
     hook(const hook&)            = delete;
     hook& operator=(const hook&) = delete;
@@ -1352,27 +1358,17 @@ namespace alterhook
     hook(hook_chain& chain, const std::byte* pdetour, orig& origref,
          const std::byte* poriginal = nullptr, bool should_enable = false);
     hook(hook_chain& chain, const std::byte* detour,
-         const helpers::orig_buff_t& buffer,
+         const helpers::original_ref_handler& original_ref,
          const std::byte* poriginal = nullptr, bool should_enable = false);
 
-    helpers::original& originalref() noexcept
+    inline void redirect_original(const std::byte* original) noexcept
     {
-      return *std::launder(reinterpret_cast<helpers::original*>(&origbuff));
-    }
-
-    const helpers::original& originalref() const noexcept
-    {
-      return *std::launder(
-          reinterpret_cast<const helpers::original*>(&origbuff));
-    }
-
-    void redirect_originalref(const std::byte* original) noexcept
-    {
-      originalref() = poriginal = original;
+      poriginal = original;
+      original_ref.bind_original(poriginal);
     }
 
     void set_detour(std::byte* detour);
-    void set_original(helpers::orig_buff_t original);
+    void set_original(const helpers::original_ref_handler& original);
     void swap(hook& right);
   };
 
@@ -1589,7 +1585,7 @@ namespace alterhook
     hook_init_list arg_list = {
       { get_target_address<originals>(
             std::forward<detours>(std::get<indexes>(args.first))),
-       helpers::original_wrapper(std::get<indexes>(args.second)) }
+       helpers::original_ref_handler(std::get<indexes>(args.second)) }
       ...
     };
     init_with_list({ arg_list.begin(), arg_list.end() });
@@ -1623,7 +1619,7 @@ namespace alterhook
     hook_init_list arg_list = {
       { get_target_address<originals>(
             std::forward<detours>(std::get<indexes>(args.first))),
-       helpers::original_wrapper(std::get<indexes>(args.second)) }
+       helpers::original_ref_handler(std::get<indexes>(args.second)) }
       ...
     };
     return append_list(to, { arg_list.begin(), arg_list.end() });
@@ -1634,10 +1630,10 @@ namespace alterhook
                          orig& origref, const std::byte* poriginal,
                          bool should_enable)
       : chain(chain), pdetour(pdetour), poriginal(poriginal),
-        origbuff(helpers::original_wrapper(origref)), enabled(should_enable)
+        original_ref(origref), enabled(should_enable)
   {
     if (poriginal)
-      originalref() = poriginal;
+      original_ref.bind_original(poriginal);
   }
 
   template <typename dtr, typename orig, typename>
@@ -1649,7 +1645,7 @@ namespace alterhook
                  "hook_chain::insert: base cannot be the both flag");
     return insert_impl(position,
                        get_target_address<orig>(std::forward<dtr>(detour)),
-                       helpers::original_wrapper(original), trg);
+                       original, trg);
   }
 
   template <typename dtr, typename orig, typename>
@@ -1736,7 +1732,7 @@ namespace alterhook
                                                    bool enable_hook)
   {
     return push_back_impl(get_target_address<orig>(std::forward<dtr>(detour)),
-                          helpers::original_wrapper(original), enable_hook);
+                          original, enable_hook);
   }
 
   template <typename dtr, typename orig, typename>
@@ -1744,7 +1740,7 @@ namespace alterhook
       hook_chain::push_front(dtr&& detour, orig& original, bool enable_hook)
   {
     return push_front_impl(get_target_address<orig>(std::forward<dtr>(detour)),
-                           helpers::original_wrapper(original), enable_hook);
+                           original, enable_hook);
   }
 
   /*
@@ -2033,13 +2029,13 @@ namespace alterhook
   inline typename hook_chain::hook& hook_chain::happend(const hook& src,
                                                         bool        enable_hook)
   {
-    return push_back_impl(src.pdetour, src.origbuff, enable_hook);
+    return push_back_impl(src.pdetour, src.original_ref, enable_hook);
   }
 
   inline void hook_chain::hcopy(hook& dest, const hook& src)
   {
-    dest.pdetour  = src.pdetour;
-    dest.origbuff = src.origbuff;
+    dest.pdetour      = src.pdetour;
+    dest.original_ref = src.original_ref;
   }
 
   inline hook_chain::const_iterator&
@@ -2099,14 +2095,15 @@ namespace alterhook
     return get_iterator();
   }
 
-  inline hook_chain::hook::hook(hook_chain& chain, const std::byte* pdetour,
-                                const helpers::orig_buff_t& buffer,
-                                const std::byte* poriginal, bool should_enable)
-      : chain(chain), pdetour(pdetour), poriginal(poriginal), origbuff(buffer),
-        enabled(should_enable)
+  inline hook_chain::hook::hook(
+      hook_chain& chain, const std::byte* pdetour,
+      const helpers::original_ref_handler& init_original_ref,
+      const std::byte* poriginal, bool should_enable)
+      : chain(chain), pdetour(pdetour), poriginal(poriginal),
+        original_ref(init_original_ref), enabled(should_enable)
   {
     if (poriginal)
-      originalref() = poriginal;
+      original_ref.bind_original(poriginal);
   }
 } // namespace alterhook
 

@@ -387,6 +387,12 @@ namespace alterhook
       {
       }
 
+      template <typename Fn>
+      original_ref_handler(const original_ref<Fn>& original)
+          : buffer(original), active(true)
+      {
+      }
+
       // Both instances will hold the same reference. Be careful with this one
       // as unbinding one of the instances will leave the other unaware of the
       // change. Might be deprecated in the future.
@@ -457,6 +463,21 @@ namespace alterhook
       {
         return *std::launder(reinterpret_cast<const abstract_original_ref*>(
                    &buffer)) == other_func;
+      }
+
+      // This check is crutial because trying to compare *this with Fn& when any
+      // of those is a reference to an instance of std::function is pretty much
+      // impossible (unable to get the target address) and therefore leading to
+      // a hard runtime error.
+      template <typename Fn>
+      constexpr bool comparable_with() const noexcept
+      {
+        if constexpr (!utils::stl_function_type<Fn>)
+        {
+          return !is_stl_function_ref();
+        }
+        else
+          return false;
       }
 
     private:

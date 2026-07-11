@@ -1,7 +1,6 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.hpp>
-#include "trampoline.hpp"
 #include "exceptions.hpp"
 #include "injection.hpp"
 #include "instructions.hpp"
@@ -10,7 +9,7 @@
 namespace alterhook
 {
   void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
-                        injector_flags flags)
+                        detail::injector_flags flags)
   {
     utils_assert(target, "inject_to_target: no target address specified");
     utils_assert(backup_or_detour,
@@ -54,7 +53,7 @@ namespace alterhook
   }
 
   void patch_jmp(std::byte* target, const std::byte* detour,
-                 patcher_flags flags)
+                 detail::patcher_flags flags)
   {
     utils_assert(target, "patch_jmp: no target address specified");
     utils_assert(detour, "patch_jmp: no detour specified");

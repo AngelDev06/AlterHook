@@ -50,14 +50,14 @@ namespace alterhook
   } // namespace helpers
 
   template <typename key, typename hash = std::hash<key>,
-            typename keyequal  = std::equal_to<key>,
-            typename allocator = std::allocator<std::pair<
-                const key, std::reference_wrapper<typename hook_chain::hook>>>,
-            template <typename, typename, typename, typename, typename>
-            typename hash_map    = std::unordered_map,
-            bool concurrent_mode = utils::concurrent_hash_map<
-                hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
-                         hash, keyequal, allocator>>>
+            typename keyequal                     = std::equal_to<key>,
+            typename allocator                    = std::allocator<std::pair<
+                                   const key, std::reference_wrapper<typename hook_chain::hook>>>,
+            template <typename, typename, typename, typename,
+                      typename> typename hash_map = std::unordered_map,
+            bool concurrent_mode                  = utils::concurrent_hash_map<
+                                 hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
+                                          hash, keyequal, allocator>>>
   class hook_map
       : public helpers::determine_adapter_t<
             hash_map<key, std::reference_wrapper<typename hook_chain::hook>,
@@ -73,9 +73,8 @@ namespace alterhook
     using base::base;
   };
 
-  template <typename key,
-            template <typename, typename, typename, typename, typename>
-            typename hash_map>
+  template <typename key, template <typename, typename, typename, typename,
+                                    typename> typename hash_map>
   using hook_map_using = hook_map<
       key, std::hash<key>, std::equal_to<key>,
       std::allocator<std::pair<
@@ -89,9 +88,8 @@ namespace alterhook
           const key, std::reference_wrapper<typename hook_chain::hook>>>,
       std::unordered_map, true>;
 
-  template <typename key,
-            template <typename, typename, typename, typename, typename>
-            typename hash_map>
+  template <typename key, template <typename, typename, typename, typename,
+                                    typename> typename hash_map>
   using concurrent_hook_map_using = hook_map<
       key, std::hash<key>, std::equal_to<key>,
       std::allocator<std::pair<
@@ -1465,7 +1463,7 @@ namespace alterhook
 
   template <typename trg, typename... types>
   hook_map(trg, types&&...) -> hook_map<typename helpers::get_all_keys<
-                                types...>::template to<std::common_type_t>>;
+      types...>::template to<std::common_type_t>>;
 
   /*
    * TEMPLATE DEFINITIONS (ignore them)
@@ -1613,7 +1611,7 @@ namespace alterhook
             status ? (tba_hooks.emplace_back(
                           get_target_address<originals>(std::forward<detours>(
                               std::get<indexes>(std::get<1>(args)))),
-                          helpers::original_wrapper(
+                          helpers::original_ref_handler(
                               std::get<indexes>(std::get<2>(args)))),
                       sources.push_back(result), void())
                    : void()),
@@ -2534,7 +2532,8 @@ namespace alterhook
   {
     std::unique_lock lock{ base::map_lock };
     if (T::visit(k,
-                 [&](auto& pair) {
+                 [&](auto& pair)
+                 {
                    return func(
                        std::make_pair(std::cref(pair.first), pair.second));
                  }))

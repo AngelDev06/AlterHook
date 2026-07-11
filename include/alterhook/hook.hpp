@@ -370,9 +370,8 @@ namespace alterhook
 
   private:
     friend class hook_chain;
-#ifdef __alterhook_expose_impl
-    friend struct injectors;
-#endif
+    template <typename derived>
+    friend class detail::injectable;
 
     typedef std::array<std::byte, detail::constants::backup_size> backup_t;
 

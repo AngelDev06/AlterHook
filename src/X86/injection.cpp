@@ -20,7 +20,7 @@ namespace alterhook
   }
 
   void inject_to_target(std::byte* target, const std::byte* backup_or_detour,
-                        injector_flags flags)
+                        detail::injector_flags flags)
   {
     utils_assert(target, "inject_to_target: no target address specified");
     utils_assert(backup_or_detour,
@@ -61,7 +61,7 @@ namespace alterhook
 
 #if utils_x86 || !always_use_relay
   void patch_jmp(std::byte* target, const std::byte* detour,
-                 [[maybe_unused]] patcher_flags flags)
+                 [[maybe_unused]] detail::patcher_flags flags)
   {
     utils_assert(target, "patch_jmp: no target address specified");
     utils_assert(detour, "patch_jmp: no detour specified");

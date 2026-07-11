@@ -5,6 +5,10 @@
 #include "injection.hpp"
 #include "detail/injectable.hpp"
 #include "hook.hpp"
+#include "hook_chain.hpp"
+#pragma GCC visibility push(hidden)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
 namespace alterhook::detail
 {
@@ -27,7 +31,7 @@ namespace alterhook::detail
   void injectable<derived>::inject(const std::byte* backup_or_detour,
                                    bool             enable) const
   {
-    auto* pself = static_cast<derived*>(this);
+    auto* pself = static_cast<const derived*>(this);
 #if !utils_x86
     if (enable && pself->prelay)
     {
@@ -44,7 +48,7 @@ namespace alterhook::detail
   template <typename derived>
   void injectable<derived>::patch(const std::byte* detour) const
   {
-    auto* pself = static_cast<derived*>(this);
+    auto* pself = static_cast<const derived*>(this);
 #if !utils_x86
   #if !always_use_relay
     if (pself->prelay)
@@ -56,7 +60,7 @@ namespace alterhook::detail
 #endif // !utils_x86
 
 #if utils_x86 || !always_use_relay
-    patch_jmp(pself->prelay, detour, make_patcher_flags());
+    patch_jmp(pself->ptarget, detour, make_patcher_flags());
 #endif // utils_x86 || !always_use_relay
   }
 
@@ -66,7 +70,7 @@ namespace alterhook::detail
   {
     static_assert(std::is_same_v<T, injector_flags> ||
                   std::is_same_v<T, patcher_flags>);
-    auto* pself = static_cast<derived*>(this);
+    auto* pself = static_cast<const derived*>(this);
     T     flags{ pself->patch_above };
 
 #if !utils_x86 && !always_use_relay
@@ -77,4 +81,10 @@ namespace alterhook::detail
 #endif // !utils_windows
     return flags;
   }
+
+  template class injectable<hook>;
+  template class injectable<hook_chain>;
 } // namespace alterhook::detail
+
+#pragma GCC diagnostic pop
+#pragma GCC visibility pop
