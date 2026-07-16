@@ -820,7 +820,7 @@ public                                                                         \
   /*
    * MODIFIER BASE CLASS
    */
-//  DEFINE MODIFIER CLASS
+//  DEFINE MODIFIER HANDLER CLASS
 #define __alterhook_define_modifier(info, modifier_name, modifier_handler,               \
                                     modifier_target)                                     \
   namespace                                                                              \
