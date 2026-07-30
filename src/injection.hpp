@@ -7,7 +7,7 @@
 
 namespace alterhook
 {
-  extern std::shared_mutex hook_lock;
+  inline std::shared_mutex global_inject_lock{};
 
 #if utils_windows
   #define __define_old_protect(flags) DWORD old_protect = 0

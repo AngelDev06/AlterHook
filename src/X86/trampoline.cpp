@@ -280,7 +280,8 @@ namespace alterhook
 
 #if utils_x64
       auto has_rip = std::find_if(operands_begin, operands_end,
-                                  [](const cs_x86_op& element) {
+                                  [](const cs_x86_op& element)
+                                  {
                                     return element.type == X86_OP_MEM &&
                                            element.mem.base == X86_REG_RIP;
                                   });
@@ -499,7 +500,8 @@ namespace alterhook
       // always absolute.
 #if utils_x64
       auto rip_op = std::find_if(operands_begin, operands_end,
-                                 [](const cs_x86_op& element) {
+                                 [](const cs_x86_op& element)
+                                 {
                                    return element.type == X86_OP_MEM &&
                                           element.mem.base == X86_REG_RIP;
                                  });
@@ -641,7 +643,7 @@ namespace alterhook
     return *this;
   }
 
-  void trampoline::reset()
+  void trampoline::reset() noexcept
   {
     if (!ptarget)
       return;

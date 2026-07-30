@@ -1,11 +1,17 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
+#include <algorithm>
+#include <cstdlib>
+#include <iterator>
 #include <pch.hpp>
+#include <tuple>
+#include <utility>
+#include <vector>
 #include "hook_chain.hpp"
-#include "injection.hpp"
 #include "exceptions.hpp"
 #include "thread_handler.hpp"
 #include "tools.hpp"
+#include "utilities/macros.hpp"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnon-virtual-dtor"
 #pragma clang diagnostic ignored "-Wshadow"
@@ -14,39 +20,503 @@
 
 namespace alterhook
 {
-  hook_chain::hook_chain(alterhook::hook&& other) : trampoline(std::move(other))
+  struct hook_chain::intra_swap_info
   {
-    utils_assert(other.original_ref,
-                 "hook_chain::hook_chain: can't initialize hook chain with a "
-                 "hook that doesn't hold a reference to the original");
-    memcpy(backup.data(), other.backup.data(), backup.size());
-    hook_list& target_list = other.enabled ? enabled : disabled;
+    bool rearranged;
+    bool left_is_first;
+  };
 
-    target_list.emplace_back(
-        *this, other.pdetour, other.original_ref,
-        helpers::resolve_original(ptarget, ptrampoline.get()), other.enabled);
-    target_list.begin()->current = target_list.begin();
-    starts_enabled               = other.enabled;
+  struct hook_chain::splicer_rollback_info
+  {
+    iterator itr{};
+    bool     was_matched   = false;
+    bool     changed_state = false;
+  };
+
+  // only domain specific properties are swapped
+  void hook_chain::hook::swap(hook& right)
+  {
+    std::swap(poriginal, right.poriginal);
+    original_ref.bind_original(poriginal);
+    right.original_ref.bind_original(right.poriginal);
+    std::swap(chain, right.chain);
   }
 
-  hook_chain::hook_chain(const hook_chain& other) : trampoline(other)
+  void hook_chain::inject_back_all()
   {
-    memcpy(backup.data(), other.backup.data(), backup.size());
-    for (const hook& h : other)
+    if (!enabled_count)
+      return;
+    thread_freezer freeze{ *this, true };
+    inject(enabled_hooks().back().pdetour, true);
+  }
+
+  void hook_chain::uninject_all()
+  {
+    if (!enabled_count)
+      return;
+    thread_freezer freeze{ *this, false };
+    inject(backup.data(), false);
+  }
+
+  void hook_chain::safe_uninject_all() noexcept
+  {
+    try
     {
-      list_iterator itr =
-          disabled.emplace(disabled.end(), *this, h.pdetour, h.original_ref);
-      itr->current = itr;
+      uninject_all();
+    }
+    catch (...)
+    {
+      release();
+    }
+  }
+
+  void hook_chain::set_status_range(iterator first, iterator last,
+                                    bool new_state)
+  {
+    if (first == last)
+      return;
+
+    // --- PHASE 1: TRANSACTION SETUP & BOOKKEEPING ---
+    // Track strictly the hooks that change state to allow O(1) rollback.
+    std::vector<iterator> updated_hooks;
+    updated_hooks.reserve(hooks.size());
+
+    // Search backwards to find the nearest active hook before our range.
+    // If none exists, our starting point is the absolute original target
+    // function.
+    const auto prev_enabled =
+        std::find_if(std::reverse_iterator(first), rend(),
+                     [](const hook& item) { return item.enabled; });
+    const std::byte* const prev_original =
+        prev_enabled != rend()
+            ? prev_enabled->pdetour
+            : helpers::resolve_original(ptarget, ptrampoline.get());
+
+    const std::byte* current_original = prev_original;
+
+    iterator  last_enabled_processed{};
+    ptrdiff_t enabled_diff = 0;
+
+    // Halt all active threads globally BEFORE modifying any poriginal pointers
+    // to prevent active execution from reading mid-update memory.
+    thread_freezer freeze{ *this, true };
+
+    try
+    {
+      // --- PHASE 2: SINGLE-PASS STATE & POINTER UPDATE ---
+      for (iterator itr = first; itr != last; ++itr)
+      {
+        // 1. Update logical state and track for potential rollback
+        if (itr->enabled != new_state)
+        {
+          itr->enabled = new_state;
+          updated_hooks.push_back(itr);
+          if (new_state)
+            ++enabled_diff;
+          else
+            --enabled_diff;
+        }
+
+        // 2. Safely relink pointers (threads are frozen)
+        if (new_state)
+        {
+          // Cache-line optimization: Avoid writing if the address is already
+          // correct
+          if (itr->poriginal != current_original)
+            itr->redirect_original(current_original);
+
+          current_original       = itr->pdetour;
+          last_enabled_processed = itr;
+        }
+      }
+
+      // Fast-track the total container counter
+      enabled_count += enabled_diff;
+
+      // --- PHASE 3: TAIL RELINKING & SYSTEM MEMORY COMMIT ---
+      const iterator next_enabled = std::find_if(
+          last, end(), [](const hook& item) { return item.enabled; });
+
+      if (next_enabled != end())
+      {
+        // CASE A: The modified range is entirely internal.
+        // We just link the next active hook in the chain to our modified range.
+        // No OS memory patching is required.
+        const std::byte* const last_original =
+            last_enabled_processed != iterator()
+                ? last_enabled_processed->pdetour
+                : current_original;
+
+        if (next_enabled->poriginal != last_original)
+          next_enabled->redirect_original(last_original);
+      }
+      else if (enabled_diff)
+      {
+        // CASE B: We reached the end of the chain and state was changed.
+        // We MUST patch system memory to point to the new final detour.
+
+        if (last_enabled_processed == iterator() && prev_enabled == rend())
+          // B1: Everything is now disabled. Completely restore target memory.
+          inject(backup.data(), false);
+
+        else if (new_state &&
+                 enabled_count == static_cast<size_t>(enabled_diff))
+          // B2: Chain went from 0 active hooks to >0. Full injection required.
+          inject(last_enabled_processed->pdetour, true);
+
+        else if (last_enabled_processed == updated_hooks.back())
+          // B3: The tail hook changed state. Update the target to point to it.
+          patch(last_enabled_processed->pdetour);
+
+        else if (last_enabled_processed == iterator() && prev_enabled != rend())
+          // B4: We disabled the tail hook(s). Fall back to the previous active
+          // hook.
+          patch(prev_enabled->pdetour);
+      }
+    }
+    catch (...)
+    {
+      // --- PHASE 4: EXCEPTION ROLLBACK ---
+      // The OS refused to patch memory. Target function is still in its old
+      // state. Revert our internal data to perfectly synchronize with reality.
+
+      for (iterator update : updated_hooks)
+        update->enabled = !new_state;
+      enabled_count -= enabled_diff;
+
+      // Optimization: Disabling doesn't touch poriginal pointers, so we can
+      // exit early.
+      if (!new_state)
+        throw;
+
+      current_original = prev_original;
+
+      // Revert the poriginal pointers of the enabled hooks to their original
+      // state
+      for (iterator itr = first; itr != last; ++itr)
+      {
+        if (!itr->enabled)
+          continue;
+        if (itr->poriginal != current_original)
+          itr->redirect_original(current_original);
+        current_original = itr->pdetour;
+      }
+
+      throw; // Rethrow to the caller
+    }
+  }
+
+  // Detaches a hook from the chain, bridging the gap using new_poriginal.
+  // Passing update_memory = false skips host memory patches (used for
+  // transactional safety).
+  void hook_chain::unlink(iterator itr, const std::byte* new_poriginal,
+                          bool update_memory)
+  {
+    // Search forward (upstream) to find the hook that currently jumps to 'itr'
+    iterator next = std::find_if(std::next(itr), hooks.end(),
+                                 [](const hook& item) { return item.enabled; });
+
+    if (next != hooks.end())
+    {
+      // The hook is in the middle of the chain. We simply rewire the upstream
+      // hook's internal trampoline to bypass 'itr'. No physical memory touched.
+      next->redirect_original(new_poriginal);
+      return;
+    }
+    // The hook is at the head of the chain, but hardware patches are
+    // deferred.
+    else if (!update_memory)
+      return;
+
+    // The hook is at the head of the chain and we must patch the physical
+    // memory.
+    if (enabled_count == 1)
+      // It was the last active hook. Restore the target function's original
+      // bytes.
+      inject(backup.data(), false);
+    else
+      // Other hooks remain. Overwrite the host's JMP to point to the new head.
+      patch(new_poriginal);
+  }
+
+  // Inserts a hook into the active execution chain.
+  // Passing new_poriginal (optionally) forces a specific downstream target
+  // (O(1) optimization). Passing update_memory = false skips host memory
+  // patches (used for transactional safety).
+  void hook_chain::link(iterator itr, const std::byte* new_poriginal,
+                        bool update_memory)
+  {
+    // Search forward (upstream) to find the hook that will execute just before
+    // 'itr'
+    iterator next = std::find_if(std::next(itr), hooks.end(),
+                                 [](const hook& item) { return item.enabled; });
+
+    if (next != hooks.end())
+    {
+      // The hook is in the middle of the chain.
+      // Point our hook downstream (using the override or stealing the
+      // upstream's target).
+      itr->redirect_original(new_poriginal ? new_poriginal : next->poriginal);
+
+      // Wire the upstream hook to jump into our new hook.
+      // Since the host's physical JMP isn't changing, we exit early.
+      next->redirect_original(itr->pdetour);
+      return;
+    }
+
+    // The hook is at the head of the chain. Handle physical memory updates if
+    // requested.
+    if (update_memory)
+    {
+      if (!enabled_count)
+        // First active hook in the container: allocate trampoline and write the
+        // JMP.
+        inject(itr->pdetour, true);
+      else
+        // Chain is already active: just overwrite the existing JMP destination.
+        patch(itr->pdetour);
+    }
+
+    // Since 'itr' is at the head, it needs to know what to execute next
+    // (downstream).
+    if (new_poriginal)
+      // O(1) override used during cross-container swaps.
+      itr->redirect_original(new_poriginal);
+    else
+    {
+      // Fallback: Search backward (downstream) to find the next active hook in
+      // this container.
+      auto prev = std::find_if(std::reverse_iterator(itr), rend(),
+                               [](const hook& item) { return item.enabled; });
+
+      if (prev != rend())
+        // Jump to the closest downstream hook.
+        itr->redirect_original(prev->pdetour);
+      else
+        // No downstream hooks exist. Jump to the host application's original
+        // function.
+        itr->redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+    }
+  }
+
+  // Determines if a cross-container swap will physically overwrite the prologue
+  // of the target function, requiring the thread_freezer to perform IP
+  // relocation.
+  bool hook_chain::cross_splice_requires_injection(
+      iterator other_itr) const noexcept
+  {
+    utils_assert(this != &other_itr->chain.get(),
+                 "hook_chain::cross_splice_requires_injection: improper use of "
+                 "the tool, other_itr belongs to `this`");
+
+    // Relocation is only required when transitioning between 0 and 1 active
+    // hooks, as this is when the target function's prologue instructions are
+    // physically altered:
+    // 1. (!enabled_count && other_itr->enabled): 0 -> 1. We are writing a JMP
+    // (inject).
+    //    Frozen threads caught in the prologue must be relocated to the
+    //    trampoline.
+    // 2. (enabled_count == 1 && !other_itr->enabled): 1 -> 0. We are restoring
+    // original bytes.
+    //    Frozen threads must be relocated accordingly.
+    return (!enabled_count && other_itr->enabled) ||
+           (enabled_count == 1 && !other_itr->enabled);
+  }
+
+  // Physically swaps two hook nodes across containers without copying their
+  // internal data.
+  void hook_chain::swap_raw(iterator& left, iterator left_next,
+                            hook_chain& other, iterator& right,
+                            iterator right_next) noexcept
+  {
+    // 1. Adapt domain-specific metadata (chain references and poriginals)
+    left->swap(*right);
+
+    // 2. Structurally move 'right' into 'this' container, right where 'left'
+    // was
+    hooks.splice(left_next, other.hooks, right);
+
+    // 3. Structurally move 'left' into the 'other' container, right where
+    // 'right' was
+    other.hooks.splice(right_next, hooks, left);
+
+    // 4. Realign the iterator variables in the caller's scope.
+    // This ensures 'left' still refers to the slot in 'this' container,
+    // and 'right' still refers to the slot in 'other'.
+    std::swap(left, right);
+  }
+
+  // Analyzes two hooks in the same container to determine if swapping them
+  // alters the active execution topology, and identifies their spatial
+  // relationship (left < right).
+  hook_chain::intra_swap_info
+      hook_chain::analyse_intra_swap(iterator left,
+                                     iterator right) const noexcept
+  {
+    // O(1) Fast path: Disabled hooks are invisible to the active execution
+    // chain. Swapping them never changes the topology.
+    if (!left->enabled && !right->enabled)
+      return { false, false };
+
+    // If both are enabled, swapping them will always change the execution
+    // order.
+    const bool both_enabled    = left->enabled && right->enabled;
+    bool       enabled_spotted = false;
+
+    // 1. Forward Search: Assume 'left' comes before 'right' in the chain.
+    for (iterator itr = std::next(left); itr != end(); ++itr)
+    {
+      if (itr == right)
+      {
+        // 'right' was found downstream. The topology changes if both are
+        // enabled, or if there is at least one active hook strictly between
+        // them.
+        return { both_enabled || enabled_spotted, true };
+      }
+      if (itr->enabled)
+        enabled_spotted = true;
+    }
+
+    // 2. Reverse Search: If the forward search hit end(), 'right' MUST precede
+    // 'left'. We set up strictly exclusive bounds to check the nodes between
+    // them.
+    auto ritr  = std::reverse_iterator(left);
+    auto rstop = std::reverse_iterator(std::next(right));
+
+#ifdef NDEBUG
+    // Release mode: Fast strictly-between search using the exclusive rstop
+    // bound.
+    const bool rearranged =
+        both_enabled || std::find_if(ritr, rstop, [](const hook& item)
+                                     { return item.enabled; }) != rstop;
+    return { rearranged, false };
+#else
+    // Debug mode: Manual loop to enforce safety guarantees.
+    enabled_spotted = false;
+    for (; ritr != rend(); ++ritr)
+    {
+      if (ritr == rstop)
+        return { both_enabled || enabled_spotted, false };
+      if (ritr->enabled)
+        enabled_spotted = true;
+    }
+
+    // If we hit rend() before rstop, 'left' and 'right' belong to entirely
+    // different containers!
+    utils_assert(false, "hook_chain::swap: `left` and `right` don't form a "
+                        "valid range with `other` set to `*this`");
+    return { false, false };
+#endif
+  }
+
+  void hook_chain::splice_disabled(iterator newpos, hook_chain& other,
+                                   iterator first, iterator last) noexcept
+  {
+    const bool intra_splice = this == &other;
+
+    for (iterator itr = first; itr != last;)
+    {
+      if (itr->enabled)
+      {
+        ++itr;
+        continue;
+      }
+
+      if (!intra_splice)
+        itr->chain = *this;
+      hooks.splice(newpos, other.hooks, itr++);
+    }
+  }
+
+  void hook_chain::splice_rollback(iterator first, iterator last,
+                                   iterator newpos, hook_chain& other,
+                                   const rollback_t& rollback_data,
+                                   const std::byte*  prev_poriginal) noexcept
+  {
+    const std::byte* current_poriginal = prev_poriginal;
+    const bool       intra_splice      = this == &other;
+
+    if (!rollback_data.capacity())
+    {
+      for (iterator itr = first; itr != newpos;)
+      {
+        if (!intra_splice)
+          itr->chain = other;
+        if (itr->enabled)
+        {
+          itr->redirect_original(current_poriginal);
+          current_poriginal = itr->pdetour;
+        }
+        other.hooks.splice(last, hooks, itr++);
+      }
+      return;
+    }
+
+    iterator next_unmatched        = last;
+    bool     search_next_unmatched = true;
+
+    for (auto rollback_itr = rollback_data.begin();
+         rollback_itr != rollback_data.end(); ++rollback_itr)
+    {
+      if (!rollback_itr->was_matched)
+      {
+        search_next_unmatched = true;
+        continue;
+      }
+
+      if (search_next_unmatched)
+      {
+        const auto search_itr = std::find_if_not(
+            std::next(rollback_itr), rollback_data.end(),
+            [](const splicer_rollback_info& item) { return item.was_matched; });
+        if (search_itr == rollback_data.end())
+          next_unmatched = last;
+        else
+          next_unmatched = search_itr->itr;
+        search_next_unmatched = false;
+      }
+
+      const auto itr = rollback_itr->itr;
+
+      if (rollback_itr->changed_state)
+        itr->enabled = !itr->enabled;
+
+      if (itr->enabled)
+      {
+        itr->redirect_original(current_poriginal);
+        current_poriginal = itr->pdetour;
+      }
+
+      if (!intra_splice)
+        itr->chain = other;
+
+      other.hooks.splice(next_unmatched, hooks, itr);
     }
   }
 
   hook_chain::hook_chain(hook_chain&& other) noexcept
-      : trampoline(std::move(other)), disabled(std::move(other.disabled)),
-        enabled(std::move(other.enabled)), starts_enabled(other.starts_enabled)
+      : trampoline(std::move(other)), backup(other.backup),
+        hooks(std::move(other.hooks)),
+        enabled_count(std::exchange(other.enabled_count, 0))
   {
-    memcpy(backup.data(), other.backup.data(), backup.size());
     for (hook& h : *this)
       h.chain = *this;
+  }
+
+  hook_chain::hook_chain(alterhook::hook&& other)
+      : trampoline(std::move(other)), backup(other.backup),
+        enabled_count(other.enabled ? 1 : 0)
+  {
+    utils_assert(other.original_ref,
+                 "hook_chain::hook_chain: can't initialize hook chain with a "
+                 "hook that doesn't hold a reference to the original");
+    reference item = hooks.emplace_back(
+        *this, std::exchange(other.pdetour, nullptr),
+        std::move(other.original_ref),
+        helpers::resolve_original(ptarget, ptrampoline.get()),
+        std::exchange(other.enabled, false));
+    item.current = hooks.begin();
   }
 
 #if utils_msvc
@@ -54,64 +524,33 @@ namespace alterhook
   #pragma warning(disable : 4297)
 #endif
 
-  hook_chain::~hook_chain() noexcept { clear(); }
+  hook_chain::~hook_chain() noexcept
+  {
+    try
+    {
+      clear();
+    }
+    catch (...)
+    {
+      // release the trampoline, that's the safest approach we can use here
+      release();
+    }
+  }
 
 #if utils_msvc
   #pragma warning(pop)
 #endif
 
-  hook_chain& hook_chain::operator=(const hook_chain& other)
-  {
-    if (this == &other)
-      return *this;
-    disable_all();
-    trampoline::operator=(other);
-    memcpy(backup.data(), other.backup.data(), backup.size());
-
-    if (size() >= other.size())
-    {
-      auto thisitr = disabled.begin();
-      for (auto otheritr = other.begin(), otherend = other.end();
-           otheritr != otherend; ++otheritr, ++thisitr)
-      {
-        thisitr->pdetour      = otheritr->pdetour;
-        thisitr->original_ref = otheritr->original_ref;
-      }
-      disabled.erase(thisitr, disabled.end());
-    }
-    else
-    {
-      auto otheritr = other.begin();
-      for (auto thisitr = disabled.begin(), thisend = disabled.end();
-           thisitr != thisend; ++thisitr, ++otheritr)
-      {
-        thisitr->pdetour      = otheritr->pdetour;
-        thisitr->original_ref = otheritr->original_ref;
-      }
-      for (auto otherend = other.end(); otheritr != otherend; ++otheritr)
-      {
-        auto itr = disabled.emplace(disabled.end(), *this, otheritr->pdetour,
-                                    otheritr->original_ref);
-        itr->current = itr;
-      }
-    }
-    return *this;
-  }
-
   hook_chain& hook_chain::operator=(hook_chain&& other) noexcept
   {
     if (this == &other)
       return *this;
-    if (!enabled.empty())
-    {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
-      inject(backup.data(), false);
-    }
+    safe_uninject_all();
     trampoline::operator=(std::move(other));
-    disabled       = std::move(other.disabled);
-    enabled        = std::move(other.enabled);
-    starts_enabled = other.starts_enabled;
+
+    backup        = other.backup;
+    hooks         = std::move(other.hooks);
+    enabled_count = std::exchange(other.enabled_count, 0);
 
     for (hook& h : *this)
       h.chain = *this;
@@ -120,19 +559,45 @@ namespace alterhook
 
   hook_chain& hook_chain::operator=(const trampoline& other)
   {
-    if (this != &other)
+    if (ptarget != other.get_target())
+      uninject_all();
+    else if (!enabled_count)
+    {
+      trampoline::operator=(other);
       return *this;
-    uninject_all();
+    }
+    else
+    {
+      auto tmp = static_cast<trampoline&&>(*this);
+      trampoline::operator=(other);
+      try
+      {
+        thread_freezer freeze;
+        enabled_hooks().front().redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+      }
+      catch (...)
+      {
+        trampoline::operator=(std::move(tmp));
+        throw;
+      }
+      return *this;
+    }
 
     try
     {
       trampoline::operator=(other);
-      inject_back(enabled.begin(), enabled.end());
       helpers::make_backup(ptarget, backup.data(), patch_above);
+      if (enabled_count)
+        enabled_hooks().front().redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+      inject_back_all();
     }
     catch (...)
     {
-      toggle_status_all(include::enabled);
+      for (hook& hook : hooks)
+        hook.enabled = false;
+      enabled_count = 0;
       throw;
     }
     return *this;
@@ -140,514 +605,181 @@ namespace alterhook
 
   hook_chain& hook_chain::operator=(trampoline&& other)
   {
-    if (this == &other)
-      return *this;
-    if (!enabled.empty())
+    if (ptarget != other.get_target())
+      uninject_all();
+    else if (!enabled_count)
     {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
-      inject(backup.data(), false);
+      trampoline::operator=(std::move(other));
+      return *this;
+    }
+    else
+    {
+      std::swap(static_cast<trampoline&>(*this), other);
+      try
+      {
+        thread_freezer freeze;
+        enabled_hooks().front().redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+      }
+      catch (...)
+      {
+        std::swap(static_cast<trampoline&>(*this), other);
+        throw;
+      }
+
+      other.reset();
+      return *this;
     }
 
     trampoline::operator=(std::move(other));
     helpers::make_backup(ptarget, backup.data(), patch_above);
 
-    if (enabled.empty())
-      return *this;
     try
     {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
-      inject(enabled.back().pdetour, true);
+      if (enabled_count)
+        enabled_hooks().front().redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+      inject_back_all();
     }
     catch (...)
     {
-      if (!disabled.empty())
-        disabled.back().has_other = false;
-      list_iterator previtr = disabled.end();
-      do
-      {
-        list_iterator curritr = std::prev(enabled.end());
-        list_iterator trgitr  = previtr;
-        hook&         curr    = *curritr;
-
-        if (curr.has_other)
-        {
-          if (curr.other != disabled.begin())
-            std::prev(curr.other)->has_other = false;
-          trgitr         = curr.other;
-          curr.has_other = false;
-        }
-
-        curr.enabled = false;
-        disabled.splice(trgitr, enabled, curritr);
-        previtr = curritr;
-      } while (!enabled.empty());
-
-      starts_enabled = false;
+      for (hook& hook : hooks)
+        hook.enabled = false;
+      enabled_count = 0;
       throw;
     }
     return *this;
   }
 
-  void hook_chain::clear(include trg)
+  void hook_chain::clear(state_filter filter)
   {
-    if (empty())
+    if (hooks.empty())
       return;
-    const auto uninject = [&]
-    {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
-      inject(backup.data(), false);
-    };
 
-    switch (trg)
+    switch (filter)
     {
-    case include::disabled:
-      if (disabled.empty())
+    case state_filter::disabled:
+      if (enabled_count == hooks.size())
         return;
-      disabled.clear();
-
-      for (hook& h : enabled)
-        h.has_other = false;
-      starts_enabled = true;
+      hooks.remove_if([](const hook& item) { return !item.enabled; });
       break;
-    case include::enabled:
-      if (enabled.empty())
+    case state_filter::enabled:
+      if (!enabled_count)
         return;
-      uninject();
-      enabled.clear();
-
-      for (hook& h : disabled)
-        h.has_other = false;
-      starts_enabled = false;
+      uninject_all();
+      hooks.remove_if([](const hook& item) { return item.enabled; });
+      enabled_count = 0;
       break;
-    case include::both:
-      if (!enabled.empty())
-        uninject();
-      enabled.clear();
-      disabled.clear();
+    case state_filter::any:
+      uninject_all();
+      hooks.clear();
+      enabled_count = 0;
       break;
     }
   }
 
-  void hook_chain::enable_all()
-  {
-    if (disabled.empty())
-      return;
-    starts_enabled = true;
-    if (enabled.empty())
-    {
-      reverse_list_iterator rbegin = disabled.rbegin();
-      rbegin->redirect_original(
-          helpers::resolve_original(ptarget, ptrampoline.get()));
-      thread_freezer freeze{ *this, true };
-      {
-        std::unique_lock lock{ hook_lock };
-        inject(rbegin->pdetour, true);
-      }
-      rbegin->enabled = true;
-
-      for (auto prev = rbegin, itr = std::next(rbegin),
-                enditr = disabled.rend();
-           itr != enditr; ++itr, ++prev)
-      {
-        itr->enabled = true;
-        itr->redirect_original(prev->poriginal);
-        prev->redirect_original(itr->pdetour);
-      }
-      enabled.splice(enabled.begin(), disabled);
-    }
-    else
-    {
-      list_iterator  previtr = std::prev(disabled.end());
-      hook&          dlast   = *previtr;
-      thread_freezer freeze{ nullptr };
-      // if disabled doesn't have other then we got to touch the target
-      if (!dlast.has_other)
-      {
-        hook& elast     = enabled.back();
-        dlast.enabled   = true;
-        elast.has_other = false;
-        dlast.redirect_original(elast.pdetour);
-
-        {
-          std::unique_lock lock{ hook_lock };
-          patch(dlast.pdetour);
-        }
-
-        enabled.splice(enabled.end(), disabled, previtr);
-      }
-      toggle_status_all(include::disabled);
-    }
-  }
-
-  void hook_chain::disable_all()
-  {
-    if (enabled.empty())
-      return;
-
-    uninject_all();
-    toggle_status_all(include::enabled);
-  }
-
-  void hook_chain::pop_back(include trg)
-  {
-    utils_assert(!empty(), "hook_chain::pop_back: popping from empty chain");
-    list_iterator itr{};
-    hook_list*    to       = nullptr;
-    hook_list*    other    = nullptr;
-    const auto    uninject = [&]
-    {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
-      inject(backup.data(), false);
-    };
-
-    switch (trg)
-    {
-    case include::disabled:
-      utils_assert(!disabled.empty(),
-                   "hook_chain::pop_back: popping from an empty disabled list");
-      itr   = std::prev(disabled.end());
-      to    = &disabled;
-      other = &enabled;
-      break;
-    case include::enabled:
-      utils_assert(!enabled.empty(),
-                   "hook_chain::pop_back: popping from an empty enabled list");
-      itr   = std::prev(enabled.end());
-      to    = &enabled;
-      other = &disabled;
-
-      if (enabled.size() == 1)
-        uninject();
-      else
-      {
-        std::unique_lock lock{ hook_lock };
-        patch(itr->poriginal);
-      }
-      break;
-    case include::both:
-      itr = std::prev(disabled.empty() || disabled.back().has_other
-                          ? enabled.end()
-                          : disabled.end());
-      to  = itr->enabled ? &enabled : &disabled;
-
-      if (itr->enabled)
-      {
-        if (enabled.size() == 1)
-          uninject();
-        else
-        {
-          std::unique_lock lock{ hook_lock };
-          patch(itr->poriginal);
-        }
-
-        if (!disabled.empty())
-        {
-          hook& disback = disabled.back();
-          if (disback.has_other && disback.other == itr)
-            disback.has_other = false;
-        }
-      }
-      else if (!enabled.empty())
-      {
-        hook& enback = enabled.back();
-        if (enback.has_other && enback.other == itr)
-          enback.has_other = false;
-      }
-      to->pop_back();
-      return;
-    }
-
-    if (itr == to->begin())
-    {
-      if (itr->enabled != starts_enabled)
-      {
-        hook& oback     = other->back();
-        oback.has_other = false;
-      }
-      else if (itr->has_other)
-        starts_enabled = !starts_enabled;
-    }
-    else
-    {
-      list_iterator itrprev = std::prev(itr);
-      if (itrprev->has_other)
-      {
-        hook& oback     = other->back();
-        oback.has_other = false;
-      }
-      else if (itr->has_other)
-      {
-        itrprev->has_other = true;
-        itrprev->other     = itr->other;
-      }
-    }
-
-    to->pop_back();
-  }
-
-  void hook_chain::pop_front(include trg)
-  {
-    utils_assert(!empty(), "hook_chain::pop_front: popping from empty chain");
-    list_iterator itr{};
-    list_iterator itrnext{};
-    hook_list*    to                     = nullptr;
-    hook_list*    other                  = nullptr;
-    auto          uninject_first_enabled = [&]
-    {
-      if (itrnext == enabled.end())
-      {
-        std::unique_lock lock{ hook_lock };
-        thread_freezer   freeze{ *this, false };
-        inject(backup.data(), false);
-      }
-      else
-      {
-        thread_freezer freeze{ nullptr };
-        itrnext->redirect_original(itr->poriginal);
-      }
-    };
-
-    switch (trg)
-    {
-    case include::disabled:
-      utils_assert(!disabled.empty(),
-                   "hook_chain::pop_front: popping from empty disabled chain");
-      itr     = disabled.begin();
-      itrnext = std::next(itr);
-      to      = &disabled;
-      other   = &enabled;
-      break;
-    case include::enabled:
-      utils_assert(!enabled.empty(),
-                   "hook_chain::pop_front: popping from empty enabled chain");
-      itr     = enabled.begin();
-      itrnext = std::next(itr);
-      to      = &enabled;
-      other   = &disabled;
-      uninject_first_enabled();
-      break;
-    case include::both:
-      itr     = starts_enabled ? enabled.begin() : disabled.begin();
-      itrnext = std::next(itr);
-      if (itr->enabled)
-        uninject_first_enabled();
-      if (itr->has_other)
-        starts_enabled = !starts_enabled;
-      to = itr->enabled ? &enabled : &disabled;
-      to->pop_front();
-      return;
-    }
-
-    if (itr->enabled != starts_enabled)
-    {
-      list_iterator i = other->begin();
-      while (!i->has_other)
-        ++i;
-
-      if (itr->has_other || to->size() == 1)
-        i->has_other = false;
-      else
-        i->other = itrnext;
-    }
-    else if (itr->has_other)
-      starts_enabled = !starts_enabled;
-
-    to->pop_front();
-  }
-
-  hook_chain::list_iterator hook_chain::erase(list_iterator position)
-  {
-    if (position->enabled)
-      uninject(position);
-
-    unbind(position);
-
-    hook_list& trg = position->enabled ? enabled : disabled;
-    return trg.erase(position);
-  }
-
-  hook_chain::list_iterator hook_chain::erase(list_iterator first,
-                                              list_iterator last)
+  hook_chain::iterator hook_chain::erase(iterator first, iterator last,
+                                         state_filter filter)
   {
     if (first == last)
       return last;
-    hook_list& trg = first->enabled ? enabled : disabled;
 
-    if (first->enabled)
-      uninject_range(first, last);
+    iterator first_removed_enabled = hooks.end();
+    size_t   removed_enabled_count = 0;
 
-    struct erase_callback : unbind_range_callback
+    if (filter != state_filter::disabled)
     {
-      hook_list& trg;
+      for (iterator itr = first; itr != last; ++itr)
+      {
+        if (!itr->enabled)
+          continue;
+        if (first_removed_enabled == hooks.end())
+          first_removed_enabled = itr;
+        ++removed_enabled_count;
+      }
 
-      erase_callback(hook_list& trg) : trg(trg) {}
+      if (removed_enabled_count)
+      {
+        iterator next_surviving_enabled = std::find_if(
+            last, hooks.end(), [](const hook& item) { return item.enabled; });
 
-      void operator()(list_iterator itr, bool) override { trg.erase(itr); }
-    } callback{ trg };
+        if (enabled_count == removed_enabled_count)
+          uninject_all();
+        else
+        {
+          thread_freezer freeze;
+          if (next_surviving_enabled == hooks.end())
+            patch(first_removed_enabled->poriginal);
+          else
+            next_surviving_enabled->redirect_original(
+                first_removed_enabled->poriginal);
+        }
 
-    unbind_range(first, last, callback);
+        enabled_count -= removed_enabled_count;
+      }
+    }
+
+    if (filter == state_filter::any)
+      return hooks.erase(first, last);
+
+    iterator itr           = first;
+    bool     enabled_check = filter == state_filter::enabled;
+
+    do
+    {
+      if (itr->enabled == enabled_check)
+        itr = hooks.erase(itr);
+      else
+        ++itr;
+    } while (itr != last);
+
     return last;
   }
 
-  hook_chain::iterator hook_chain::erase(iterator first, iterator last)
+  void hook_chain::pop_back(state_filter filter)
   {
-    list_iterator       firstprev{};
-    list_iterator       search_itr{};
-    list_iterator       range_begin   = first;
-    const list_iterator range_end     = last;
-    list_iterator       first_enabled = range_begin;
-    list_iterator       last_enabled  = range_end;
-    bool                has_enabled   = false;
-    bool                has_firstprev = false;
-    bool                search        = false;
-
-    auto [first_current, first_other] = first.enabled
-                                            ? std::tie(enabled, disabled)
-                                            : std::tie(disabled, enabled);
-    hook_list& last_current           = last.enabled ? enabled : disabled;
-
-    // find firstprev
-    if (range_begin == first_current.begin())
+    if (empty())
+      return;
+    if (filter == state_filter::any)
     {
-      if (first.enabled != starts_enabled)
-      {
-        search     = true;
-        search_itr = first_other.begin();
-      }
-    }
-    else
-    {
-      has_firstprev = true;
-      firstprev     = std::prev(range_begin);
-      if (firstprev->has_other)
-      {
-        search     = true;
-        search_itr = firstprev->other;
-      }
+      erase(std::prev(hooks.end()), hooks.end());
+      return;
     }
 
-    if (search)
-    {
-      has_firstprev = true;
-      while (!search_itr->has_other)
-        ++search_itr;
-      firstprev = search_itr;
-    }
+    const bool enabled_check = filter == state_filter::enabled;
+    const auto result        = std::find_if(hooks.rbegin(), hooks.rend(),
+                                            [enabled_check](const hook& item)
+                                            { return item.enabled == enabled_check; });
 
-    // find first_enabled
-    if (!first.enabled)
-    {
-      if (!last.enabled)
-      {
-        while (range_begin != range_end && !range_begin->has_other)
-          range_begin = disabled.erase(range_begin);
-
-        if (range_begin != range_end)
-        {
-          has_enabled   = true;
-          first_enabled = range_begin->other;
-          disabled.erase(range_begin);
-        }
-      }
-      else
-      {
-        while (!range_begin->has_other)
-          range_begin = disabled.erase(range_begin);
-
-        first_enabled = range_begin->other;
-        disabled.erase(first_enabled);
-        if (first_enabled != range_end)
-          has_enabled = true;
-      }
-    }
-    else
-      has_enabled = true;
-
-    if (has_enabled)
-    {
-      // erase all except enabled ones for safety reasons
-      for (auto itr = iterator(list_iterator(), first_enabled, true);
-           itr != last;)
-      {
-        if (itr.enabled)
-          last_enabled = itr++;
-        else
-        {
-          iterator next = std::next(itr);
-          disabled.erase(itr);
-          itr = next;
-        }
-      }
-
-      const list_iterator end_enabled = std::next(last_enabled);
-
-      // only after uninjecting successfully it is safe to erase the enabled
-      // hooks
-      try
-      {
-        uninject_range(first_enabled, end_enabled);
-      }
-      catch (...)
-      {
-        for (list_iterator itr = first_enabled; itr != end_enabled; ++itr)
-          itr->has_other = false;
-
-        if (has_firstprev)
-        {
-          firstprev->has_other = false;
-          if (!firstprev->enabled)
-          {
-            firstprev->has_other = true;
-            firstprev->other     = first_enabled;
-          }
-        }
-        else
-          starts_enabled = true;
-
-        if (range_end != last_current.end() && !range_end->enabled)
-        {
-          last_enabled->has_other = true;
-          last_enabled->other     = range_end;
-        }
-        throw;
-      }
-
-      enabled.erase(first_enabled, end_enabled);
-    }
-    else
-    {
-      if (last.enabled)
-      {
-        list_iterator itr = first;
-        while (!itr->has_other)
-          itr = disabled.erase(itr);
-      }
-      else
-        disabled.erase(first, last);
-    }
-
-    if (has_firstprev)
-    {
-      firstprev->has_other = false;
-      if (range_end != last_current.end() &&
-          range_end->enabled != firstprev->enabled)
-      {
-        firstprev->has_other = true;
-        firstprev->other     = range_end;
-      }
-    }
-    else
-      starts_enabled = last.enabled;
-
-    return last;
+    if (result != hooks.rend())
+      erase(std::prev(result.base()), result.base(), filter);
   }
 
-  void hook_chain::swap(list_iterator left, hook_chain& other,
-                        list_iterator right)
+  void hook_chain::pop_front(state_filter filter)
+  {
+    if (empty())
+      return;
+    if (filter == state_filter::any)
+    {
+      erase(begin(), std::next(begin()), filter);
+      return;
+    }
+
+    const bool enabled_check = filter == state_filter::enabled;
+    const auto itr =
+        std::find_if(begin(), end(), [enabled_check](const hook& item)
+                     { return item.enabled == enabled_check; });
+
+    if (itr != end())
+      erase(itr, std::next(itr), filter);
+  }
+
+  // Swaps two hooks. Handles both intra-container (same target) and
+  // cross-container (different targets) swaps. Provides Strong Exception
+  // Guarantee for intra-container swaps and Basic Exception Guarantee for
+  // cross-container swaps, minimizing hardware cache flushes via deferred
+  // memory patching.
+  void hook_chain::swap(iterator left, hook_chain& other, iterator right)
   {
     utils_assert(&left->chain.get() == this,
                  "hook_chain::swap: the left iterator passed is outside the "
@@ -655,138 +787,349 @@ namespace alterhook
     utils_assert(&right->chain.get() == &other,
                  "hook_chain::swap: the right iterator passed is outside the "
                  "range of `other` object");
-    if (&other == this && left->enabled == right->enabled && left == right)
-      return;
-    hook_list&    lefttrg   = left->enabled ? enabled : disabled;
-    hook_list&    righttrg  = right->enabled ? other.enabled : other.disabled;
-    list_iterator leftnext  = std::next(left);
-    list_iterator rightnext = std::next(right);
 
-    if (left->enabled || right->enabled)
+    // =========================================================================
+    // PHASE 1: Normalization & Early Exits (Intra-container only)
+    // =========================================================================
+    if (this == &other)
     {
-#if !utils_64bit
-      bool injected_first = false;
-#endif
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ nullptr };
-      right->swap(*left);
-      lefttrg.splice(leftnext, righttrg, right);
-      righttrg.splice(rightnext, lefttrg, left);
-      std::swap(left, right);
+      if (left == right)
+        return;
 
-#if !utils_64bit
-      try
-#endif
+      auto [rearranged, left_is_first] = analyse_intra_swap(left, right);
+
+      if (!rearranged)
       {
-        if (left->enabled)
-        {
-          if (leftnext == enabled.end())
-            patch(left->pdetour);
-          else if (leftnext != left)
-            leftnext->redirect_original(left->pdetour);
-#if !utils_64bit
-          injected_first = true;
-#endif
-        }
-
-        if (right->enabled)
-        {
-          if (rightnext == other.enabled.end())
-            other.patch(right->pdetour);
-          else if (rightnext != right)
-            rightnext->redirect_original(right->pdetour);
-        }
+        // Topology is unchanged. Perform a raw physical splice and exit (O(1)).
+        const iterator left_next  = std::next(left);
+        const iterator right_next = std::next(right);
+        hooks.splice(left_next, hooks, right);
+        hooks.splice(right_next, hooks, left);
+        return;
       }
-#if !utils_64bit
-      catch (...)
-      {
-        right->swap(*left);
-        lefttrg.splice(leftnext, righttrg, right);
-        righttrg.splice(rightnext, lefttrg, left);
+
+      // Enforce the spatial invariant: `left` must always physically precede
+      // `right`. This allows upstream/downstream linking logic to be
+      // unidirectional.
+      if (!left_is_first)
         std::swap(left, right);
-
-        if (injected_first)
-        {
-          // if that throws, no guarantee is provided
-          if (leftnext == other.enabled.end())
-            patch(left->pdetour);
-          else
-            leftnext->redirect_original(left->pdetour);
-        }
-        throw;
-      }
-#endif
     }
 
-    bind(left, left, left->enabled);
-    other.bind(right, right, right->enabled);
+    // =========================================================================
+    // PHASE 2: State Capture & Thread Synchronization
+    // =========================================================================
+    const iterator         left_next             = std::next(left);
+    const bool             left_was_enabled      = left->enabled;
+    const std::byte* const left_poriginal        = left->poriginal;
+    const iterator         right_next            = std::next(right);
+    const bool             right_was_enabled     = right->enabled;
+    const std::byte* const right_poriginal       = right->poriginal;
+    bool                   this_gap_hard_closed  = false;
+    bool                   other_gap_hard_closed = false;
+
+    thread_freezer freeze{ defer_freeze };
+    if (left->enabled || right->enabled)
+    {
+      // Initialize the freezer. If crossing containers requires an
+      // inject/uninject, pass relocation info to prevent freezing threads on
+      // overwritten prologues.
+      if (this == &other)
+        freeze.init();
+      else if (cross_splice_requires_injection(right))
+        freeze.init(*this, !enabled_count);
+      else if (other.cross_splice_requires_injection(left))
+        freeze.init(other, !other.enabled_count);
+      else
+        freeze.init();
+    }
+
+    // =========================================================================
+    // PHASE 3: Unlink Phase (Ghosting)
+    // =========================================================================
+    if (this == &other)
+    {
+      left->enabled  = false;
+      right->enabled = false;
+
+      // Intra-container: Defer physical memory updates (false).
+      // global enabled_count remains stable.
+      if (left_was_enabled)
+        unlink(left, left_poriginal, false);
+      if (right_was_enabled)
+        other.unlink(right, right_poriginal, false);
+    }
+    else if (left->enabled && right->enabled)
+    {
+      // Cross-container Dual-Enabled: Optimize by naturally orphaning `left`.
+      // Only `right` forces a hard gap close on the `other` container.
+      other.unlink(right, right_poriginal, true);
+      other_gap_hard_closed = true;
+      --other.enabled_count;
+    }
+    else if (left->enabled || right->enabled)
+    {
+      // Swapping an enabled hook with a disabled one. Hard unlink the enabled
+      // and hard link it to its next container.
+      if (left->enabled)
+      {
+        unlink(left, left_poriginal, true);
+        this_gap_hard_closed = true;
+        --enabled_count;
+      }
+      else
+      {
+        other.unlink(right, right_poriginal, true);
+        other_gap_hard_closed = true;
+        --other.enabled_count;
+      }
+    }
+
+    // =========================================================================
+    // PHASE 4: Physical Node Swap
+    // =========================================================================
+    swap_raw(left, left_next, other, right, right_next);
+
+    bool left_linked             = false;
+    bool cross_dual_enabled_swap = false;
+
+    // =========================================================================
+    // PHASE 5: Link Phase (Wiring)
+    // =========================================================================
+    try
+    {
+      if (this == &other)
+      {
+        // 1-Patch Optimization: `left` is downstream, `right` is upstream.
+        // Link `left` first. If `left_was_enabled` is true, pass false to skip
+        // memory patch. It seamlessly wires internal trampolines via its
+        // backward search.
+        left->enabled = right_was_enabled;
+        if (left->enabled)
+        {
+          link(left, nullptr, !left_was_enabled);
+          left_linked = true;
+        }
+
+        // Link `right` second. Passes true to trigger exactly 1 patch if it is
+        // the head node.
+        right->enabled = left_was_enabled;
+
+        if (right->enabled)
+          other.link(right, nullptr, true);
+      }
+      else if (left->enabled || right->enabled)
+      {
+        if (left->enabled && right->enabled)
+        {
+          // hard link the new left, automatically unlinking the old one. then
+          // hard link the new right to other.
+          cross_dual_enabled_swap = true;
+          link(left, left_poriginal, true);
+          left_linked = true;
+          other.link(right, right_poriginal, true);
+          ++other.enabled_count;
+        }
+        // just hard link the enabled hook to its new location
+        else if (right->enabled)
+        {
+          other.link(right, right_poriginal, true);
+          ++other.enabled_count;
+        }
+        else
+        {
+          link(left, left_poriginal, true);
+          ++enabled_count;
+        }
+      }
+    }
+    // =========================================================================
+    // PHASE 6: Exception Rollback
+    // =========================================================================
+    catch (...)
+    {
+      left->enabled  = false;
+      right->enabled = false;
+
+      // 1. Unlink left if it was successfully wired before the exception
+      if (left_linked)
+      {
+        try
+        {
+          // Pass `this != &other` to avoid touching physical memory for
+          // intra-container rollbacks
+          unlink(left, left->poriginal, this != &other);
+        }
+        catch (...)
+        {
+          // Double-fault fallback: Basic Guarantee. Re-enable and adjust
+          // counts.
+          left->enabled = true;
+          if (right_was_enabled && !other_gap_hard_closed)
+            --other.enabled_count;
+          throw;
+        }
+
+        this_gap_hard_closed = this != &other;
+        if (this_gap_hard_closed)
+          --enabled_count;
+      }
+
+      // 2. Restore physical topology
+      swap_raw(left, left_next, other, right, right_next);
+
+      const bool this_was_untouched =
+          !left_was_enabled || (cross_dual_enabled_swap && !left_linked);
+      left->enabled  = left_was_enabled;
+      right->enabled = right_was_enabled;
+      left_linked    = false;
+
+      // 3. Relink original targets
+      try
+      {
+        if (!this_was_untouched)
+        {
+          link(left, nullptr, this_gap_hard_closed);
+          left_linked = true;
+          if (this_gap_hard_closed)
+            ++enabled_count;
+        }
+
+        if (right_was_enabled)
+        {
+          other.link(right, nullptr, other_gap_hard_closed);
+          if (other_gap_hard_closed)
+            ++other.enabled_count;
+        }
+      }
+      catch (...)
+      {
+        // on double failure, mark the failed hooks as disabled. they were hard
+        // unlinked at this point, therefore providing basic guarantee
+        if (!left_linked && !this_was_untouched)
+          left->enabled = false;
+        if (right_was_enabled)
+          right->enabled = false;
+        throw;
+      }
+      throw;
+    }
   }
 
   void hook_chain::swap(hook_chain& other)
   {
     if (this == &other)
       return;
-    utils_assert(
-        other.ptarget != ptarget,
-        "hook_chain::swap: other can't share the same target as *this");
-
+    if (!enabled_count && !other.enabled_count)
     {
-#if !utils_64bit
-      bool injected_first_range = false;
-#endif
-
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ nullptr };
-      if (!other.enabled.empty())
-      {
-        patch(other.enabled.back().pdetour);
-        hook& hfront = other.enabled.front();
-        hfront.redirect_original(
-            helpers::resolve_original(ptarget, ptrampoline.get()));
-#if !utils_64bit
-        injected_first_range = true;
-#endif
-      }
-
-      if (!enabled.empty())
-      {
-        // patch is noexcept on x64 so no need to try-catch
-#if !utils_64bit
-        if (injected_first_range)
-        {
-          try
-          {
-            patch(other, enabled.back().pdetour);
-            hook& hfront = enabled.front();
-            hfront.redirect_original(helpers::resolve_original(
-                other.ptarget, other.ptrampoline.get()));
-          }
-          catch (...)
-          {
-            // if that throws no guarantee is provided
-            patch(enabled.back().pdetour);
-            throw;
-          }
-        }
-        else
-#endif
-        {
-          other.patch(enabled.back().pdetour);
-          hook& hfront = enabled.front();
-          hfront.redirect_original(helpers::resolve_original(
-              other.ptarget, other.ptrampoline.get()));
-        }
-      }
+      hooks.swap(other.hooks);
+      for (hook& item : *this)
+        item.chain = *this;
+      for (hook& item : other)
+        item.chain = other;
+      return;
     }
 
-    enabled.swap(other.enabled);
-    disabled.swap(other.disabled);
-    std::swap(starts_enabled, other.starts_enabled);
+    thread_freezer freeze{ defer_freeze };
+    if (enabled_count && other.enabled_count)
+      freeze.init();
+    else
+    {
+      hook_chain& to = enabled_count ? other : *this;
+      freeze.init(to, true);
+    }
 
-    for (hook& h : *this)
-      h.chain = *this;
-    for (hook& h : other)
-      h.chain = other;
+    bool first_injected = false;
+
+    try
+    {
+      if (enabled_count && other.enabled_count)
+      {
+        other.inject(other.backup.data(), false);
+        patch(other.enabled_hooks().back().pdetour);
+        enabled_hooks().front().redirect_original(
+            helpers::resolve_original(other.ptarget, other.ptrampoline.get()));
+        first_injected = true;
+
+        other.inject(enabled_hooks().back().pdetour, true);
+        other.enabled_hooks().front().redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+      }
+      else
+      {
+        auto [from, to] =
+            enabled_count ? std::tie(*this, other) : std::tie(other, *this);
+        from.inject(from.backup.data(), false);
+        to.inject(from.enabled_hooks().back().pdetour, true);
+        from.enabled_hooks().front().redirect_original(
+            helpers::resolve_original(to.ptarget, to.ptrampoline.get()));
+      }
+    }
+    catch (...)
+    {
+      if (first_injected)
+      {
+        try
+        {
+          patch(enabled_hooks().back().pdetour);
+        }
+        catch (...)
+        {
+          hooks.swap(other.hooks);
+          std::swap(enabled_count, other.enabled_count);
+          for (hook& item : hooks)
+            item.chain = *this;
+          for (hook& item : other.hooks)
+          {
+            item.enabled = false;
+            item.chain   = other;
+          }
+          throw;
+        }
+
+        enabled_hooks().front().redirect_original(
+            helpers::resolve_original(ptarget, ptrampoline.get()));
+      }
+
+      try
+      {
+        if (enabled_count && !other.enabled_count)
+        {
+          inject(enabled_hooks().back().pdetour, true);
+          enabled_hooks().front().redirect_original(
+              helpers::resolve_original(ptarget, ptrampoline.get()));
+          first_injected = true;
+        }
+        else if (other.enabled_count)
+        {
+          other.inject(other.enabled_hooks().back().pdetour, true);
+          other.enabled_hooks().front().redirect_original(
+              helpers::resolve_original(other.ptarget,
+                                        other.ptrampoline.get()));
+        }
+      }
+      catch (...)
+      {
+        if (enabled_count && !other.enabled_count)
+        {
+          for (hook& item : hooks)
+            item.enabled = false;
+        }
+        else if (other.enabled_count)
+        {
+          for (hook& item : other.hooks)
+            item.enabled = false;
+        }
+        throw;
+      }
+      throw;
+    }
+
+    hooks.swap(other.hooks);
+    std::swap(enabled_count, other.enabled_count);
+    for (hook& item : hooks)
+      item.chain = *this;
+    for (hook& item : other.hooks)
+      item.chain = other;
   }
 
 #if utils_clang
@@ -794,571 +1137,280 @@ namespace alterhook
   #pragma clang diagnostic ignored "-Wswitch"
 #endif
 
-  void hook_chain::splice(list_iterator newpos, hook_chain& other, transfer to,
-                          transfer from)
+  void hook_chain::splice(iterator newpos, hook_chain& other, iterator first,
+                          iterator last, splicer_flags flags)
   {
-    utils_assert(&other != this, "hook_chain::splice: other needs to be a "
-                                 "different hook_chain instance");
-    utils_assert(to != transfer::both,
-                 "hook_chain::splice: `to` must not be `transfer::both`");
-    if (other.empty())
-      return;
-    bool       to_enabled = to == transfer::enabled;
-    hook_list& trg        = to_enabled ? enabled : disabled;
-
-    if (from != transfer::disabled)
-      other.uninject_range(other.enabled.begin(), other.enabled.end());
-
-    if (to_enabled)
-    {
-      if (from == transfer::disabled)
-        inject_range(newpos, other.enabled.begin(), other.enabled.end());
-      else
-      {
-        try
-        {
-          inject_range(newpos, other.enabled.begin(), other.enabled.end());
-        }
-        catch (...)
-        {
-          try
-          {
-            other.inject_back(other.enabled.begin(), other.enabled.end());
-          }
-          catch (...)
-          {
-            other.toggle_status_all(include::enabled);
-            throw;
-          }
-          throw;
-        }
-      }
-    }
-
-    if (from == transfer::both && !empty())
-    {
-      hook& lastprev = other.back();
-
-      if (lastprev.enabled != to_enabled && newpos != trg.end())
-      {
-        lastprev.has_other = true;
-        lastprev.other     = newpos;
-      }
-    }
-
-    switch (from)
-    {
-    case transfer::disabled:
-      bind(newpos, other.disabled.begin(), to_enabled);
-      break;
-    case transfer::enabled:
-      bind(newpos, other.enabled.end(), to_enabled);
-      break;
-    case transfer::both: bind(newpos, other.begin(), to_enabled); break;
-    }
-
-    if (from == transfer::both)
-    {
-      if (empty())
-        starts_enabled = other.starts_enabled;
-
-      list_iterator disablednewpos = newpos;
-      list_iterator enablednewpos  = newpos;
-
-      if (newpos == trg.end())
-      {
-        disablednewpos = disabled.end();
-        enablednewpos  = enabled.end();
-      }
-      else
-      {
-        list_iterator& othernewpos =
-            to_enabled ? disablednewpos : enablednewpos;
-        list_iterator i = newpos;
-
-        while (i != trg.end() && !i->has_other)
-          ++i;
-        if (i == trg.end())
-          othernewpos = to_enabled ? disabled.end() : enabled.end();
-        else
-          othernewpos = i->other;
-      }
-
-      for (auto i = other.begin(), otherend = other.end(), next = iterator();
-           i != otherend; i = next)
-      {
-        next     = std::next(i);
-        i->chain = *this;
-        if (i->enabled)
-          enabled.splice(enablednewpos, other.enabled, i);
-        else
-          disabled.splice(disablednewpos, other.disabled, i);
-      }
-    }
-    else
-    {
-      if (empty())
-        starts_enabled = to_enabled;
-
-      auto [from_current, from_other] =
-          from == transfer::enabled
-              ? std::pair(&other.enabled, &other.disabled)
-              : std::pair(&other.disabled, &other.enabled);
-
-      for (hook& h : *from_current)
-      {
-        h.has_other = false;
-        h.chain     = *this;
-        h.enabled   = to_enabled;
-      }
-      for (hook& h : *from_other)
-        h.has_other = false;
-      trg.splice(newpos, *from_current);
-    }
-  }
-
-  void hook_chain::splice(list_iterator newpos, hook_chain& other,
-                          list_iterator oldpos, transfer to)
-  {
-    utils_assert(to != transfer::both,
-                 "hook_chain::splice: `to` must not be `transfer::both`");
-    const bool to_enabled = to == transfer::enabled;
-    auto       oldnext    = std::next(oldpos);
-    if (&other == this && oldpos->enabled == to_enabled &&
-        (newpos == oldpos || newpos == oldnext))
-      return;
-
-    if (oldpos->enabled)
-      other.uninject(oldpos);
-
-    if (to_enabled)
-    {
-      if (!oldpos->enabled)
-        inject_range(newpos, oldpos, oldnext);
-      else
-      {
-        try
-        {
-          inject_range(newpos, oldpos, oldnext);
-        }
-        catch (...)
-        {
-          try
-          {
-            other.inject_back(oldpos, oldnext);
-          }
-          catch (...)
-          {
-            other.toggle_status(oldpos);
-            throw;
-          }
-          throw;
-        }
-      }
-    }
-
-    other.unbind(oldpos);
-    bind(newpos, oldpos, to_enabled);
-
-    hook_list& trg    = to_enabled ? enabled : disabled;
-    hook_list& src    = oldpos->enabled ? other.enabled : other.disabled;
-    oldpos->has_other = false;
-    oldpos->enabled   = to_enabled;
-    oldpos->chain     = *this;
-
-    trg.splice(newpos, src, oldpos);
-  }
-
-  void hook_chain::splice(list_iterator newpos, hook_chain& other,
-                          list_iterator first, list_iterator last, transfer to)
-  {
-    utils_assert(to != transfer::both,
-                 "hook_chain::splice: `to` must not be `transfer::both`");
     if (first == last)
       return;
-    if (std::next(first) == last)
-      return splice(newpos, other, first, to);
-    const bool to_enabled = to == transfer::enabled;
-    hook_list& trg        = to_enabled ? enabled : disabled;
-    hook_list& src        = first->enabled ? other.enabled : other.disabled;
+    const bool intra_splice = this == &other;
 
-    if (&trg == &src && newpos == last)
-      return;
-    // on transfer from disabled to enabled we make sure the pieces are bound
-    // together
-    if (to_enabled && !first->enabled)
+    if (intra_splice && newpos == last)
     {
-      for (auto prev = first, current = std::next(first); current != last;
-           ++prev, ++current)
-        current->redirect_original(prev->pdetour);
+      if (flags.target != target_state::preserve)
+        set_status_range(first, last, flags.target == target_state::enabled);
+      return;
+    }
+    if (flags.target == target_state::preserve &&
+        flags.filter == state_filter::disabled)
+    {
+      splice_disabled(newpos, other, first, last);
+      return;
     }
 
-    if (first->enabled)
-      other.uninject_range(first, last);
+    iterator         this_next_enabled   = end();
+    const std::byte* this_prev_poriginal = nullptr;
 
-    // covers transfer to enabled
-    if (to_enabled)
+    if (!enabled_count)
+      this_prev_poriginal =
+          helpers::resolve_original(ptarget, ptrampoline.get());
+    else
     {
-      try
-      {
-        inject_range(newpos, first, last);
-      }
-      catch (...)
-      {
-        if (first->enabled)
-        {
-          try
-          {
-            other.inject_back(first, last);
-          }
-          catch (...)
-          {
-            other.toggle_status(first, last);
-            throw;
-          }
-        }
-        throw;
-      }
+      this_next_enabled = std::find_if(newpos, end(), [](const hook& item)
+                                       { return item.enabled; });
+      this_prev_poriginal =
+          this_next_enabled != end()
+              ? this_next_enabled->poriginal
+              : std::find_if(std::reverse_iterator(newpos), rend(),
+                             [](const hook& item) { return item.enabled; })
+                    ->pdetour;
     }
 
-    struct splice_callback : unbind_range_callback
-    {
-      hook_chain*   current;
-      const bool    to_enabled;
-      hook_list&    trg;
-      hook_list&    src;
-      list_iterator newpos;
+    thread_freezer   freeze{ defer_freeze };
+    iterator         first_enabled          = other.end();
+    iterator         other_next_enabled     = other.end();
+    const std::byte* other_prev_poriginal   = nullptr;
+    const std::byte* current_this_poriginal = this_prev_poriginal;
+    ptrdiff_t        this_enabled_diff      = 0;
+    ptrdiff_t        other_enabled_diff     = 0;
+    rollback_t       rollback_data;
 
-      splice_callback(hook_chain* current, bool to_enabled, hook_list& trg,
-                      hook_list& src, list_iterator newpos)
-          : current(current), to_enabled(to_enabled), trg(trg), src(src),
-            newpos(newpos)
+    // Optimization Case: if splicing the whole range intra container without
+    // state updates, we can make use of the O(1) std::list::splice. We only
+    // need to look for the boundaries of the enabled subrange.
+    if (intra_splice && flags.filter == state_filter::any &&
+        flags.target == target_state::preserve)
+    {
+      first_enabled = std::find_if(first, last, [](const hook& item)
+                                   { return item.enabled; });
+      if (first_enabled != last)
       {
+        if (!enabled_count)
+          freeze.init(*this, true);
+        else
+          freeze.init();
+
+        other_prev_poriginal = first_enabled->poriginal;
+        first_enabled->redirect_original(current_this_poriginal);
+        current_this_poriginal =
+            std::find_if(std::reverse_iterator(last),
+                         std::reverse_iterator(first),
+                         [](const hook& item) { return item.enabled; })
+                ->pdetour;
       }
 
-      void operator()(list_iterator itr, bool forward) override
-      {
-        set_has_other(itr, false);
-        set_enabled(itr, to_enabled);
-        set_pchain(itr, current);
-        trg.splice(newpos, src, itr);
-        if (!forward)
-          newpos = itr;
-      }
-    } callback{ this, to_enabled, trg, src, newpos };
-
-    bind(newpos, first, to_enabled);
-    other.unbind_range(first, last, callback);
-  }
-
-  void hook_chain::splice(list_iterator newpos, hook_chain& other,
-                          iterator first, iterator last, transfer to)
-  {
-    utils_assert(to != transfer::both,
-                 "hook_chain::splice: to can't be the both flag");
-    if (first == last)
-      return;
-
-    const bool to_enabled = to == transfer::enabled;
-    const bool is_empty   = empty();
-
-    list_iterator disablednewpos    = newpos;
-    list_iterator enablednewpos     = newpos;
-    list_iterator disabledoldtrgpos = last;
-    list_iterator enabledoldtrgpos  = last;
-
-    auto [to_current, to_other] =
-        to_enabled ? std::tie(enabled, disabled) : std::tie(disabled, enabled);
-    auto [first_current, first_other, first_newpos_current,
-          first_newpos_other] =
-        first.enabled
-            ? std::tie(enabled, disabled, enablednewpos, disablednewpos)
-            : std::tie(disabled, enabled, disablednewpos, enablednewpos);
-    auto [last_current_src, last_current_src_other] =
-        last.enabled ? std::tie(other.enabled, other.disabled)
-                     : std::tie(other.disabled, other.enabled);
-
-    if (&other == this && last.enabled == to_enabled && newpos == last)
-      return;
-
-    // gets disablednewpos & enablednewpos
-    if (newpos == to_current.end())
-    {
-      disablednewpos = disabled.end();
-      enablednewpos  = enabled.end();
+      hooks.splice(newpos, other.hooks, first, last);
     }
     else
     {
-      list_iterator& othernewpos = to_enabled ? disablednewpos : enablednewpos;
-      list_iterator  i           = newpos;
+      if (flags.filter != state_filter::any ||
+          flags.target != target_state::preserve)
+        rollback_data.reserve(hooks.size());
 
-      while (i != to_current.end() && !i->has_other)
-        ++i;
-      othernewpos = i != to_current.end() ? i->other : to_other.end();
-    }
-
-    list_iterator bind_pos{};
-    list_iterator lastprev{};
-    list_iterator range_begin   = first;
-    list_iterator range_end     = last;
-    list_iterator first_enabled = range_begin;
-    list_iterator last_enabled  = range_end;
-    bool          has_enabled   = false;
-    bool          should_bind   = false;
-    // when an exception is thrown, this is used to transfer all elements back
-    // to their old position
-    const auto    transfer_back = [&]
-    {
-      const list_iterator range_last         = std::next(lastprev);
-      const bool          lastprev_has_other = lastprev->has_other;
-      lastprev->has_other                    = false;
-
-      for (auto itr    = iterator(first, first, first.enabled),
-                itrend = iterator(range_last, range_last, lastprev->enabled);
-           itr != itrend;)
+      for (iterator itr = first; itr != last;)
       {
-        itr->chain = other;
-        auto [trgpos, trglist, othertrglist] =
-            itr.enabled ? std::tie(enabledoldtrgpos, other.enabled, enabled)
-                        : std::tie(disabledoldtrgpos, other.disabled, disabled);
-
-        trglist.splice(trgpos, othertrglist,
-                       std::exchange(itr, std::next(itr)));
-      }
-
-      lastprev->has_other = lastprev_has_other;
-    };
-
-    if (!is_empty)
-    {
-      if (first_newpos_current == first_current.begin())
-      {
-        if (starts_enabled != first.enabled)
+        bool match = false;
+        switch (flags.filter)
         {
-          should_bind = true;
-          bind_pos    = std::prev(first_newpos_other);
-        }
-      }
-      else
-      {
-        list_iterator newfirstprev = std::prev(first_newpos_current);
-        if (newfirstprev->has_other)
-        {
-          should_bind = true;
-          bind_pos    = std::prev(first_newpos_other);
-        }
-      }
-    }
-
-    // search for first enabled
-    if (!first.enabled)
-    {
-      // if neither first nor last refer to an enabled hook we can't be sure
-      // that an enabled hook is within the range so we got to do safety checks.
-      // otherwise we simply iterate till one is found
-      if (!last.enabled)
-      {
-        while (range_begin != range_end && !range_begin->has_other)
-        {
-          range_begin->chain = *this;
-          lastprev           = range_begin;
-          disabled.splice(disablednewpos, other.disabled,
-                          std::exchange(range_begin, std::next(range_begin)));
+        case state_filter::any: match = true; break;
+        case state_filter::enabled: match = itr->enabled; break;
+        case state_filter::disabled: match = !itr->enabled; break;
         }
 
-        if (range_begin != range_end)
+        if (!match)
         {
-          disabledoldtrgpos  = std::next(range_begin);
-          range_begin->chain = *this;
-          lastprev           = range_begin;
-          disabled.splice(disablednewpos, other.disabled, range_begin);
-          first_enabled = range_begin->other;
-          has_enabled   = true;
-        }
-      }
-      else
-      {
-        while (!range_begin->has_other)
-        {
-          range_begin->chain = *this;
-          lastprev           = range_begin;
-          disabled.splice(disablednewpos, other.disabled,
-                          std::exchange(range_begin, std::next(range_begin)));
-        }
-
-        disabledoldtrgpos  = std::next(range_begin);
-        range_begin->chain = *this;
-        lastprev           = range_begin;
-        disabled.splice(disablednewpos, other.disabled, range_begin);
-        first_enabled = range_begin->other;
-        if (first_enabled != range_end)
-          has_enabled = true;
-      }
-    }
-    else
-      has_enabled = true;
-
-    if (has_enabled)
-    {
-      const bool in_list_splice         = &other == this;
-      bool       stop_splicing_enabled  = false;
-      bool       stop_splicing_disabled = false;
-
-      // transfer everything (and keep track of last_enabled)
-      for (auto itr = iterator(list_iterator(), first_enabled, true);
-           itr != last;)
-      {
-        itr->chain = *this;
-        lastprev   = itr;
-        if (itr.enabled)
-          last_enabled = lastprev;
-
-        auto [oldtrgpos, trgpos, trglist, othertrglist, stop_splicing] =
-            itr.enabled ? std::tie(enabledoldtrgpos, enablednewpos, enabled,
-                                   other.enabled, stop_splicing_enabled)
-                        : std::tie(disabledoldtrgpos, disablednewpos, disabled,
-                                   other.disabled, stop_splicing_disabled);
-
-        oldtrgpos = std::next(static_cast<list_iterator>(itr));
-
-        if (in_list_splice &&
-            (stop_splicing || (stop_splicing = itr == trgpos)))
-        {
+          rollback_data.push_back({ itr, false, false });
           ++itr;
           continue;
         }
 
-        trglist.splice(trgpos, othertrglist,
-                       std::exchange(itr, std::next(itr)));
-      }
-
-      try
-      {
-        if (enabledoldtrgpos == other.enabled.end())
+        bool will_be_enabled = false;
+        switch (flags.target)
         {
-          std::unique_lock lock{ hook_lock };
-          if (other.enabled.empty())
-          {
-            thread_freezer freeze{ other, false };
-            other.inject(other.backup.data(), false);
-          }
+        case target_state::preserve: will_be_enabled = itr->enabled; break;
+        case target_state::enabled: will_be_enabled = true; break;
+        case target_state::disabled: will_be_enabled = false; break;
+        }
+
+        // we will be initializing the freezer only when it's absolutely
+        // necessary (since it's a heavy call). that is when state changes occur
+        // or when the hook moved is enabled. so basically the freezer is not
+        // initialized when moving a disabled and keeping it as disabled
+        if (!freeze.initialized() &&
+            (will_be_enabled != itr->enabled || itr->enabled))
+        {
+          if (!enabled_count)
+            freeze.init(*this, true);
           else
-            other.patch(first_enabled->poriginal);
+            freeze.init();
         }
-        else
+
+        if (!intra_splice)
         {
-          thread_freezer freeze{ nullptr };
-          enabledoldtrgpos->redirect_original(first_enabled->poriginal);
+          itr->chain = *this;
+          if (will_be_enabled)
+            ++this_enabled_diff;
+          if (itr->enabled)
+            --other_enabled_diff;
         }
-      }
-      catch (...)
-      {
-        transfer_back();
-        throw;
-      }
-
-      hook& otherfront = *first_enabled;
-      hook& otherback  = *last_enabled;
-      if (first_enabled == enabled.begin())
-        otherfront.redirect_original(
-            helpers::resolve_original(ptarget, ptrampoline.get()));
-      else
-      {
-        list_iterator enabledprev = std::prev(first_enabled);
-        otherfront.redirect_original(enabledprev->pdetour);
-      }
-
-      try
-      {
-        if (enablednewpos == enabled.end())
+        else if (will_be_enabled != itr->enabled)
         {
-          std::unique_lock lock{ hook_lock };
-          if (first_enabled == enabled.begin())
-          {
-            thread_freezer freeze{ *this, true };
-            inject(otherback.pdetour, true);
-          }
+          if (will_be_enabled)
+            ++other_enabled_diff;
           else
-            patch(otherback.pdetour);
+            --other_enabled_diff;
         }
-        else
+
+        if (!other_prev_poriginal && itr->enabled)
         {
-          thread_freezer freeze{ nullptr };
-          enablednewpos->redirect_original(otherback.pdetour);
+          other_prev_poriginal = itr->poriginal;
+          first_enabled        = itr;
+        }
+
+        if (will_be_enabled)
+        {
+          if (itr->poriginal != current_this_poriginal)
+            itr->redirect_original(current_this_poriginal);
+          current_this_poriginal = itr->pdetour;
+        }
+
+        if (rollback_data.capacity())
+          rollback_data.push_back(
+              { itr, true, will_be_enabled != itr->enabled });
+        itr->enabled = will_be_enabled;
+        hooks.splice(newpos, other.hooks, itr++);
+      }
+
+      if (first->enabled)
+        first_enabled = first;
+    }
+
+    // unlink phase, only required if there was at least one enabled hook in the
+    // range
+    if (other_prev_poriginal)
+    {
+      // intra splice early exits: the following checks detect whether hooks
+      // were actually rearranged
+      if (intra_splice)
+      {
+        // if newpos >= last and it's true that no enabled hooks exist in the
+        // range [last, newpos) then we can fix the broken first_enabled
+        // redirection (points to last_enabled) currently and exit.
+        if (this_prev_poriginal == current_this_poriginal)
+        {
+          first_enabled->redirect_original(other_prev_poriginal);
+          enabled_count += other_enabled_diff;
+          return;
+        }
+        // if newpos < first and it's true that no enabled hooks exist in the
+        // range [newpos, first) we can just exit (provided that there wasn't
+        // any hook that changed state at the end). pointer redirections were
+        // setup correctly in the loop earlier.
+        if (this_next_enabled == first_enabled &&
+            (!rollback_data.capacity() || !rollback_data.back().changed_state))
+        {
+          enabled_count += other_enabled_diff;
+          return;
         }
       }
-      catch (...)
-      {
-        transfer_back();
 
+      other_next_enabled = std::find_if(last, other.end(), [](const hook& item)
+                                        { return item.enabled; });
+
+      if (other_next_enabled != other.end())
+        other_next_enabled->redirect_original(other_prev_poriginal);
+      // we don't touch memory for intra splicing (for performance benefits and
+      // to provide strong guarantee) unless all hooks in the container are left
+      // as disabled and therefore this is the last part of the process
+      else if (!intra_splice ||
+               (other_enabled_diff < 0 &&
+                enabled_count == static_cast<size_t>(-other_enabled_diff)))
+      {
         try
         {
-          other.inject_back(first_enabled, std::next(last_enabled));
+          if (other.enabled_count == static_cast<size_t>(-other_enabled_diff))
+            other.inject(other.backup.data(), false);
+          else
+            other.patch(other_prev_poriginal);
         }
         catch (...)
         {
-          other.toggle_status(first_enabled, std::next(last_enabled));
+          splice_rollback(first, last, newpos, other, rollback_data,
+                          other_prev_poriginal);
           throw;
         }
-        throw;
       }
     }
 
-    if (is_empty)
-      starts_enabled = first.enabled;
-    else if (should_bind)
+    // link phase: if the first enabled hook that was found within the range was
+    // disabled then all of the rest did too. so if it's still enabled we
+    // proceed linking
+    if (first_enabled->enabled)
     {
-      bind_pos->has_other = true;
-      bind_pos->other     = first;
-    }
-
-    if (!other.empty())
-    {
-      // rebind previous old position
-      list_iterator oldother{};
-      bool          has_old_other = true;
-      if (disabledoldtrgpos == other.disabled.begin() &&
-          enabledoldtrgpos == other.enabled.begin())
-      {
-        other.starts_enabled = last.enabled;
-        has_old_other        = false;
-      }
-      else if (disabledoldtrgpos == other.disabled.begin())
-        oldother = std::prev(enabledoldtrgpos);
-      else if (enabledoldtrgpos == other.enabled.begin())
-        oldother = std::prev(disabledoldtrgpos);
-      else if (first.enabled)
-      {
-        oldother = std::prev(enabledoldtrgpos);
-        if (oldother->has_other)
-          oldother = std::prev(disabledoldtrgpos);
-      }
+      if (this_next_enabled != end())
+        this_next_enabled->redirect_original(current_this_poriginal);
       else
       {
-        oldother = std::prev(disabledoldtrgpos);
-        if (oldother->has_other)
-          oldother = std::prev(enabledoldtrgpos);
-      }
-
-      if (has_old_other)
-      {
-        if (last == last_current_src.end() || last.enabled == oldother->enabled)
-          oldother->has_other = false;
-        else
+        try
         {
-          oldother->has_other = true;
-          oldother->other     = last;
+          if (!intra_splice && !enabled_count)
+            inject(current_this_poriginal, true);
+          else
+            patch(current_this_poriginal);
+        }
+        catch (...)
+        {
+          splice_rollback(first, last, newpos, other, rollback_data,
+                          other_prev_poriginal);
+
+          // for intra splices no hard unlink ever happened, therefore providing
+          // strong guarantee!
+          if (intra_splice && other_next_enabled == other.end())
+            throw;
+
+          const auto rstop = std::reverse_iterator(first);
+          const auto last_enabled =
+              std::find_if(std::reverse_iterator(last), rstop,
+                           [](const hook& item) { return item.enabled; });
+
+          // there were no enabled hooks to link back!
+          if (last_enabled == rstop)
+            throw;
+          if (other_next_enabled != other.end())
+            other_next_enabled->redirect_original(last_enabled->pdetour);
+          else
+          {
+            try
+            {
+              if (other.enabled_count ==
+                  static_cast<size_t>(-other_enabled_diff))
+                inject(last_enabled->pdetour, true);
+              else
+                patch(last_enabled->pdetour);
+            }
+            catch (...)
+            {
+              for (iterator itr = first; itr != last; ++itr)
+                itr->enabled = false;
+              throw;
+            }
+          }
+          throw;
         }
       }
     }
 
-    // bind last to new position
-    lastprev->has_other = false;
-    if (to_enabled != lastprev->enabled && newpos != to_current.end())
-    {
-      lastprev->has_other = true;
-      lastprev->other     = newpos;
-    }
+    enabled_count       += this_enabled_diff;
+    other.enabled_count += other_enabled_diff;
   }
 
   void hook_chain::set_target(std::byte* target)
@@ -1378,7 +1430,7 @@ namespace alterhook
       }
       catch (...)
       {
-        toggle_status_all(include::enabled);
+        toggle_status_all(included_states::enabled);
         throw;
       }
     };
@@ -1402,7 +1454,7 @@ namespace alterhook
       // for any other exception the trampoline is reset and therefore the chain
       // is left uninitialized, so we move all enabled hooks to the disabled
       // list.
-      toggle_status_all(include::enabled);
+      toggle_status_all(included_states::enabled);
       throw;
     }
 
@@ -1570,15 +1622,6 @@ namespace alterhook
     }
   }
 
-  void hook_chain::uninject_all()
-  {
-    if (enabled.empty())
-      return;
-    std::unique_lock lock{ hook_lock };
-    thread_freezer   freeze{ *this, false };
-    inject(backup.data(), false);
-  }
-
   void hook_chain::uninject_range(list_iterator first, list_iterator last)
   {
     if (last != enabled.end())
@@ -1689,232 +1732,31 @@ namespace alterhook
     }
   }
 
-  void hook_chain::inject_back(list_iterator first, list_iterator last)
-  {
-    if (first == last)
-      return;
-    const list_iterator lastprev = std::prev(last);
-
-    if (first == enabled.begin())
-      first->redirect_original(
-          helpers::resolve_original(ptarget, ptrampoline.get()));
-    else
-    {
-      const list_iterator firstprev = std::prev(first);
-      first->redirect_original(firstprev->pdetour);
-    }
-
-    if (last != enabled.end())
-    {
-      thread_freezer freeze{ nullptr };
-      last->redirect_original(lastprev->pdetour);
-      return;
-    }
-
-    std::unique_lock lock{ hook_lock };
-    if (first == enabled.begin())
-    {
-      thread_freezer freeze{ *this, true };
-      inject(lastprev->pdetour, true);
-    }
-    else
-      patch(lastprev->pdetour);
-  }
-
-  void hook_chain::toggle_status(list_iterator first, list_iterator last)
-  {
-    auto [current, other] = first->enabled ? std::pair(&enabled, &disabled)
-                                           : std::pair(&disabled, &enabled);
-
-    if (first != current->begin())
-    {
-      list_iterator firstprev = std::prev(first);
-      if (!firstprev->has_other)
-      {
-        firstprev->has_other = true;
-        firstprev->other     = first;
-      }
-    }
-    else if (starts_enabled == first->enabled)
-      starts_enabled = !starts_enabled;
-
-    list_iterator       firstbind{};
-    list_iterator       lastbind{};
-    const list_iterator lastprev           = std::prev(last);
-    list_iterator       pos                = lastprev;
-    list_iterator       previtr            = other->end();
-    bool                has_bind           = false;
-    const bool          lastprev_has_other = pos->has_other;
-    const bool          first_enabled      = first->enabled;
-
-    while (pos != current->end() && !pos->has_other)
-      ++pos;
-    if (pos != current->end())
-      previtr = pos->other;
-
-    do
-    {
-      list_iterator current_itr = std::prev(last);
-      list_iterator target_itr  = previtr;
-
-      if (current_itr->has_other)
-      {
-        if (current_itr->other != other->begin())
-        {
-          lastbind            = std::prev(current_itr->other);
-          lastbind->has_other = false;
-        }
-        if (!has_bind)
-        {
-          has_bind  = true;
-          firstbind = current_itr->other;
-        }
-
-        target_itr             = current_itr->other;
-        current_itr->has_other = false;
-      }
-
-      current_itr->enabled = !current_itr->enabled;
-      other->splice(target_itr, *current, current_itr);
-      previtr = current_itr;
-    } while (first->enabled == first_enabled);
-
-    if (!lastprev_has_other)
-    {
-      if (has_bind)
-      {
-        while (!firstbind->has_other)
-          ++firstbind;
-        firstbind->has_other = false;
-      }
-
-      if (last != current->end())
-      {
-        lastprev->has_other = true;
-        lastprev->other     = last;
-      }
-    }
-
-    // if lastbind other points to a not spliced element then we set it back
-    // to true
-    if (has_bind)
-      lastbind->has_other = lastbind->other->enabled != lastbind->enabled;
-    else if (first != other->begin())
-    {
-      // if no bind was found and the previous element of first's current
-      // position points to first then we disable has other
-      const list_iterator newfirstprev = std::prev(first);
-      if (newfirstprev->has_other &&
-          newfirstprev->other->enabled == first->enabled)
-        newfirstprev->has_other = false;
-    }
-  }
-
-  void hook_chain::toggle_status(list_iterator position)
-  {
-    auto [current, other] = position->enabled ? std::pair(&enabled, &disabled)
-                                              : std::pair(&disabled, &enabled);
-
-    if (position != current->begin())
-    {
-      list_iterator posprev = std::prev(position);
-      if (!posprev->has_other)
-      {
-        posprev->has_other = true;
-        posprev->other     = position;
-      }
-    }
-    else if (starts_enabled == position->enabled)
-      starts_enabled = !starts_enabled;
-
-    const list_iterator posnext    = std::next(position);
-    list_iterator       target_itr = position;
-
-    while (target_itr != current->end() && !target_itr->has_other)
-      ++target_itr;
-
-    target_itr =
-        target_itr != current->end() ? target_itr->other : other->end();
-
-    if (target_itr != other->begin())
-    {
-      const list_iterator targetprev = std::prev(target_itr);
-      if (targetprev->has_other && targetprev->other == position)
-        targetprev->has_other = false;
-    }
-
-    if (!position->has_other && posnext != current->end())
-    {
-      position->has_other = true;
-      position->other     = posnext;
-    }
-    else
-      position->has_other = false;
-
-    position->enabled = !position->enabled;
-    other->splice(target_itr, *current, position);
-  }
-
-  void hook_chain::toggle_status_all(include src)
-  {
-    utils_assert(src != include::both,
-                 "hook_chain::toggle_status_all: trg can't be the 'both' flag");
-
-    auto [current, other] = src == include::enabled
-                                ? std::pair(&enabled, &disabled)
-                                : std::pair(&disabled, &enabled);
-
-    if (!other->empty())
-      other->back().has_other = false;
-
-    list_iterator previtr = other->end();
-    do
-    {
-      const list_iterator current_itr = std::prev(current->end());
-      list_iterator       target_itr  = previtr;
-
-      if (current_itr->has_other)
-      {
-        if (current_itr->other != other->begin())
-          std::prev(current_itr->other)->has_other = false;
-
-        target_itr             = current_itr->other;
-        current_itr->has_other = false;
-      }
-
-      current_itr->enabled = !current_itr->enabled;
-      if (src == include::disabled)
-      {
-        current_itr->redirect_original(target_itr->poriginal);
-        target_itr->redirect_original(current_itr->pdetour);
-      }
-      other->splice(target_itr, *current, current_itr);
-      previtr = current_itr;
-    } while (!current->empty());
-
-    // switch to true only if moving disabled to enabled, otherwise false
-    starts_enabled = src == include::disabled;
-  }
-
-  void hook_chain::init_with_list(hook_init_range range)
+  void hook_chain::init_with_list(hook_init_range range, bool enable)
   {
     helpers::make_backup(ptarget, backup.data(), patch_above);
     const std::byte* original =
         helpers::resolve_original(ptarget, ptrampoline.get());
 
-    for (auto itr = range.first; itr != range.second; ++itr)
+    for (auto init_list_itr = range.first; init_list_itr != range.second;
+         ++init_list_itr)
     {
-      auto& [detour, buffer] = *itr;
-      const list_iterator trg_itr =
-          enabled.emplace(enabled.end(), *this, detour, buffer, original, true);
-      trg_itr->current = trg_itr;
-      original         = detour;
+      auto& [detour, buffer] = *init_list_itr;
+      const iterator entry_itr =
+          hooks.emplace(hooks.end(), *this, detour, buffer, original, enable);
+      entry_itr->current = entry_itr;
+      original           = detour;
     }
 
-    starts_enabled = true;
+    if (enable)
+      enabled_count = hooks.size();
+  }
+
+  void hook_chain::initial_inject()
+  {
     std::unique_lock lock{ hook_lock };
-    thread_freezer   freeze{ *this, true };
-    inject(enabled.back().pdetour, true);
+    thread_freezer   freezer{ *this, true };
+    inject(hooks.back().pdetour, true);
   }
 
   typename hook_chain::hook&
@@ -1980,11 +1822,12 @@ namespace alterhook
   typename hook_chain::hook&
       hook_chain::insert_impl(list_iterator pos, const std::byte* detour,
                               helpers::original_ref_handler original_ref,
-                              include                       trg)
+                              included_states               trg)
   {
-    auto [to, other] = trg == include::enabled ? std::tie(enabled, disabled)
-                                               : std::tie(disabled, enabled);
-    const bool             enable_hook = trg == include::enabled;
+    auto [to, other]                   = trg == included_states::enabled
+                                             ? std::tie(enabled, disabled)
+                                             : std::tie(disabled, enabled);
+    const bool             enable_hook = trg == included_states::enabled;
     const std::byte* const original =
         enable_hook
             ? pos == enabled.begin()
@@ -2160,36 +2003,6 @@ namespace alterhook
     }
   }
 
-  void hook_chain::hook::enable()
-  {
-    utils_assert(
-        chain.get().ptarget != pdetour,
-        "hook_chain::hook::enable: target & detour have the same address");
-    if (enabled)
-      return;
-    list_iterator newpos = chain.get().enabled.end();
-    if (!chain.get().enabled.empty())
-    {
-      list_iterator i = current;
-      while (!i->has_other && i != chain.get().disabled.end())
-        ++i;
-
-      if (i != chain.get().disabled.end())
-        newpos = i->other;
-    }
-
-    chain.get().inject_range(newpos, current, std::next(current));
-    chain.get().toggle_status(current);
-  }
-
-  void hook_chain::hook::disable()
-  {
-    if (!enabled)
-      return;
-    chain.get().uninject(current);
-    chain.get().toggle_status(current);
-  }
-
   void hook_chain::hook::set_detour(std::byte* detour)
   {
     if (pdetour == detour)
@@ -2223,30 +2036,6 @@ namespace alterhook
     original_ref.unbind_original();
     original_ref = new_original_ref;
     original_ref.bind_original(poriginal);
-  }
-
-  void hook_chain::hook::swap(hook& right)
-  {
-    if (enabled && right.enabled &&
-        (poriginal == right.pdetour || right.poriginal == pdetour))
-    {
-      auto [newprev, newnext] = poriginal == right.pdetour
-                                    ? std::tie(*this, right)
-                                    : std::tie(right, *this);
-      newprev.redirect_original(newnext.poriginal);
-      newnext.redirect_original(newprev.pdetour);
-    }
-    else
-    {
-      std::swap(poriginal, right.poriginal);
-      original_ref.bind_original(poriginal);
-      right.original_ref.bind_original(right.poriginal);
-    }
-
-    std::swap(chain, right.chain);
-    std::swap(other, right.other);
-    std::swap(has_other, right.has_other);
-    std::swap(enabled, right.enabled);
   }
 
   bool hook_chain::hook::operator==(const hook& other) const noexcept

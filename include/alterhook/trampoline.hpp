@@ -147,7 +147,7 @@ namespace alterhook
      * @note It does not deallocate the executable buffer (if it exists) but
      * instead keeps it to prevent future allocations.
      */
-    void reset();
+    void reset() noexcept;
 
     /**
      * @brief Calls the underlying trampoline function with arg and return types
@@ -272,6 +272,14 @@ namespace alterhook
     /// @brief a collection of the positions of each instruction in the target
     /// function with its respective position in the executable buffer
     positions_t positions{};
+
+    // intentionally creates a memory leak!!! this is only used by noexcept
+    // methods (such as the containers' destructors) when uninjection failed.
+    inline void release() noexcept
+    {
+      reset();
+      (void)ptrampoline.release();
+    }
   };
 
   template <typename trg, typename>

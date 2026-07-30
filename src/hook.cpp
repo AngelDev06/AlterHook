@@ -3,7 +3,6 @@
 #include <pch.hpp>
 #include <utility>
 #include "hook.hpp"
-#include "injection.hpp"
 #include "thread_handler.hpp"
 #include "tools.hpp"
 
@@ -109,8 +108,7 @@ namespace alterhook
     utils_assert(pdetour, "hook::enable: invalid detour");
     if (!enabled)
     {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, true };
+      thread_freezer freeze{ *this, true };
       inject(pdetour, true);
       enabled = true;
     }
@@ -120,8 +118,7 @@ namespace alterhook
   {
     if (enabled)
     {
-      std::unique_lock lock{ hook_lock };
-      thread_freezer   freeze{ *this, false };
+      thread_freezer freeze{ *this, false };
       inject(backup.data(), false);
       enabled = false;
     }
@@ -149,7 +146,7 @@ namespace alterhook
 
     if (enabled)
     {
-      std::unique_lock lock{ hook_lock };
+      thread_freezer freeze;
       patch(detour);
     }
     pdetour = detour;
@@ -157,9 +154,9 @@ namespace alterhook
 
   void hook::set_original(const helpers::original_ref_handler& new_original)
   {
-    thread_freezer freeze{};
+    thread_freezer freeze{ defer_freeze };
     if (enabled)
-      freeze.init(nullptr);
+      freeze.init();
     if (original_ref)
       original_ref.unbind_original();
 
@@ -172,9 +169,9 @@ namespace alterhook
   {
     if (!original_ref)
       return *this;
-    thread_freezer freeze{};
+    thread_freezer freeze{ defer_freeze };
     if (enabled)
-      freeze.init(nullptr);
+      freeze.init();
     original_ref.unbind_original();
     return *this;
   }

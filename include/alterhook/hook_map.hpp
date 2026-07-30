@@ -130,7 +130,7 @@ namespace alterhook
     using typename base::const_list_iterator;
     using typename base::const_reverse_list_iterator;
     using typename base::hook;
-    using typename base::include;
+    using typename base::included_states;
     using typename base::list_iterator;
     using typename base::reverse_list_iterator;
     using transfer = base::transfer;
@@ -278,7 +278,7 @@ namespace alterhook
       using hook_chain::const_list_iterator;
       using hook_chain::const_reverse_list_iterator;
       using hook_chain::hook;
-      using hook_chain::include;
+      using hook_chain::included_states;
       using hook_chain::list_iterator;
       using hook_chain::reverse_list_iterator;
       using hook_chain::transfer;

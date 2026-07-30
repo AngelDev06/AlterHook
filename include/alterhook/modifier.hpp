@@ -28,7 +28,7 @@ namespace alterhook
     using typename base::hasher;
     using typename base::hook;
     using typename base::hook_reference;
-    using typename base::include;
+    using typename base::included_states;
     using typename base::key_equal;
     using typename base::key_type;
     using typename base::list_iterator;

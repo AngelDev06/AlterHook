@@ -892,9 +892,8 @@ namespace alterhook
       }
 
       template <typename T>
-      auto handle_it_block()
-          -> std::enable_if_t<
-              has_custom_instruction_tag<utils::remove_cvref_t<T>>>
+      auto handle_it_block() -> std::enable_if_t<
+          has_custom_instruction_tag<utils::remove_cvref_t<T>>>
       {
         typedef utils::remove_cvref_t<T> clean_t;
         constexpr size_t instr_count = clean_t::instruction_count;
@@ -945,9 +944,8 @@ namespace alterhook
 
       // no handling required for non-custom tagged instructions
       template <typename T>
-      auto handle_it_block()
-          -> std::enable_if_t<
-              !has_custom_instruction_tag<utils::remove_cvref_t<T>>>
+      auto handle_it_block() -> std::enable_if_t<
+          !has_custom_instruction_tag<utils::remove_cvref_t<T>>>
       {
       }
 
@@ -1793,7 +1791,7 @@ namespace alterhook
     return stream.str();
   }
 
-  void trampoline::reset()
+  void trampoline::reset() noexcept
   {
     if (!ptarget)
       return;

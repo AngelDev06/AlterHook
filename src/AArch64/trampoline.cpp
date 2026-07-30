@@ -1578,7 +1578,7 @@ namespace alterhook
     return *this;
   }
 
-  void trampoline::reset()
+  void trampoline::reset() noexcept
   {
     if (!ptarget)
       return;

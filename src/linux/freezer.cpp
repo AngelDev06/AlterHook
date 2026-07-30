@@ -1,15 +1,10 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #include <pch.hpp>
+#include <thread>
 #include "exceptions.hpp"
 #include "thread_handler.hpp"
 #include "tools.hpp"
-
-#if utils_arm
-  #define report_any_errors() handle_errors()
-#else
-  #define report_any_errors() ((void)0)
-#endif
 
 namespace fs = std::filesystem;
 
@@ -41,29 +36,55 @@ namespace alterhook
 #endif
   }
 
-  size_t             thread_freezer::ref_count = 0;
-  std::mutex         thread_freezer::ref_count_lock{};
-  std::atomic_size_t thread_freezer::processed_threads_count{};
-  std::shared_mutex  thread_freezer::freezer_lock{};
-  bool               thread_freezer::should_suspend = false;
-
-  struct sigaction thread_freezer::old_action
+  bool thread_freezer::suspend(pid_t tid) noexcept
   {
-  };
+    return !tgkill(getpid(), tid, SIGURG);
+  }
 
-  std::pair<const trampoline*, bool> thread_freezer::args{};
-#if utils_arm || utils_aarch64
-  std::pair<std::atomic_bool, std::tuple<std::byte*, std::byte*, size_t>>
-      thread_freezer::result{};
-#endif
+  void thread_freezer::set_signal_handler()
+  {
+    signal_data_t act{};
+
+    act.sa_sigaction = thread_control_handler;
+    act.sa_flags     = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&act.sa_mask);
+    // we cannot proceed if signal handler isn't set so this
+    // is exception worthy
+    if (sigaction(SIGURG, &act, &old_action))
+      nested_throw(
+          exceptions::sigaction_exception(errno, SIGURG, &act, &old_action));
+  }
+
+  void thread_freezer::unset_signal_handler() noexcept
+  {
+    sigaction(SIGURG, &old_action, nullptr);
+  }
+
+  void thread_freezer::thread_control_handler(int, siginfo_t*, void* sigcontext)
+  {
+    if (!should_suspend.load(std::memory_order_acquire))
+      return;
+
+    if (args.first)
+    {
+      if (uintptr_t result = process_frozen_threads(*args.first, args.second,
+                                                    getip(sigcontext)))
+        setip(sigcontext, result);
+    }
+
+    processed_threads_count.fetch_add(1, std::memory_order_acq_rel);
+
+    while (should_suspend.load(std::memory_order_acquire))
+      std::this_thread::yield();
+  }
 
   void thread_freezer::scan_threads()
   {
     // we don't want to scan threads while another thread is freezing them (or
     // the other way around) but we can have multiple threads scanning the
     // thread list in parallel without issues so this is the perfect use case
-    // for a shared lock
-    std::shared_lock lock{ freezer_lock };
+    // for a shared unique
+    std::shared_lock lock{ global_inject_lock };
     pid_t            current_tid = gettid();
 
     for (const fs::directory_entry& entry :
@@ -89,6 +110,16 @@ namespace alterhook
     }
   }
 
+  void thread_freezer::setup_signal_handler()
+  {
+    std::scoped_lock lock{ ref_count_lock };
+    if (!ref_count)
+      set_signal_handler();
+    ++ref_count;
+
+    is_managing_signals = true;
+  }
+
   void thread_freezer::wait_until_threads_are_processed()
   {
     while (processed_threads_count.load(std::memory_order_acquire) <
@@ -96,70 +127,21 @@ namespace alterhook
       std::this_thread::yield();
   }
 
-  bool thread_freezer::suspend(pid_t tid) noexcept
+  void thread_freezer::handle_errors()
   {
-    should_suspend = true;
-    return !tgkill(getpid(), tid, SIGURG);
-  }
-
-  void thread_freezer::resume(pid_t tid) noexcept
-  {
-    should_suspend = false;
-    tgkill(getpid(), tid, SIGURG);
-  }
-
-  void thread_freezer::set_signal_handler()
-  {
-    struct sigaction act
-    {
-    };
-
-    act.sa_sigaction = thread_control_handler;
-    act.sa_flags     = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
-    sigemptyset(&act.sa_mask);
-    // we cannot proceed if signal handler isn't set so this
-    // is exception worthy
-    if (sigaction(SIGURG, &act, &old_action))
-      nested_throw(
-          exceptions::sigaction_exception(errno, SIGURG, &act, &old_action));
-  }
-
-  void thread_freezer::unset_signal_handler() noexcept
-  {
-    sigaction(SIGURG, &old_action, nullptr);
-  }
-
-  void thread_freezer::thread_control_handler(int, siginfo_t*, void* sigcontext)
-  {
-    if (!should_suspend)
-    {
-      processed_threads_count.fetch_add(1, std::memory_order_acq_rel);
+#if utils_arm || utils_aarch64
+    if (!result.first.load(std::memory_order_relaxed))
       return;
-    }
-
-    if (args.first)
-    {
-      if (uintptr_t result = process_frozen_threads(*args.first, args.second,
-                                                    getip(sigcontext)))
-        setip(sigcontext, result);
-    }
-
-    processed_threads_count.fetch_add(1, std::memory_order_acq_rel);
-    pause();
+    result.first.store(false, std::memory_order_relaxed);
+    auto [tramp_addr, target_addr, pos] = result.second;
+    nested_throw(exceptions::thread_process_fail(tramp_addr, target_addr, pos));
+#endif
   }
 
-  void thread_freezer::init(const trampoline& tramp, bool enable_hook)
+  void thread_freezer::suspend_all_and_wait()
   {
-    // read only operation, it can work in parallel
-    scan_threads();
-    {
-      std::scoped_lock lock{ ref_count_lock };
-      if (!ref_count)
-        set_signal_handler();
-      ++ref_count;
-    }
-    std::unique_lock lock{ freezer_lock };
-    args = { &tramp, enable_hook };
+    should_suspend.store(true, std::memory_order_release);
+    processed_threads_count.store(0, std::memory_order_release);
     // iterating with indexes on purpose since we are modifying the list at the
     // same time also note that erase in this case is noexcept
     for (size_t i = 0; i != tids.size(); ++i)
@@ -169,65 +151,48 @@ namespace alterhook
     }
 
     wait_until_threads_are_processed();
-    report_any_errors();
   }
 
-  void thread_freezer::init(std::nullptr_t)
-  {
-    scan_threads();
-    {
-      std::scoped_lock lock{ ref_count_lock };
-      if (!ref_count)
-        set_signal_handler();
-      ++ref_count;
-    }
-    std::unique_lock lock{ freezer_lock };
-    args = { nullptr, 0 };
-
-    for (size_t i = 0; i != tids.size(); ++i)
-    {
-      if (!suspend(tids[i]))
-        tids.erase(tids.begin() + i);
-    }
-
-    wait_until_threads_are_processed();
-  }
-
-  thread_freezer::~thread_freezer() noexcept
+  void thread_freezer::cleanup() noexcept
   {
     if (!tids.empty())
     {
-      std::unique_lock lock{ freezer_lock };
-      for (pid_t tid : tids)
-        resume(tid);
+      should_suspend.store(false, std::memory_order_release);
+      tids.clear();
     }
+
+    if (is_managing_signals)
     {
       std::scoped_lock lock{ ref_count_lock };
       --ref_count;
       if (!ref_count)
         unset_signal_handler();
+
+      is_managing_signals = false;
     }
   }
 
-#if utils_arm || utils_aarch64
-  void thread_freezer::handle_errors()
+  void thread_freezer::init(const trampoline& tramp, bool enable_hook)
   {
-    if (!result.first.load(std::memory_order_relaxed))
-      return;
-
-    for (pid_t tid : tids)
-      resume(tid);
-
-    std::scoped_lock lock{ ref_count_lock };
-    --ref_count;
-    if (!ref_count)
-      unset_signal_handler();
-
-    result.first.store(false, std::memory_order_relaxed);
-    auto [tramp_addr, target_addr, pos] = result.second;
-    nested_throw(exceptions::thread_process_fail(tramp_addr, target_addr, pos));
+    // read only operation, it can work in parallel
+    scan_threads();
+    setup_signal_handler();
+    instance_lock.lock();
+    args = { &tramp, enable_hook };
+    suspend_all_and_wait();
+    handle_errors();
   }
 
+  void thread_freezer::init()
+  {
+    scan_threads();
+    setup_signal_handler();
+    instance_lock.lock();
+    args = { nullptr, 0 };
+    suspend_all_and_wait();
+  }
+
+#if utils_arm || utils_aarch64
   [[gnu::visibility("hidden")]] void
       report_error(std::byte* tramp, std::byte* target, uint8_t pos) noexcept
   {

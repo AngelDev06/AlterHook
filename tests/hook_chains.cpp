@@ -249,7 +249,7 @@ TEST_F(HookChainTest, Splicers)
 
 TEST_F(HookChainTest, Modifiers)
 {
-  typedef typename alterhook::hook_chain::include include;
+  typedef typename alterhook::hook_chain::included_states include;
 
   chain1.append(&detourcls::func7, original7, &detourcls::func8, original8);
   EXPECT_EQ(chain1.enabled_size(), 5);
