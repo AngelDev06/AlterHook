@@ -4,13 +4,17 @@
 #include <algorithm>
 #include <iterator>
 #include <list>
-#include <optional>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 #include "detail/injectable.hpp"
 #include "hook.hpp"
 #include "tools.hpp"
 #include "utilities/concepts.hpp"
+#include "utilities/index_sequence.hpp"
 #include "utilities/macros.hpp"
+#include "utilities/other.hpp"
+#include "utilities/type_sequence.hpp"
 
 #if utils_msvc
   #pragma warning(push)
@@ -275,7 +279,7 @@ namespace alterhook
      * @par Exceptions
      * - @ref trampoline-copy-exceptions
      */
-    inline hook_chain(const trampoline& other) : trampoline(other)
+    hook_chain(const trampoline& other) : trampoline(other)
     {
       helpers::make_backup(ptarget, backup.data(), patch_above);
     }
@@ -353,19 +357,51 @@ namespace alterhook
      */
 
     /// Enables all hooks that are currently disabled in the container
-    void enable_all() { set_status_range(begin(), end(), true); }
+    size_t enable_all() { return set_status_range(begin(), end(), true); }
 
     /// Disables all hooks that are currently enabled in the container
-    void disable_all() { set_status_range(begin(), end(), false); }
+    size_t disable_all() { return set_status_range(begin(), end(), false); }
 
-    void enable(iterator first, iterator last)
+    size_t enable(iterator first, iterator last)
     {
-      set_status_range(first, last, true);
+      return set_status_range(first, last, true);
     }
 
-    void disable(iterator first, iterator last)
+    size_t disable(iterator first, iterator last)
     {
-      set_status_range(first, last, false);
+      return set_status_range(first, last, false);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t enable_if(iterator first, iterator last, callable&& predicate)
+    {
+      return set_status_range(first, last, true, predicate);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t disable_if(iterator first, iterator last, callable&& predicate)
+    {
+      return set_status_range(first, last, false, predicate);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t enable_if(callable&& predicate)
+    {
+      return enable_if(begin(), end(), predicate);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t disable_if(callable&& predicate)
+    {
+      return disable_if(begin(), end(), predicate);
     }
 
     /// @}
@@ -413,7 +449,7 @@ namespace alterhook
      * @returns a list iterator to the hook that follows the one pointed to by
      * `position` in list iteration order
      */
-    iterator erase(iterator position)
+    size_t erase(iterator position)
     {
       return erase(position, std::next(position), state_filter::any);
     }
@@ -425,8 +461,44 @@ namespace alterhook
      * @param last the end of the range (not included in the range)
      * @returns `last`
      */
-    iterator erase(iterator first, iterator last,
-                   state_filter target = state_filter::any);
+    size_t erase(iterator first, iterator last,
+                 state_filter filter = state_filter::any)
+    {
+      return do_erase_if(first, last, filter);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t erase_if(iterator first, iterator last, state_filter filter,
+                    callable&& predicate)
+    {
+      return do_erase_if(first, last, filter, predicate);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t erase_if(iterator first, iterator last, callable&& predicate)
+    {
+      return do_erase_if(first, last, state_filter::any, predicate);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t erase_if(state_filter filter, callable&& predicate)
+    {
+      return do_erase_if(begin(), end(), filter, predicate);
+    }
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<bool, callable&, const hook&>>>
+    size_t erase_if(callable&& predicate)
+    {
+      return do_erase_if(begin(), end(), state_filter::any, predicate);
+    }
 
     /// @}
 
@@ -445,57 +517,6 @@ namespace alterhook
      * and therefore debug assertions are put to prevent such incorrect usage.
      * @{
      */
-
-    /**
-     * @brief Insert multiple hooks (with the arguments forwarded in sequential
-     * order) at the end of the container and set their state as either enabled
-     * or disabled.
-     * @param to whether to append to the enabled or the disabled list
-     * @param detour the first detour
-     * @param original the first reference to the original callback
-     * @param rest the arguments for the rest of the hooks
-     * @returns A pair of list iterators pointing to the beginning and the end
-     * of the inserted range respectively.
-     */
-    template <typename dtr, typename orig, typename... types,
-              typename = std::enable_if_t<
-                  utils::detours_and_originals<dtr, orig&, types...>>>
-    list_range append(dtr&& detour, orig& original, types&&... rest);
-
-    template <typename dtr, typename orig, typename... types,
-              typename = std::enable_if_t<
-                  utils::detours_and_originals<dtr, orig&, types...>>>
-    list_range append(defer_enable_t, dtr&& detour, orig& original,
-                      types&&... rest);
-
-    /**
-     * @brief Insert multiple hooks (with the arguments grouped in @ref
-     * alterhook::utils::pair_like "pair-like objects") at the end of the
-     * container and set their state as either enabled or disabled.
-     * @param to whether to append to the enabled or the disabled list
-     * @param first the pair of arguments for the first hook
-     * @param rest the pairs of arguments for the rest of the hooks
-     * @returns A pair of list iterators pointing to the beginning and the end
-     * of the inserted range respectively.
-     */
-    template <typename pair, typename... types,
-              typename = std::enable_if_t<
-                  utils::detour_and_original_pairs<pair, types...>>>
-    list_range append(pair&& first, types&&... rest);
-
-    /**
-     * @brief Insert multiple hooks (with the arguments grouped in @ref
-     * alterhook::utils::pair_like "pair-like objects") at the end of the
-     * container and set their state as either enabled or disabled.
-     * @param first the pair of arguments for the first hook
-     * @param rest the pairs of arguments for the rest of the hooks
-     * @returns A pair of list iterators pointing to the beginning and the end
-     * of the inserted range respectively.
-     */
-    template <typename pair, typename... types,
-              typename = std::enable_if_t<
-                  utils::detour_and_original_pairs<pair, types...>>>
-    list_range append(defer_enable_t, pair&& first, types&&... rest);
 
     /**
      * @brief Insert a single hook at the end of the container and sets its
@@ -534,6 +555,17 @@ namespace alterhook
                   utils::detours_and_originals<dtr, orig&, types...>>>
     list_range insert(defer_enable_t, iterator pos, dtr&& detour,
                       orig& original, types&&... rest);
+
+    template <typename pair, typename... types,
+              typename = std::enable_if_t<
+                  utils::detour_and_original_pairs<pair, types...>>>
+    list_range insert(iterator pos, pair&& first, types&&... rest);
+
+    template <typename pair, typename... types,
+              typename = std::enable_if_t<
+                  utils::detour_and_original_pairs<pair, types...>>>
+    list_range insert(defer_enable_t, iterator pos, pair&& first,
+                      types&&... rest);
 
     /// @}
 
@@ -728,17 +760,22 @@ namespace alterhook
      */
 
     /// Access the first hook.
-    reference       front() noexcept;
+    reference front() noexcept { return *begin(); }
+
     /// Const version of @ref front().
-    const_reference front() const noexcept;
+    const_reference front() const noexcept { return *begin(); }
+
     /// Const version of @ref front().
-    const_reference cfront() const noexcept;
+    const_reference cfront() const noexcept { return front(); }
+
     /// Access the last hook.
-    reference       back() noexcept;
+    reference back() noexcept { return *std::prev(end()); }
+
     /// Const version of @ref back().
-    const_reference back() const noexcept;
+    const_reference back() const noexcept { return *std::prev(end()); }
+
     /// Const version of @ref back().
-    const_reference cback() const noexcept;
+    const_reference cback() const noexcept { return back(); }
 
     /// @}
 
@@ -894,22 +931,6 @@ namespace alterhook
 
     /// @}
 
-    /**
-     * @name Comparison
-     * @brief Compare two chains and determine equality if the target, the
-     * number of hooks on each individual list and the detours of each hook
-     * compare equal in the same order. Note that the state of each hook should
-     * also compare equal in the same order.
-     * @{
-     */
-
-    /// Return `true` if `*this` and `other` are equal, `false` otherwise.
-    bool operator==(const hook_chain& other) const noexcept;
-    /// Return `true` if `*this` and `other` are not equal, `false` otherwise.
-    bool operator!=(const hook_chain& other) const noexcept;
-
-    /// @}
-
   private:
     template <typename derived>
     friend class detail::injectable;
@@ -929,16 +950,6 @@ namespace alterhook
     hook_list hooks{};
     size_t    enabled_count = 0;
 
-    struct unbind_range_callback
-    {
-      virtual void operator()(iterator itr, bool forward = true) = 0;
-
-      static void set_pchain(iterator itr, hook_chain* pchain);
-      static void set_enabled(iterator itr, bool status);
-      static void set_has_other(iterator itr, bool status);
-      static void set_other(iterator itr, iterator other);
-    };
-
     template <bool auto_enable, size_t... d_indexes, size_t... o_indexes,
               typename... types>
     void init_chain(std::index_sequence<d_indexes...>,
@@ -950,12 +961,24 @@ namespace alterhook
         std::index_sequence<indexes...>,
         std::pair<std::tuple<detours...>, std::tuple<originals...>>&& args);
 
-    void inject_back_all();
-    void uninject_all();
-    void safe_uninject_all() noexcept;
-    void set_status_range(iterator first, iterator last, bool new_state);
-    void unlink(iterator itr, const std::byte* new_poriginal,
-                bool update_memory);
+    template <bool auto_enable, size_t... d_indexes, size_t... o_indexes,
+              typename... types>
+    list_range do_insert(std::index_sequence<d_indexes...>,
+                         std::index_sequence<o_indexes...>, iterator pos,
+                         std::tuple<types...>&& args);
+    template <bool auto_enable, size_t... indexes, typename... detours,
+              typename... originals>
+    list_range do_insert(
+        std::index_sequence<indexes...>, iterator pos,
+        std::pair<std::tuple<detours...>, std::tuple<originals...>>&& args);
+
+    void   inject_back_all();
+    void   uninject_all();
+    void   safe_uninject_all() noexcept;
+    size_t set_status_range(iterator first, iterator last, bool new_state,
+                            predicate_view<bool(const hook&)> predicate = {});
+    void   unlink(iterator itr, const std::byte* new_poriginal,
+                  bool update_memory);
     void link(iterator itr, const std::byte* new_poriginal, bool update_memory);
     bool cross_splice_requires_injection(iterator other_itr) const noexcept;
     void swap_raw(iterator& left, iterator left_next, hook_chain& other,
@@ -968,39 +991,6 @@ namespace alterhook
                          hook_chain& other, const rollback_t& rollback_data,
                          const std::byte* prev_poriginal) noexcept;
 
-    void inject_back(enabled_list_range range);
-
-    void  join_last_unchecked(size_t enabled_count = 1);
-    void  join_last();
-    void  join_first();
-    void  join(iterator itr);
-    void  unbind_range(iterator first, iterator last,
-                       unbind_range_callback& callback);
-    void  unbind(iterator position);
-    void  uninject_range(iterator first, iterator last);
-    void  uninject(iterator position);
-    void  bind(iterator pos, iterator oldpos, bool to_enabled);
-    void  inject_range(iterator pos, iterator first, iterator last);
-    hook& push_back_impl(const std::byte*              detour,
-                         helpers::original_ref_handler original_ref,
-                         bool                          enable_hook);
-    hook& push_front_impl(const std::byte*              detour,
-                          helpers::original_ref_handler original_ref,
-                          bool                          enable_hook);
-    hook& insert_impl(iterator pos, const std::byte* detour,
-                      helpers::original_ref_handler original_ref,
-                      state_filter                  trg);
-    template <bool auto_enable, size_t... d_indexes, size_t... o_indexes,
-              typename... types>
-    list_range append_impl(std::index_sequence<d_indexes...>,
-                           std::index_sequence<o_indexes...>,
-                           std::tuple<types...>&& args);
-    template <bool auto_enable, typename... detours, typename... originals,
-              size_t... indexes>
-    list_range append_impl(
-        std::index_sequence<indexes...>,
-        std::pair<std::tuple<detours...>, std::tuple<originals...>>&& args);
-
   protected:
     using hook_init_item =
         std::pair<const std::byte*, helpers::original_ref_handler>;
@@ -1012,12 +1002,11 @@ namespace alterhook
 
     const trampoline& get_trampoline() const { return *this; }
 
-    void        init_with_list(hook_init_range range, bool enable);
-    void        initial_inject();
-    list_range  append_list(hook_init_range range, bool enable);
-    hook&       happend(const hook& src, bool enable_hook);
-    static void hcopy(hook& dest, const hook& src);
-    static std::reference_wrapper<hook> empty_ref_wrap();
+    void       init_with_list(hook_init_range range, bool enable);
+    void       initial_inject();
+    list_range do_insert(iterator pos, hook_init_range range, bool auto_enable);
+    size_t     do_erase_if(iterator first, iterator last, state_filter filter,
+                           predicate_view<bool(const hook&)> predicate = {});
   };
 
   /**
@@ -1045,7 +1034,7 @@ namespace alterhook
      */
 
     /// Enable the hook
-    inline void enable()
+    void enable()
     {
       if (enabled)
         return;
@@ -1053,7 +1042,7 @@ namespace alterhook
     }
 
     /// Disable the hook
-    inline void disable()
+    void disable()
     {
       if (!enabled)
         return;
@@ -1069,14 +1058,11 @@ namespace alterhook
      * @{
      */
 
-    inline iterator get_iterator() noexcept { return current; }
+    iterator get_iterator() noexcept { return current; }
 
-    inline const_iterator get_iterator() const noexcept { return current; }
+    const_iterator get_iterator() const noexcept { return current; }
 
-    inline const_iterator get_const_iterator() const noexcept
-    {
-      return current;
-    }
+    const_iterator get_const_iterator() const noexcept { return current; }
 
     /// @}
 
@@ -1145,25 +1131,9 @@ namespace alterhook
               typename = std::enable_if_t<utils::function_type<orig>>>
     hook& set_original(orig& original)
     {
-      if (original_ref.comparable_with<orig>() && original_ref == original)
-        return *this;
       set_original(helpers::original_ref_handler(original));
       return *this;
     }
-
-    /// @}
-
-    /**
-     * @name Comparison
-     * @brief Compare two hooks and determine equality if the target, the detour
-     * and the status are the same
-     * @{
-     */
-
-    /// Return `true` if `*this` and `other` are equal, `false` otherwise
-    bool operator==(const hook& other) const noexcept;
-    /// Return `true` if `*this` and `other` are not equal, `false` otherwise
-    bool operator!=(const hook& other) const noexcept;
 
     /// @}
 
@@ -1188,12 +1158,12 @@ namespace alterhook
     template <typename orig,
               typename = std::enable_if_t<utils::function_type<orig>>>
     hook(hook_chain& chain, const std::byte* pdetour, orig& origref,
-         const std::byte* poriginal = nullptr, bool should_enable = false);
+         const std::byte* poriginal = nullptr, bool enabled = false);
     hook(hook_chain& chain, const std::byte* detour,
          const helpers::original_ref_handler& original_ref,
-         const std::byte* poriginal = nullptr, bool should_enable = false);
+         const std::byte* poriginal = nullptr, bool enabled = false);
 
-    inline void redirect_original(const std::byte* original) noexcept
+    void redirect_original(const std::byte* original) noexcept
     {
       poriginal = original;
       original_ref.bind_original(poriginal);
@@ -1572,16 +1542,93 @@ namespace alterhook
       initial_inject();
   }
 
+  template <typename dtr, typename orig, typename>
+  hook_chain::hook& hook_chain::push_back(dtr&& detour, orig& original,
+                                          bool enable_hook)
+  {
+    if (enable_hook)
+      return *insert(end(), std::forward<dtr>(detour), original).first;
+    return *insert(defer_enable, end(), std::forward<dtr>(detour), original)
+                .first;
+  }
+
+  template <typename dtr, typename orig, typename>
+  hook_chain::hook& hook_chain::push_front(dtr&& detour, orig& original,
+                                           bool enable_hook)
+  {
+    if (enable_hook)
+      return *insert(begin(), std::forward<dtr>(detour), original).first;
+    return *insert(defer_enable, begin(), std::forward<dtr>(detour), original)
+                .first;
+  }
+
+  template <typename dtr, typename orig, typename... types, typename>
+  hook_chain::list_range hook_chain::insert(iterator pos, dtr&& detour,
+                                            orig& original, types&&... rest)
+  {
+    return do_insert<true>(
+        utils::make_index_sequence_with_step<sizeof...(types) + 2>(),
+        utils::make_index_sequence_with_step<sizeof...(types) + 2, 1>(), pos,
+        std::forward_as_tuple(std::forward<dtr>(detour), original,
+                              std::forward<types>(rest)...));
+  }
+
+  template <typename dtr, typename orig, typename... types, typename>
+  hook_chain::list_range hook_chain::insert(defer_enable_t, iterator pos,
+                                            dtr&& detour, orig& original,
+                                            types&&... rest)
+  {
+    return do_insert<false>(
+        utils::make_index_sequence_with_step<sizeof...(types) + 2>(),
+        utils::make_index_sequence_with_step<sizeof...(types) + 2, 1>(), pos,
+        std::forward_as_tuple(std::forward<dtr>(detour), original,
+                              std::forward<types>(rest)...));
+  }
+
+  template <typename pair, typename... types, typename>
+  hook_chain::list_range hook_chain::insert(iterator pos, pair&& first,
+                                            types&&... rest)
+  {
+    return do_insert<true>(
+        std::make_index_sequence<sizeof...(types) + 1>(), pos,
+        std::pair(
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<pair>>>(
+                    std::get<0>(first)),
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
+                    std::get<0>(rest))...),
+            std::forward_as_tuple(std::get<1>(first), std::get<1>(rest)...)));
+  }
+
+  template <typename pair, typename... types, typename>
+  hook_chain::list_range hook_chain::insert(defer_enable_t, iterator pos,
+                                            pair&& first, types&&... rest)
+  {
+    return do_insert<false>(
+        std::make_index_sequence<sizeof...(types) + 1>(), pos,
+        std::pair(
+            std::forward_as_tuple(
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<pair>>>(
+                    std::get<0>(first)),
+                std::forward<
+                    std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
+                    std::get<0>(rest))...),
+            std::forward_as_tuple(std::get<1>(first), std::get<1>(rest)...)));
+  }
+
   template <bool auto_enable, size_t... d_indexes, size_t... o_indexes,
             typename... types>
-  typename hook_chain::list_range
-      hook_chain::append_impl(std::index_sequence<d_indexes...>,
-                              std::index_sequence<o_indexes...>,
-                              std::tuple<types...>&& args)
+  hook_chain::list_range
+      hook_chain::do_insert(std::index_sequence<d_indexes...>,
+                            std::index_sequence<o_indexes...>, iterator pos,
+                            std::tuple<types...>&& args)
   {
     using seq = utils::type_sequence<types...>;
-    return append_impl<auto_enable>(
-        std::make_index_sequence<sizeof...(d_indexes)>(),
+    return do_insert<auto_enable>(
+        std::make_index_sequence<sizeof...(d_indexes)>(), pos,
         std::pair(std::forward_as_tuple(
                       std::forward<utils::type_at_t<d_indexes, seq>>(
                           std::get<d_indexes>(args))...),
@@ -1590,141 +1637,30 @@ namespace alterhook
                           std::get<o_indexes>(args))...)));
   }
 
-  template <bool auto_enable, typename... detours, typename... originals,
-            size_t... indexes>
-  typename hook_chain::list_range hook_chain::append_impl(
-      std::index_sequence<indexes...>,
+  template <bool auto_enable, size_t... indexes, typename... detours,
+            typename... originals>
+  hook_chain::list_range hook_chain::do_insert(
+      std::index_sequence<indexes...>, iterator pos,
       std::pair<std::tuple<detours...>, std::tuple<originals...>>&& args)
   {
-    helpers::assert_valid_detour_and_original_pairs(
-        utils::type_sequence<detours...>(),
-        utils::type_sequence<originals...>());
-    hook_init_list arg_list = {
+    hook_init_list args_list = {
       { get_target_address<originals>(
             std::forward<detours>(std::get<indexes>(args.first))),
        helpers::original_ref_handler(std::get<indexes>(args.second)) }
       ...
     };
-    return append_list({ arg_list.begin(), arg_list.end() }, auto_enable);
+    return do_insert(pos, { args_list.begin(), args_list.end() }, auto_enable);
   }
 
   template <typename orig, typename>
   hook_chain::hook::hook(hook_chain& chain, const std::byte* pdetour,
                          orig& origref, const std::byte* poriginal,
-                         bool should_enable)
+                         bool enabled)
       : chain(chain), pdetour(pdetour), poriginal(poriginal),
-        original_ref(origref), enabled(should_enable)
+        original_ref(origref), enabled(enabled)
   {
     if (poriginal)
       original_ref.bind_original(poriginal);
-  }
-
-  // template <typename dtr, typename orig, typename>
-  // hook_chain::hook& hook_chain::insert(list_iterator position, dtr&& detour,
-  //                                      orig& original, state_filter trg)
-  // {
-  //   helpers::assert_valid_detour_original_pair<dtr, orig>();
-  //   utils_assert(trg != state_filter::any,
-  //                "hook_chain::insert: base cannot be the both flag");
-  //   return insert_impl(position,
-  //                      get_target_address<orig>(std::forward<dtr>(detour)),
-  //                      original, trg);
-  // }
-  //
-  // template <typename dtr, typename orig, typename>
-  // hook_chain::hook& hook_chain::insert(iterator position, dtr&& detour,
-  //                                      orig& original)
-  // {
-  //   return insert(static_cast<list_iterator>(position),
-  //                 std::forward<dtr>(detour), original,
-  //                 position.enabled ? state_filter::enabled
-  //                                  : state_filter::disabled);
-  // }
-
-  // template <typename dtr, typename orig, typename... types, typename>
-  // typename hook_chain::list_range hook_chain::append(transfer to, dtr&&
-  // detour,
-  //                                                    orig& original,
-  //                                                    types&&... rest)
-  // {
-  //   if constexpr (sizeof...(rest) == 0)
-  //   {
-  //     push_back(std::forward<dtr>(detour), original, static_cast<bool>(to));
-  //     return { std::prev(hooks.end()), hooks.end() };
-  //   }
-  //   else
-  //     return append_impl(
-  //         to, utils::make_index_sequence_with_step<sizeof...(rest) + 2>(),
-  //         utils::make_index_sequence_with_step<sizeof...(rest) + 2, 1>(),
-  //         std::forward_as_tuple(std::forward<dtr>(detour), original,
-  //                               std::forward<types>(rest)...));
-  // }
-
-  // template <typename dtr, typename orig, typename... types, typename>
-  // typename hook_chain::list_range
-  //     hook_chain::append(dtr&& detour, orig& original, types&&... rest)
-  // {
-  //   return append(transfer::enabled, std::forward<dtr>(detour), original,
-  //                 std::forward<types>(rest)...);
-  // }
-
-  // template <typename pair, typename... types, typename>
-  // typename hook_chain::list_range hook_chain::append(transfer to, pair&&
-  // first,
-  //                                                    types&&... rest)
-  // {
-  //   if constexpr (sizeof...(rest) == 0)
-  //   {
-  //     push_back(
-  //         std::forward<std::tuple_element_t<0, utils::remove_cvref_t<pair>>>(
-  //             std::get<0>(first)),
-  //         std::forward<std::tuple_element_t<1, utils::remove_cvref_t<pair>>>(
-  //             std::get<1>(first)),
-  //         static_cast<bool>(to));
-  //     return { std::prev(hooks.end()), hooks.end() };
-  //   }
-  //   else
-  //     return append_impl(
-  //         to, std::make_index_sequence<sizeof...(rest) + 1>(),
-  //         std::pair(
-  //             std::forward_as_tuple(
-  //                 std::forward<
-  //                     std::tuple_element_t<0, utils::remove_cvref_t<pair>>>(
-  //                     std::get<0>(first)),
-  //                 std::forward<
-  //                     std::tuple_element_t<0, utils::remove_cvref_t<types>>>(
-  //                     std::get<0>(rest))...),
-  //             std::forward_as_tuple(
-  //                 std::forward<
-  //                     std::tuple_element_t<1, utils::remove_cvref_t<pair>>>(
-  //                     std::get<1>(first)),
-  //                 std::forward<
-  //                     std::tuple_element_t<1, utils::remove_cvref_t<types>>>(
-  //                     std::get<1>(rest))...)));
-  // }
-
-  // template <typename pair, typename... types, typename>
-  // typename hook_chain::list_range hook_chain::append(pair&& first,
-  //                                                    types&&... rest)
-  // {
-  //   return append(transfer::enabled, std::forward<pair>(first),
-  //                 std::forward<types>(rest)...);
-  // }
-
-  template <typename dtr, typename orig, typename>
-  typename hook_chain::hook& hook_chain::push_back(dtr&& detour, orig& original,
-                                                   bool enable_hook)
-  {
-    return push_back_impl(get_target_address<orig>(std::forward<dtr>(detour)),
-                          original, enable_hook);
-  }
-
-  template <typename dtr, typename orig, typename>
-  typename hook_chain::hook&
-      hook_chain::push_front(dtr&& detour, orig& original, bool enable_hook)
-  {
-    return push_front_impl(get_target_address<orig>(std::forward<dtr>(detour)),
-                           original, enable_hook);
   }
 
   /*
@@ -1773,84 +1709,12 @@ namespace alterhook
     return const_disabled_view(*this);
   }
 
-  inline typename hook_chain::reference hook_chain::front() noexcept
-  {
-    return *begin();
-  }
-
-  inline typename hook_chain::const_reference hook_chain::front() const noexcept
-  {
-    return *begin();
-  }
-
-  inline typename hook_chain::const_reference
-      hook_chain::cfront() const noexcept
-  {
-    return front();
-  }
-
-  inline typename hook_chain::reference hook_chain::back() noexcept
-  {
-    return *rbegin();
-  }
-
-  inline typename hook_chain::const_reference hook_chain::back() const noexcept
-  {
-    return *rbegin();
-  }
-
-  inline typename hook_chain::const_reference hook_chain::cback() const noexcept
-  {
-    return back();
-  }
-
-  // inline void hook_chain::unbind_range_callback::set_pchain(list_iterator
-  // itr,
-  //                                                           hook_chain*
-  //                                                           pchain)
-  // {
-  //   itr->chain = *pchain;
-  // }
-  //
-  // inline void hook_chain::unbind_range_callback::set_enabled(list_iterator
-  // itr,
-  //                                                            bool status)
-  // {
-  //   itr->enabled = status;
-  // }
-  //
-  // inline void
-  //     hook_chain::unbind_range_callback::set_has_other(list_iterator itr,
-  //                                                      bool          status)
-  // {
-  //   itr->has_other = status;
-  // }
-  //
-  // inline void hook_chain::unbind_range_callback::set_other(list_iterator itr,
-  //                                                          list_iterator
-  //                                                          other)
-  // {
-  //   itr->other = other;
-  // }
-
-  inline typename hook_chain::hook& hook_chain::happend(const hook& src,
-                                                        bool        enable_hook)
-  {
-    return push_back_impl(src.pdetour, src.original_ref, enable_hook);
-  }
-
-  inline void hook_chain::hcopy(hook& dest, const hook& src)
-  {
-    dest.pdetour      = src.pdetour;
-    dest.original_ref = src.original_ref;
-  }
-
   inline hook_chain::hook::hook(
       hook_chain& chain, const std::byte* pdetour,
       const helpers::original_ref_handler& init_original_ref,
-      const std::byte* poriginal, bool should_enable)
+      const std::byte* poriginal, bool enabled)
       : chain(chain), pdetour(pdetour), poriginal(poriginal),
-        original_ref(init_original_ref), enabled(should_enable)
+        original_ref(init_original_ref), enabled(enabled)
   {
     if (poriginal)
       original_ref.bind_original(poriginal);

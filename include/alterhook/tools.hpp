@@ -8,6 +8,8 @@
 #include "addresser.hpp"
 #include <cstddef>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -290,22 +292,70 @@ namespace alterhook
       throw(std::forward<T>(exception));
   }
 
+  template <typename T>
+  class predicate_view;
+
+  template <typename ret, typename... args>
+  class predicate_view<ret(args...)>
+  {
+  public:
+    predicate_view() noexcept = default;
+
+    template <typename callable,
+              typename = std::enable_if_t<
+                  std::is_invocable_r_v<ret, callable&, args...>>>
+    predicate_view(callable& func) noexcept
+        : ctx(const_cast<void*>(
+              static_cast<const void*>(std::addressof(func)))),
+          invoker(
+              [](void* ctx, args... values)
+              {
+                return std::invoke(*static_cast<callable*>(ctx),
+                                   std::forward<args>(values)...);
+              })
+    {
+    }
+
+    ret operator()(args... values) const
+    {
+      utils_assert(
+          invoker,
+          "predicate_view: attempted to invoke an uninitialized instance");
+      return invoker(ctx, std::forward<args>(values)...);
+    }
+
+    bool empty() const noexcept { return !ctx; }
+
+    explicit operator bool() const noexcept { return !empty(); }
+
+  private:
+    void* ctx                      = nullptr;
+    ret (*invoker)(void*, args...) = nullptr;
+  };
+
   namespace helpers
   {
-    // A wrapper over a reference to the original is needed to handle binding
-    // and unbinding (as well as moving/copying) in a type safe way. Since the
-    // original reference may refer to a simple function pointer or to a
-    // complicated std::function instance, dynamic dispatch is used to allow
-    // proper management of each type of reference. This is the abstract class
-    // that defines the available tools that hooks can make use of.
+    /* A wrapper over a reference to the original is needed to handle binding
+     * and unbinding (as well as moving/copying) in a type safe way. Since the
+     * original reference may refer to a simple function pointer or to a
+     * complicated std::function instance, dynamic dispatch is used to allow
+     * proper management of each type of reference. This is the abstract class
+     * that defines the available tools that hooks can make use of. */
     class abstract_original_ref
     {
     public:
       virtual ~abstract_original_ref()           = default;
       virtual void             unbind_original() = 0;
-      virtual void             bind_original(const std::byte* address) = 0;
-      virtual const std::byte* raw_address() const                     = 0;
-      virtual bool             is_stl_function_ref() const noexcept    = 0;
+      virtual void             bind_original(const std::byte* address)      = 0;
+      virtual const std::byte* raw_address() const                          = 0;
+      virtual const void*      raw_ref_address() const noexcept             = 0;
+      virtual bool             is_stl_function_ref() const noexcept         = 0;
+      virtual void             clone_into(std::byte* buffer) const noexcept = 0;
+
+      bool same_reference(const abstract_original_ref& other) const noexcept
+      {
+        return raw_ref_address() == other.raw_ref_address();
+      }
 
       template <typename Fn,
                 typename = std::enable_if_t<utils::function_type<Fn>>>
@@ -342,40 +392,34 @@ namespace alterhook
           return get_target_address(func);
       }
 
+      const void* raw_ref_address() const noexcept override { return &func; }
+
       bool is_stl_function_ref() const noexcept override
       {
         return utils::stl_function_type<Fn>;
       }
 
-      operator auto() const noexcept;
+      void clone_into(std::byte* buffer) const noexcept override
+      {
+        new (buffer) original_ref(func);
+      }
 
     private:
       Fn& func;
     };
 
-    using original_ref_buffer_t =
-        std::aligned_storage_t<sizeof(original_ref<std::function<void()>>),
-                               alignof(original_ref<std::function<void()>>)>;
-
-    template <typename Fn>
-    original_ref<Fn>::operator auto() const noexcept
-    {
-      original_ref_buffer_t buffer{};
-      memcpy(&buffer, this, sizeof(original_ref));
-      return buffer;
-    }
-
-    // Yet another wrapper basically, this one is used to control dynamic
-    // dispatch in a raw buffer (big enough to hold a full instance of
-    // original_ref) and it does that by laundering the pointer to the buffer
-    // and effectively forwarding calls up to the original_ref instance that
-    // knows how to deal with the reference it holds. This is the tool that
-    // hooks should be using as it removes a lot of unecessary boilerplate. It
-    // also keeps track of state and makes sure to deactivate moved instances
-    // (meaning control over the reference is released). It should be noted that
-    // copy/move operations manage the reference holder (which means that the
-    // reference itself may be bound to something else or released) while the
-    // bind/unbind functions will update the variable the reference refers to.
+    /* Yet another wrapper basically, this one is used to control dynamic
+     * dispatch in a raw buffer (big enough to hold a full instance of
+     * original_ref) and it does that by laundering the pointer to the buffer
+     * and effectively forwarding calls up to the original_ref instance that
+     * knows how to deal with the reference it holds. This is the tool that
+     * hooks should be using as it removes a lot of unecessary boilerplate. It
+     * also keeps track of state and makes sure to deactivate moved instances
+     * (meaning control over the reference is released). It should be noted that
+     * copy/move operations manage the reference holder (which means that the
+     * reference itself may be bound to something else or released) while the
+     * bind/unbind functions will update the variable the reference refers to.
+     */
     class original_ref_handler
     {
     public:
@@ -383,92 +427,122 @@ namespace alterhook
 
       template <typename Fn,
                 typename = std::enable_if_t<utils::callable_type<Fn>>>
-      original_ref_handler(Fn& func) : buffer(original_ref(func)), active(true)
+      original_ref_handler(Fn& func) : active(true)
       {
+        new (buffer.data()) original_ref(func);
       }
 
       template <typename Fn>
-      original_ref_handler(const original_ref<Fn>& original)
-          : buffer(original), active(true)
+      original_ref_handler(const original_ref<Fn>& original) : active(true)
       {
+        new (buffer.data()) original_ref(original);
       }
 
-      // Both instances will hold the same reference. Be careful with this one
-      // as unbinding one of the instances will leave the other unaware of the
-      // change. Might be deprecated in the future.
-      original_ref_handler(const original_ref_handler&) = default;
-
-      // As mentioned, old instance is deactivated when moved (just by setting
-      // its state to false). It does not touch the original, just the reference
-      // itself (releasing it).
-      inline original_ref_handler(original_ref_handler&& other)
-          : buffer(other.buffer), active(std::exchange(other.active, false))
+      /* Both instances will hold the same reference. Be careful with this one
+       * as unbinding one of the instances will leave the other unaware of the
+       * change. Might be deprecated in the future. */
+      original_ref_handler(const original_ref_handler& other) noexcept
+          : active(other.active)
       {
+        if (active)
+          other.get()->clone_into(buffer.data());
+      }
+
+      /* As mentioned, old instance is deactivated when moved (just by setting
+       * its state to false). It does not touch the original, just the reference
+       * itself (releasing it). */
+      original_ref_handler(original_ref_handler&& other) noexcept
+          : active(std::exchange(other.active, false))
+      {
+        if (active)
+        {
+          other.get()->clone_into(buffer.data());
+          other.get()->~abstract_original_ref();
+        }
       }
 
       original_ref_handler&
-          operator=(const original_ref_handler& other) = default;
-
-      inline original_ref_handler& operator=(original_ref_handler&& other)
+          operator=(const original_ref_handler& other) noexcept
       {
         if (this == &other)
           return *this;
-        buffer = other.buffer;
-        active = std::exchange(other.active, false);
+        if (active)
+          get()->~abstract_original_ref();
+
+        active = other.active;
+        if (active)
+          other.get()->clone_into(buffer.data());
         return *this;
       }
 
-      // Unlike the other methods, this one does two jobs: unsets the original
-      // and releases the reference (by setting active to false). Since the
-      // reference is released, the user should not be able to reuse this
-      // instance and instead create a new one with Fn&. Of course all of this
-      // is taken into account by the hooking api.
-      inline void unbind_original()
+      original_ref_handler& operator=(original_ref_handler&& other) noexcept
+      {
+        if (this == &other)
+          return *this;
+        if (active)
+          get()->~abstract_original_ref();
+
+        active = std::exchange(other.active, false);
+        if (active)
+        {
+          other.get()->clone_into(buffer.data());
+          other.get()->~abstract_original_ref();
+        }
+        return *this;
+      }
+
+      /* Unlike the other methods, this one does two jobs: unsets the original
+       * and releases the reference (by setting active to false). Since the
+       * reference is released, the user should not be able to reuse this
+       * instance and instead create a new one with Fn&. Of course all of this
+       * is taken into account by the hooking api. */
+      void unbind_original()
       {
         if (!active)
           return;
-        std::launder(reinterpret_cast<abstract_original_ref*>(&buffer))
-            ->unbind_original();
+        get()->unbind_original();
+        get()->~abstract_original_ref();
         active = false;
       }
 
-      // Note that this one modifies the original, not the reference itself like
-      // the rest of the assignments and the constructors do. If rebinding the
-      // reference is desired, then the assignment operators should be used.
-      inline void bind_original(const std::byte* address)
+      /* Note that this one modifies the original, not the reference itself like
+       * the rest of the assignments and the constructors do. If rebinding the
+       * reference is desired, then the assignment operators should be used. */
+      void bind_original(const std::byte* address)
       {
-        // When active is set to false that means the reference is no longer
-        // taken into account and therefore the user is free to erase or reuse
-        // that variable for something else. Therefore we should not try and set
-        // that variable using the released reference.
+        /* When active is set to false that means the reference is no longer
+         * taken into account and therefore the user is free to erase or reuse
+         * that variable for something else. Therefore we should not try and set
+         * that variable using the released reference. */
         utils_assert(active, "Prohibited use of the set operator to a released "
                              "original reference");
-        std::launder(reinterpret_cast<abstract_original_ref*>(&buffer))
-            ->bind_original(address);
+        get()->bind_original(address);
       }
 
-      inline bool is_stl_function_ref() const noexcept
+      bool is_stl_function_ref() const noexcept
       {
-        return std::launder(
-                   reinterpret_cast<const abstract_original_ref*>(&buffer))
-            ->is_stl_function_ref();
+        return get()->is_stl_function_ref();
       }
 
-      inline bool is_active() const noexcept { return active; }
+      bool same_reference(const original_ref_handler& other) const noexcept
+      {
+        return get()->same_reference(*other.get());
+      }
 
-      inline operator bool() const noexcept { return active; }
+      bool is_active() const noexcept { return active; }
+
+      operator bool() const noexcept { return active; }
 
       template <typename Fn>
       bool operator==(const Fn& other_func) const noexcept
       {
-        return *std::launder(reinterpret_cast<const abstract_original_ref*>(
-                   &buffer)) == other_func;
+        return *get() == other_func;
       }
 
-      // This check is crutial because trying to compare *this with Fn& when any
-      // of those is a reference to an instance of std::function is pretty much
-      // impossible (unable to get the target address) and therefore leading to
-      // a hard runtime error.
+      /* This check is crutial because trying to compare *this with Fn& when any
+       * of those is a reference to an instance of std::function is pretty much
+       * impossible (unable to get the target address) and therefore leading to
+       * a hard runtime error. */
       template <typename Fn>
       constexpr bool comparable_with() const noexcept
       {
@@ -481,8 +555,23 @@ namespace alterhook
       }
 
     private:
-      original_ref_buffer_t buffer{};
-      bool                  active = false;
+      using max_storage_type = original_ref<void (*)()>;
+
+      alignas(max_storage_type)
+          std::array<std::byte, sizeof(max_storage_type)> buffer{};
+      bool active = false;
+
+      abstract_original_ref* get() noexcept
+      {
+        return std::launder(
+            reinterpret_cast<abstract_original_ref*>(buffer.data()));
+      }
+
+      const abstract_original_ref* get() const noexcept
+      {
+        return std::launder(
+            reinterpret_cast<const abstract_original_ref*>(buffer.data()));
+      }
     };
 
 #if utils_clang
@@ -601,8 +690,8 @@ namespace alterhook
                     "aren't compatible");
     }
 
-    inline void make_backup(std::byte* target, std::byte* dest,
-                            bool patch_above) noexcept
+    void make_backup(std::byte* target, std::byte* dest,
+                     bool patch_above) noexcept
     {
 #if utils_arm
       target = reinterpret_cast<std::byte*>(
@@ -613,19 +702,6 @@ namespace alterhook
                detail::constants::patch_above_backup_size);
       else
         memcpy(dest, target, detail::constants::backup_size);
-    }
-
-    inline std::byte* resolve_original([[maybe_unused]] std::byte* target,
-                                       std::byte* trampoline) noexcept
-    {
-#if utils_arm
-      // basically copies the thumb bit from `target` to `trampoline`
-      return reinterpret_cast<std::byte*>(
-          reinterpret_cast<uintptr_t>(trampoline) |
-          (reinterpret_cast<uintptr_t>(target) & 1));
-#else
-      return trampoline;
-#endif
     }
 
     template <typename iseq, typename tseq>

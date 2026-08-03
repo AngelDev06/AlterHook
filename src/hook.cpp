@@ -13,12 +13,6 @@
 
 namespace alterhook
 {
-  hook::hook(const hook& other)
-      : trampoline(other), pdetour(other.pdetour), backup(other.backup),
-        original_ref(other.original_ref)
-  {
-  }
-
   hook::hook(hook&& other) noexcept
       : trampoline(std::move(other)),
         pdetour(std::exchange(other.pdetour, nullptr)),
@@ -27,28 +21,21 @@ namespace alterhook
   {
   }
 
-  hook& hook::operator=(const hook& other)
-  {
-    if (this == &other)
-      return *this;
-
-    disable();
-    trampoline::operator=(other);
-    pdetour = other.pdetour;
-    backup  = other.backup;
-
-    if (!other.original_ref)
-      return *this;
-    original_ref = other.original_ref;
-    return *this;
-  }
-
   hook& hook::operator=(hook&& other) noexcept
   {
     if (this == &other)
       return *this;
     if (enabled)
-      disable();
+    {
+      try
+      {
+        disable();
+      }
+      catch (...)
+      {
+        release();
+      }
+    }
 
     trampoline::operator=(std::move(other));
     pdetour = std::exchange(other.pdetour, nullptr);
@@ -72,8 +59,7 @@ namespace alterhook
     trampoline::operator=(other);
     helpers::make_backup(ptarget, backup.data(), patch_above);
     if (original_ref)
-      original_ref.bind_original(
-          helpers::resolve_original(ptarget, ptrampoline.get()));
+      original_ref.bind_original(get_original());
     if (should_enable)
       enable();
     return *this;
@@ -89,8 +75,7 @@ namespace alterhook
     trampoline::operator=(std::move(other));
     helpers::make_backup(ptarget, backup.data(), patch_above);
     if (original_ref)
-      original_ref.bind_original(
-          helpers::resolve_original(ptarget, ptrampoline.get()));
+      original_ref.bind_original(get_original());
     if (should_enable)
       enable();
     return *this;
@@ -98,7 +83,14 @@ namespace alterhook
 
   hook::~hook() noexcept
   {
-    disable();
+    try
+    {
+      disable();
+    }
+    catch (...)
+    {
+      release();
+    }
     if (original_ref)
       original_ref.unbind_original();
   }
@@ -154,6 +146,8 @@ namespace alterhook
 
   void hook::set_original(const helpers::original_ref_handler& new_original)
   {
+    if (original_ref.same_reference(new_original))
+      return;
     thread_freezer freeze{ defer_freeze };
     if (enabled)
       freeze.init();
@@ -161,8 +155,7 @@ namespace alterhook
       original_ref.unbind_original();
 
     original_ref = new_original;
-    original_ref.bind_original(
-        helpers::resolve_original(ptarget, ptrampoline.get()));
+    original_ref.bind_original(get_original());
   }
 
   hook& hook::reset_original()
@@ -174,18 +167,6 @@ namespace alterhook
       freeze.init();
     original_ref.unbind_original();
     return *this;
-  }
-
-  bool hook::operator==(const hook& other) const noexcept
-  {
-    return std::tie(ptarget, pdetour, enabled) ==
-           std::tie(other.ptarget, other.pdetour, other.enabled);
-  }
-
-  bool hook::operator!=(const hook& other) const noexcept
-  {
-    return std::tie(ptarget, pdetour, enabled) !=
-           std::tie(other.ptarget, other.pdetour, other.enabled);
   }
 } // namespace alterhook
 

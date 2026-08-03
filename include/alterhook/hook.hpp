@@ -102,17 +102,6 @@ namespace alterhook
     /// @}
 
     /**
-     * @brief Copies the trampoline and all the other properties (except for the
-     * state) from `other` to `*this`.
-     * @param other the hook to copy from
-     * @par Exceptions
-     * - @ref trampoline-copy-exceptions
-     *
-     * As mentioned the state isn't copied, which means that regardless of
-     * whether `other` is enabled or not, the new hook will stay as disabled.
-     */
-    hook(const hook& other);
-    /**
      * @brief Moves the trampoline and all the other properties from `other` to
      * `*this` leaving `other` uninitialized but reusable.
      * @param other the hook to move from
@@ -151,17 +140,6 @@ namespace alterhook
     /// Disables the hook (if enabled) and destructs the trampoline
     ~hook() noexcept;
 
-    /**
-     * @brief Disables the current hook and replaces all properties of `*this`
-     * with a copy of those of `other`.
-     * @param other the hook to copy from
-     * @returns `*this`
-     * @par Exceptions
-     * - @ref trampoline-copy-exceptions
-     * - @ref thread-freezer-exceptions
-     * - @ref target-injection-exceptions
-     */
-    hook& operator=(const hook& other);
     /**
      * @brief Disables the hook (if enabled) and moves all properties of `other`
      * to `*this`, claiming ownership of the hook previously maintained by
@@ -354,20 +332,6 @@ namespace alterhook
 
     /// @}
 
-    /**
-     * @name Comparison
-     * @brief Compare two hook instances and determine equality if the target,
-     * the detour and the status (i.e. enabled or disabled) compare equal.
-     * @{
-     */
-
-    /// Return `true` if `*this` and `other` are equal, `false` otherwise.
-    bool operator==(const hook& other) const noexcept;
-    /// Return `true` if `*this` and `other` are not equal, `false` otherwise.
-    bool operator!=(const hook& other) const noexcept;
-
-    /// @}
-
   private:
     friend class hook_chain;
     template <typename derived>
@@ -392,8 +356,7 @@ namespace alterhook
   {
     helpers::assert_valid_detour_original_pair<dtr, orig>();
     helpers::make_backup(target, backup.data(), patch_above);
-    original = function_cast<orig>(
-        helpers::resolve_original(target, ptrampoline.get()));
+    original = function_cast<orig>(get_original());
     utils_assert(target != pdetour,
                  "hook::hook: detour & target have the same address");
     if (enable_hook)
@@ -439,17 +402,6 @@ namespace alterhook
   template <typename orig, typename>
   hook& hook::set_original(orig& original)
   {
-    // Checking for both originals about whether they refer to an std::function
-    // instance is crutial because it's not possible to get the raw function
-    // address from such instances and therefore the comparison will fail. The
-    // process is only skipped when both address to the original function are
-    // accessible and equal.
-    if constexpr (!utils::stl_function_type<orig>)
-    {
-      if (!original_ref.is_stl_function_ref() && original_ref &&
-          original_ref == original)
-        return *this;
-    }
     set_original(helpers::original_ref_handler(original));
     return *this;
   }

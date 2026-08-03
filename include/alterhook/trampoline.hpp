@@ -191,6 +191,18 @@ namespace alterhook
     /// Returns `nullptr` if not initialized.
     std::byte* get_target() const noexcept { return ptarget; }
 
+    std::byte* get_original() const noexcept
+    {
+#if utils_arm
+      // basically copies the thumb bit from `target` to `trampoline`
+      return reinterpret_cast<std::byte*>(
+          reinterpret_cast<uintptr_t>(ptrampoline.get()) |
+          (reinterpret_cast<uintptr_t>(ptarget) & 1));
+#else
+      return ptrampoline.get();
+#endif
+    }
+
     /// @brief Returns the size (in bytes) of the instructions (and their
     /// associated data) currently stored in the trampoline buffer.
     size_t size() const noexcept { return tramp_size; }
@@ -275,7 +287,7 @@ namespace alterhook
 
     // intentionally creates a memory leak!!! this is only used by noexcept
     // methods (such as the containers' destructors) when uninjection failed.
-    inline void release() noexcept
+    void release() noexcept
     {
       reset();
       (void)ptrampoline.release();
@@ -294,16 +306,14 @@ namespace alterhook
     utils_assert(
         ptarget,
         "trampoline::invoke: attempt to invoke an uninitialized trampoline");
-    return std::invoke(function_cast<fn>(helpers::resolve_original(
-                           ptarget, ptrampoline.get())),
+    return std::invoke(function_cast<fn>(get_original()),
                        std::forward<types>(args)...);
   }
 
   template <typename fn, typename>
   auto trampoline::get_callback() const
   {
-    return function_cast<fn>(
-        helpers::resolve_original(ptarget, ptrampoline.get()));
+    return function_cast<fn>(get_original());
   }
 } // namespace alterhook
 
