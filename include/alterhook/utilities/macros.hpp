@@ -138,7 +138,7 @@
   #define utils_concept   concept
   #define utils_consteval consteval
 #else
-  #define utils_concept   inline constexpr bool
+  #define utils_concept   constexpr bool
   #define utils_consteval constexpr
 #endif
 
@@ -512,8 +512,7 @@
   private:                                                                     \
     type utils_concat(m_, name);                                               \
     utils_if(utils_not(utils_equal(attr, hidden)))(utils_expand, utils_del)(   \
-        public                                                                 \
-        : type utils_concat(get_, name)()                                      \
+        public : type utils_concat(get_, name)()                               \
             const noexcept { return utils_concat(m_, name); })
 
   #define __utils_define_field(tuple)                                          \
@@ -622,8 +621,7 @@
 
 #define __utils_define_what_impl(attr)                                         \
   utils_if(utils_is_call_operator(attr))(utils_expand, utils_del)(             \
-      public                                                                   \
-      : const char* what()                                                     \
+      public : const char* what()                                              \
           const noexcept override { return utils_expand attr; })
 #ifndef RUNNING_DOXYGEN
   #define __utils_define_what(...)                                             \

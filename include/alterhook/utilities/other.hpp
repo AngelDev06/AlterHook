@@ -2,6 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "macros.hpp"
+#include <type_traits>
 #include <utility>
 #if utils_cpp20
   #include <bit>
@@ -15,7 +16,16 @@ namespace alterhook::utils
   {
     template <typename bools, typename indexes>
     inline constexpr size_t index_of_true_impl = 0;
-  }
+    template <typename T, template <typename> typename pred, typename default_t,
+              typename = void>
+    struct try_apply_impl;
+    template <typename T, template <typename> typename pred, typename expected,
+              typename = void>
+    constexpr bool optionally_is_convertible_to_impl = true;
+    template <typename T, template <typename> typename pred, typename expected,
+              typename = void>
+    constexpr bool optionally_is_same_impl = true;
+  } // namespace helpers
 
   template <size_t i>
   struct rank : rank<i - 1>
@@ -37,6 +47,22 @@ namespace alterhook::utils
 
   template <typename T>
   using type_identity_t = typename type_identity<T>::type;
+
+  template <typename T, template <typename> typename pred, typename default_t>
+  struct try_apply : helpers::try_apply_impl<T, pred, default_t>
+  {
+  };
+
+  template <typename T, template <typename> typename pred, typename default_t>
+  using try_apply_t = typename try_apply<T, pred, default_t>::type;
+
+  template <typename T, template <typename> typename pred, typename expected>
+  constexpr bool optionally_is_convertible_v =
+      helpers::optionally_is_convertible_to_impl<T, pred, expected>;
+
+  template <typename T, template <typename> typename pred, typename expected>
+  constexpr bool optionally_is_same_v =
+      helpers::optionally_is_same_impl<T, pred, expected>;
 
   template <typename T, typename... types>
   constexpr bool any_of(T&& value, types&&... args) noexcept
@@ -162,5 +188,28 @@ namespace alterhook::utils
         index_of_true_impl<std::integer_sequence<bool, values...>,
                            std::index_sequence<indexes...>> =
             ((values ? indexes : 0) + ...);
-  }
+
+    template <typename T, template <typename> typename pred, typename default_t,
+              typename>
+    struct try_apply_impl
+    {
+      using type = default_t;
+    };
+
+    template <typename T, template <typename> typename pred, typename default_t>
+    struct try_apply_impl<T, pred, default_t, std::void_t<pred<T>>>
+    {
+      using type = pred<T>;
+    };
+
+    template <typename T, template <typename> typename pred, typename expected>
+    constexpr bool optionally_is_convertible_to_impl<T, pred, expected,
+                                                     std::void_t<pred<T>>> =
+        std::is_convertible_v<pred<T>, expected>;
+
+    template <typename T, template <typename> typename pred, typename expected>
+    constexpr bool
+        optionally_is_same_impl<T, pred, expected, std::void_t<pred<T>>> =
+            std::is_same_v<pred<T>, expected>;
+  } // namespace helpers
 } // namespace alterhook::utils
