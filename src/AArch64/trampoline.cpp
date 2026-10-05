@@ -126,8 +126,8 @@ namespace alterhook
     using all_modifiables    = typename simple_branches::template merge<
            custom_far_branches, custom_far_loads, relative_loads, preindexed_loads,
            stack_manipulators, state_updaters, instruction_tags>;
-    using modifiables_variant = typename all_modifiables::template apply<
-        std::add_pointer_t>::template to<std::variant>;
+    using modifiables_variant = typename all_modifiables::template map<
+        std::add_pointer_t>::template apply<std::variant>;
 
     struct modifiable_instruction : modifiables_variant
     {

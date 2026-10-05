@@ -2,10 +2,14 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <array>
+#include <cstddef>
+#include <type_traits>
 #include "detail/constants.hpp"
 #include "detail/injectable.hpp"
+#include "tools.hpp"
 #include "trampoline.hpp"
-#include "utilities/function_traits.hpp"
+#include "utilities/traits/concepts.hpp"
+#include "utilities/traits/function_traits.hpp"
 
 namespace alterhook
 {
@@ -57,19 +61,20 @@ namespace alterhook
     /// @brief Construct with a raw pointer to the target, the detour and the
     /// reference to the original callback. Optionally specifying whether to
     /// enable the hook (default is true).
-    template <
-        typename dtr, typename orig,
-        typename = std::enable_if_t<utils::detours_and_originals<dtr, orig&>>>
+    template <typename dtr, typename orig,
+              typename = std::enable_if_t<
+                  utils::traits::is_detour_and_original_pair<dtr, orig&>>>
     hook(std::byte* target, dtr&& detour, orig& original,
          bool enable_hook = true);
 
     /// @brief Construct with the target the detour and the reference to the
     /// original callback. Optionally specifying whether to enable the hook
     /// (default is true)
-    template <
-        typename trg, typename dtr, typename orig,
-        typename = std::enable_if_t<utils::callable_type<trg> &&
-                                    utils::detours_and_originals<dtr, orig&>>>
+    template <typename trg, typename dtr, typename orig,
+              std::enable_if_t<
+                  utils::callable_type<trg> &&
+                      utils::traits::is_detour_and_original_pair<dtr, orig&>,
+                  size_t> = 0>
     hook(trg&& target, dtr&& detour, orig& original, bool enable_hook = true);
 
     /// @}
@@ -119,7 +124,7 @@ namespace alterhook
      * @par Exceptions
      * - @ref trampoline-copy-exceptions
      */
-    hook(const trampoline& tramp) : trampoline(tramp)
+    explicit hook(const trampoline& tramp) : trampoline(tramp)
     {
       helpers::make_backup(ptarget, backup.data(), patch_above);
     }
@@ -129,9 +134,21 @@ namespace alterhook
      * `tramp`
      * @param tramp the trampoline to move from
      */
-    hook(trampoline&& tramp) noexcept : trampoline(std::move(tramp))
+    explicit hook(trampoline&& tramp) noexcept : trampoline(std::move(tramp))
     {
       helpers::make_backup(ptarget, backup.data(), patch_above);
+    }
+
+    explicit hook(std::byte* target) : trampoline(target)
+    {
+      helpers::make_backup(target, backup.data(), patch_above);
+    }
+
+    template <typename trg,
+              std::enable_if_t<utils::callable_type<trg>, size_t> = 0>
+    explicit hook(trg&& target)
+        : hook(get_target_address(std::forward<trg>(target)))
+    {
     }
 
     /// Default constructs a hook and leaves it uninitialized
@@ -375,7 +392,11 @@ namespace alterhook
       enable();
   }
 
-  template <typename trg, typename dtr, typename orig, typename>
+  template <typename trg, typename dtr, typename orig,
+            std::enable_if_t<
+                utils::callable_type<trg> &&
+                    utils::traits::is_detour_and_original_pair<dtr, orig&>,
+                size_t>>
   hook::hook(trg&& target, dtr&& detour, orig& original, bool enable_hook)
       : hook(get_target_address(std::forward<trg>(target)),
              std::forward<dtr>(detour), original, enable_hook)

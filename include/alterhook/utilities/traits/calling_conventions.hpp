@@ -2,7 +2,7 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include <functional>
-#include "macros.hpp"
+#include "../macros.hpp"
 
 namespace alterhook::utils
 {

@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <utility>
 #include <functional>
-#include "other.hpp"
+#include "../other.hpp"
 #include "type_sequence.hpp"
 #include "calling_conventions.hpp"
 #include "type_name.hpp"
@@ -793,8 +793,8 @@ namespace alterhook::utils
       template <typename callable = callable_t, typename func = func_t>
       static constexpr auto check_impl(rank<0>) -> rank<0>;
       template <typename callable = callable_t, typename func = func_t>
-      static constexpr auto
-          check_impl(rank<2>) -> decltype(&callable::operator(), rank<2>{});
+      static constexpr auto check_impl(rank<2>)
+          -> decltype(&callable::operator(), rank<2>{});
     };
 
     template <typename lambda_t, typename func_t>
@@ -839,9 +839,8 @@ namespace alterhook::utils
           typename callable_t = callable, typename func_t = func,
           std::enable_if_t<disambiguatable_callable_with<callable_t, func_t>,
                            size_t> = 0>
-      static auto select(rank<0>)
-          -> type_identity<
-              generic_callable_disambiguation_type_t<callable_t, func_t>>;
+      static auto select(rank<0>) -> type_identity<
+          generic_callable_disambiguation_type_t<callable_t, func_t>>;
 
       template <
           typename callable_t = callable, typename func_t = func,
@@ -1002,7 +1001,7 @@ namespace alterhook::utils
 
     template <typename cls1, typename cls2>
     utils_concept compatible_implicit_this =
-        same_cv_qualification_v<cls1, cls2> &&
+        same_cv_v<cls1, cls2> &&
         (std::is_base_of_v<cls1, cls2> || std::is_base_of_v<cls2, cls1>);
 
     template <typename T1, typename T2, bool = has_any_mem_func_ptr<T1, T2>,

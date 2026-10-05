@@ -72,6 +72,12 @@
   #define utils_packed
 #endif
 
+#if defined(__WIN32__) || defined(_WIN32) || defined(_MSC_VER)
+  #define utils_empty_bases __declspec(empty_bases)
+#else
+  #define utils_empty_bases
+#endif // #endif
+
 #if defined(__x86_64__) || defined(_M_X64)
   #define utils_x64     true
   #define utils_x86     false
@@ -134,11 +140,21 @@
 
 #define utils_array_size(array) (sizeof(array) / sizeof(array[0]))
 
-#if utils_cpp20
-  #define utils_concept   concept
+#if defined(__cpp_lib_concepts) && __cpp_lib_concepts >= 201'907L
+  #define utils_concept concept
+#else
+  #define utils_concept constexpr bool
+#endif
+
+#if defined(__cpp_constexpr) && __cpp_constexpr >= 202'002L
+  #define utils_constexpr20 constexpr
+#else
+  #define utils_constexpr20
+#endif
+
+#if defined(__cpp_consteval) && __cpp_consteval >= 201'811L
   #define utils_consteval consteval
 #else
-  #define utils_concept   constexpr bool
   #define utils_consteval constexpr
 #endif
 

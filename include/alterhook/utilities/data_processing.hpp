@@ -2,10 +2,12 @@
 /* Designed & implemented by AngelDev06 */
 #pragma once
 #include "macros.hpp"
+#include <functional>
 #include <optional>
 #include <limits>
 #include <array>
 #include <iterator>
+#include <utility>
 #if utils_windows
   #include <intrin.h>
   #pragma intrinsic(_BitScanForward)
@@ -169,53 +171,6 @@ namespace alterhook::utils
     }
     return std::nullopt;
 #endif
-  }
-
-  namespace helpers
-  {
-    template <typename T, size_t N, size_t... indexes>
-    constexpr std::array<std::remove_cv_t<T>, N>
-        to_array_impl(T (&a)[N], std::index_sequence<indexes...>)
-    {
-      return { { a[indexes]... } };
-    }
-
-    template <typename T, size_t N, size_t... indexes>
-    constexpr std::array<std::remove_cv_t<T>, N>
-        to_array_impl(T (&&a)[N], std::index_sequence<indexes...>)
-    {
-      return { { std::move(a[indexes])... } };
-    }
-  } // namespace helpers
-
-  template <typename T, size_t N>
-  constexpr std::array<std::remove_cv_t<T>, N> to_array(T (&a)[N])
-  {
-#if utils_cpp20
-    return std::to_array(a);
-#else
-    return helpers::to_array_impl(a, std::make_index_sequence<N>());
-#endif
-  }
-
-  template <typename T, size_t N>
-  constexpr std::array<std::remove_cv_t<T>, N> to_array(T (&&a)[N])
-  {
-#if utils_cpp20
-    return std::to_array(std::move(a));
-#else
-    return helpers::to_array_impl(std::move(a), std::make_index_sequence<N>());
-#endif
-  }
-
-  template <size_t N, typename iter>
-  auto to_array(iter first, iter last)
-  {
-    typedef typename std::iterator_traits<iter>::value_type iter_value;
-
-    std::array<iter_value, N> result{};
-    std::copy(first, last, result.begin());
-    return result;
   }
 
   template <typename value_t>

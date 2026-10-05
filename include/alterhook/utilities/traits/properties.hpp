@@ -1,7 +1,7 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
-#include "other.hpp"
+#include "../other.hpp"
 
 namespace alterhook::utils
 {
@@ -18,12 +18,6 @@ namespace alterhook::utils
     using unwrap_n_properties_t =
         typename unwrap_n_properties<N, first, types...>::type;
   } // namespace helpers
-
-  template <auto arg>
-  struct val
-  {
-    static constexpr auto value = arg;
-  };
 
   template <template <typename...> typename propcls, typename... args>
   struct property

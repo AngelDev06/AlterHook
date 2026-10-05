@@ -42,6 +42,12 @@ namespace alterhook
     std::swap(chain, right.chain);
   }
 
+  void hook_chain::init_enabled_chain(const std::byte* start_pos)
+  {
+    thread_freezer freeze{ *this, true };
+    inject(start_pos, true);
+  }
+
   void hook_chain::inject_back_all()
   {
     if (!enabled_count)
@@ -602,7 +608,7 @@ namespace alterhook
     catch (...)
     {
       for (hook& hook : hooks)
-        hook.enabled = false;
+        hook.reset();
       enabled_count = 0;
       throw;
     }
@@ -648,7 +654,7 @@ namespace alterhook
     catch (...)
     {
       for (hook& hook : hooks)
-        hook.enabled = false;
+        hook.reset();
       enabled_count = 0;
       throw;
     }
@@ -1023,8 +1029,8 @@ namespace alterhook
             item.chain = *this;
           for (hook& item : other.hooks)
           {
-            item.enabled = false;
-            item.chain   = other;
+            item.reset();
+            item.chain = other;
           }
           throw;
         }
@@ -1051,12 +1057,12 @@ namespace alterhook
         if (enabled_count && !other.enabled_count)
         {
           for (hook& item : hooks)
-            item.enabled = false;
+            item.reset();
         }
         else if (other.enabled_count)
         {
           for (hook& item : other.hooks)
-            item.enabled = false;
+            item.reset();
         }
         throw;
       }
@@ -1378,7 +1384,7 @@ namespace alterhook
         catch (...)
         {
           for (hook& item : *this)
-            item.enabled = false;
+            item.reset();
           enabled_count = 0;
           throw;
         }
@@ -1399,90 +1405,52 @@ namespace alterhook
 
   // hook_chain utilities
 
-  void hook_chain::init_with_list(hook_init_range range, bool enable)
+  hook_chain::list_range hook_chain::do_insert(
+      iterator pos,
+      predicate_view<void(const std::byte*& prev_poriginal,
+                          size_t&           enabled_added_count,
+                          predicate_view<const std::byte*()> lookup_original)>
+          inserter_loop)
   {
-    helpers::make_backup(ptarget, backup.data(), patch_above);
-    const std::byte* original = get_original();
-
-    for (auto init_list_itr = range.first; init_list_itr != range.second;
-         ++init_list_itr)
-    {
-      auto& [detour, buffer] = *init_list_itr;
-      const iterator entry_itr =
-          hooks.emplace(hooks.end(), *this, detour, buffer, original, enable);
-      entry_itr->current = entry_itr;
-      original           = detour;
-    }
-
-    if (enable)
-      enabled_count = hooks.size();
-  }
-
-  void hook_chain::initial_inject()
-  {
-    thread_freezer freezer{ *this, true };
-    inject(hooks.back().pdetour, true);
-  }
-
-  hook_chain::list_range hook_chain::do_insert(iterator        pos,
-                                               hook_init_range range,
-                                               bool            auto_enable)
-  {
-    if (range.first == range.second)
-      return { pos, pos };
-
     const iterator   range_prev     = pos != begin() ? std::prev(pos) : end();
     iterator         next_enabled   = end();
     const std::byte* prev_poriginal = nullptr;
-    const bool       was_empty      = !enabled_count;
+    const bool       had_no_enabled = !enabled_count;
     size_t           enabled_added_count = 0;
 
-    if (auto_enable)
+    auto lookup_original =
+        [this, pos, range_prev, &next_enabled, had_no_enabled]
     {
-      if (was_empty)
-        prev_poriginal = get_original();
-      else
-      {
-        next_enabled = std::find_if(pos, end(), [](const hook& item)
-                                    { return item.enabled; });
-        prev_poriginal =
-            next_enabled != end()
-                ? next_enabled->poriginal
-                : std::find_if(std::reverse_iterator(pos), rend(),
-                               [](const hook& item) { return item.enabled; })
-                      ->pdetour;
-      }
-    }
+      if (had_no_enabled)
+        return get_original();
+      next_enabled = std::find_if(pos, end(), [](const hook& item)
+                                  { return item.enabled; });
+      return next_enabled != end()
+                 ? next_enabled->poriginal
+                 : std::find_if(std::reverse_iterator(std::next(range_prev)),
+                                rend(),
+                                [](const hook& item) { return item.enabled; })
+                       ->pdetour;
+    };
 
     try
     {
-      for (auto init_itr = range.first; init_itr != range.second; ++init_itr)
-      {
-        iterator itr =
-            hooks.emplace(pos, *this, init_itr->first, init_itr->second,
-                          prev_poriginal, auto_enable);
-        itr->current = itr;
-        if (auto_enable)
-        {
-          prev_poriginal = itr->pdetour;
-          ++enabled_added_count;
-        }
-      }
+      inserter_loop(prev_poriginal, enabled_added_count, lookup_original);
 
       const iterator range_begin =
           range_prev != end() ? std::next(range_prev) : begin();
 
-      if (auto_enable)
+      if (enabled_added_count)
       {
         thread_freezer freeze{ defer_freeze };
-        if (was_empty)
+        if (had_no_enabled)
           freeze.init(*this, true);
         else
           freeze.init();
 
         if (next_enabled != end())
           next_enabled->redirect_original(prev_poriginal);
-        else if (was_empty)
+        else if (had_no_enabled)
           inject(prev_poriginal, true);
         else
           patch(prev_poriginal);
@@ -1601,6 +1569,44 @@ namespace alterhook
     return to_erase.size();
   }
 
+  hook_chain::hook& hook_chain::hook::operator=(const init_type<>& item)
+  {
+    if (pdetour == item.pdetour &&
+        original_ref.same_reference(item.original_ref))
+      return *this;
+    if (!enabled)
+    {
+      pdetour      = item.pdetour;
+      original_ref = item.original_ref;
+      return *this;
+    }
+
+    thread_freezer freeze{ defer_freeze };
+    if (pdetour != item.pdetour)
+    {
+      const iterator next_enabled =
+          std::find_if(std::next(current), chain.get().end(),
+                       [](const hook& item) { return item.enabled; });
+
+      freeze.init();
+
+      if (next_enabled != chain.get().end())
+        next_enabled->redirect_original(item.pdetour);
+      else
+        chain.get().patch(item.pdetour);
+      pdetour = item.pdetour;
+    }
+
+    if (!original_ref.same_reference(item.original_ref))
+    {
+      if (!freeze.initialized())
+        freeze.init();
+      original_ref.unbind_original();
+      original_ref = item.original_ref;
+      original_ref.bind_original(poriginal);
+    }
+  }
+
   void hook_chain::hook::set_detour(std::byte* detour)
   {
     if (pdetour == detour)
@@ -1632,7 +1638,6 @@ namespace alterhook
     if (!enabled)
     {
       original_ref = new_original_ref;
-      original_ref.bind_original(poriginal);
       return;
     }
 

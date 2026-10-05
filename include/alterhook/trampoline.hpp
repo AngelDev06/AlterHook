@@ -191,7 +191,7 @@ namespace alterhook
     /// Returns `nullptr` if not initialized.
     std::byte* get_target() const noexcept { return ptarget; }
 
-    std::byte* get_original() const noexcept
+    const std::byte* get_original() const noexcept
     {
 #if utils_arm
       // basically copies the thumb bit from `target` to `trampoline`

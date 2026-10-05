@@ -19,10 +19,3 @@
 #if !utils_arm && !utils_aarch64 && !utils_x86 && !utils_x64
   #error unsupported architecture
 #endif
-
-#define __alterhook_decl_itr_func2(itr, name)                                  \
-  itr         chain_##name() noexcept { return hook_chain::name(); }           \
-  const_##itr chain_##name() const noexcept { return hook_chain::name(); }     \
-  const_##itr chain_c##name() const noexcept { return hook_chain::name(); }
-
-#define __alterhook_decl_itr_func(params) __alterhook_decl_itr_func2 params

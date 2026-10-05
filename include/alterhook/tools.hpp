@@ -3,14 +3,17 @@
 #pragma once
 #include "detail/macros.hpp"
 #include "detail/constants.hpp"
-#include "utilities/function_traits.hpp"
+#include "utilities/traits/function_traits.hpp"
 #include "utilities/macros.hpp"
 #include "addresser.hpp"
+#include "utilities/other.hpp"
+#include "utilities/traits/type_sequence.hpp"
 #include <cstddef>
 #include <cstring>
 #include <functional>
 #include <memory>
 #include <new>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -172,6 +175,55 @@ namespace alterhook
    */
   template <typename T>
   [[noreturn]] void nested_throw(T&& exception);
+
+  /**
+   * @brief Slices a flat variadic argument pack into categorized columns based
+   * on arity.
+   *
+   * Takes a flat 1D sequence of arguments and groups them by jumping `arity`
+   * steps at a time. It perfect-forwards all arguments into a tuple of tuples.
+   *
+   * **Example Transformation (Arity = 3):**
+   * `[k1, d1, o1, k2, d2, o2]` -> `tuple( tuple(k1, k2), tuple(d1, d2),
+   * tuple(o1, o2) )`
+   *
+   * @tparam arity The size of each logical group in the flat pack (e.g., 3 for
+   * triplets).
+   * @tparam types The types of the variadic arguments.
+   * @param args The flat sequence of arguments to unzip.
+   * @return A tuple of tuples, where each inner tuple represents a column of
+   * arguments.
+   */
+  template <size_t arity, typename... types,
+            typename = std::enable_if_t<(sizeof...(types) % arity) == 0>>
+  constexpr auto unzip_into_tuples(types&&... args) noexcept;
+
+  /**
+   * @brief Transposes an N x M sequence of tuples into an M x N tuple of
+   * tuples.
+   *
+   * Takes a variadic pack of identically-sized tuples (rows) and pivots them so
+   * that elements at the same index are grouped together into new tuples
+   * (columns). Perfect forwarding and reference categories are strictly
+   * preserved.
+   *
+   * **Example Transformation:**
+   * `tuple(k1, d1, o1), tuple(k2, d2, o2)` -> `tuple( tuple(k1, k2), tuple(d1,
+   * d2), tuple(o1, o2) )`
+   *
+   * @tparam Tuple The type of the first tuple (used to deduce the column
+   * arity/width).
+   * @tparam RestTuples The types of the remaining tuples.
+   * @param first The first tuple in the sequence.
+   * @param rest The remaining tuples in the sequence.
+   * @return A tuple of tuples containing the transposed columns.
+   */
+  template <typename tuple, typename... tuples,
+            typename = std::enable_if_t<
+                ((std::tuple_size_v<utils::remove_cvref_t<tuple>> ==
+                  std::tuple_size_v<utils::remove_cvref_t<tuples>>) &&
+                 ...)>>
+  constexpr auto transpose_tuples(tuple&& first, tuples&&... rest) noexcept;
 
   template <typename func, typename callable, typename>
   auto disambiguate(callable&& instance) noexcept
@@ -461,6 +513,8 @@ namespace alterhook
         }
       }
 
+      ~original_ref_handler() noexcept { get()->~abstract_original_ref(); }
+
       original_ref_handler&
           operator=(const original_ref_handler& other) noexcept
       {
@@ -690,8 +744,8 @@ namespace alterhook
                     "aren't compatible");
     }
 
-    void make_backup(std::byte* target, std::byte* dest,
-                     bool patch_above) noexcept
+    inline void make_backup(std::byte* target, std::byte* dest,
+                            bool patch_above) noexcept
     {
 #if utils_arm
       target = reinterpret_cast<std::byte*>(
@@ -703,37 +757,6 @@ namespace alterhook
       else
         memcpy(dest, target, detail::constants::backup_size);
     }
-
-    template <typename iseq, typename tseq>
-    struct extract_detour_sequence_impl;
-
-    template <size_t... indexes, typename tseq>
-    struct extract_detour_sequence_impl<std::index_sequence<indexes...>, tseq>
-    {
-      typedef utils::type_sequence<utils::type_at_t<indexes, tseq>...> type;
-    };
-
-    template <typename... types>
-    struct extract_detour_sequence
-        : extract_detour_sequence_impl<
-              utils::make_index_sequence_with_step<sizeof...(types)>,
-              utils::type_sequence<types...>>
-    {
-    };
-
-    template <typename... types>
-    using extract_detour_sequence_t =
-        typename extract_detour_sequence<types...>::type;
-
-    template <typename... tuples>
-    struct extract_detour_sequence_from_tuples
-    {
-      typedef utils::type_sequence<std::tuple_element_t<0, tuples>...> type;
-    };
-
-    template <typename... tuples>
-    using extract_detour_sequence_from_tuples_t =
-        typename extract_detour_sequence_from_tuples<tuples...>::type;
 
     template <template <typename> typename alloc>
     struct alloc_wrapper
@@ -755,5 +778,52 @@ namespace alterhook
         }
       };
     };
+
+    template <size_t... indexes, typename... types>
+    constexpr auto unzip_into_tuples_impl(std::index_sequence<indexes...>,
+                                          std::tuple<types...>&& args) noexcept
+    {
+      return std::forward_as_tuple(std::get<indexes>(std::move(args))...);
+    }
+
+    template <typename... sequences, typename... types>
+    constexpr auto unzip_into_tuples_impl(utils::type_sequence<sequences...>,
+                                          std::tuple<types...>&& args) noexcept
+    {
+      return std::tuple(
+          unzip_into_tuples_impl(sequences{}, std::move(args))...);
+    }
+
+    template <size_t index, typename... tuples>
+    constexpr auto extract_column(tuples&&... args) noexcept
+    {
+      return std::forward_as_tuple(
+          std::get<index>(std::forward<tuples>(args))...);
+    }
+
+    template <size_t... indexes, typename... tuples>
+    constexpr auto transpose_tuples_impl(std::index_sequence<indexes...>,
+                                         tuples&&... args) noexcept
+    {
+      return std::tuple(
+          extract_column<indexes>(std::forward<tuples>(args)...)...);
+    }
   } // namespace helpers
+
+  template <size_t arity, typename... types, typename>
+  constexpr auto unzip_into_tuples(types&&... args) noexcept
+  {
+    return helpers::unzip_into_tuples_impl(
+        utils::make_unzipped_index_sequences<sizeof...(args), arity>(),
+        std::forward_as_tuple(std::forward<types>(args)...));
+  }
+
+  template <typename tuple, typename... tuples, typename>
+  constexpr auto transpose_tuples(tuple&& first, tuples&&... rest) noexcept
+  {
+    return helpers::transpose_tuples_impl(
+        std::make_index_sequence<
+            std::tuple_size_v<utils::remove_cvref_t<tuple>>>(),
+        std::forward<tuple>(first), std::forward<tuples>(rest)...);
+  }
 } // namespace alterhook

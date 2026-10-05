@@ -1,6 +1,6 @@
 #pragma once
-#include "macros.hpp"
-#include "other.hpp"
+#include "../macros.hpp"
+#include "../other.hpp"
 #include <string_view>
 
 namespace alterhook::utils

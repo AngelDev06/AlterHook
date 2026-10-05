@@ -1273,7 +1273,8 @@ namespace alterhook
               arm::BL, arm::BLX, thumb2::BL, thumb2::BLX, arm::B, thumb2::B,
               thumb2::B_cond, arm::custom::BX_RELATIVE>::
               template apply<trampoline_context::session::template reference>::
-                  template push_front<std::monostate>::template to<std::variant>
+                  template push_front<std::monostate>::template apply<
+                      std::variant>
                       branch_ref_t;
           const bool  in_overriden_area = ctx.is_in_overriden_area(
               session.instruction_info.ubranch_destination);

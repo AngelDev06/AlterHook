@@ -50,20 +50,31 @@ set_property(CACHE ALTERHOOK_TARGET_ARCH PROPERTY STRINGS "X86" "ARM" "AArch64")
 # (excluding architecture specific stuff)
 foreach(
   HEADER
+  "other"
+  "static_vector"
+  "utils"
+  "macros"
+  "data_processing"
+  "boilerplate"
+  "storage"
+  "iterators"
+  "tuple_tools")
+  list(APPEND ALTERHOOK_UTILITIES "include/alterhook/utilities/${HEADER}.hpp")
+endforeach()
+
+foreach(
+  HEADER
   "calling_conventions"
   "concepts"
   "function_traits"
-  "other"
-  "static_vector"
   "type_sequence"
-  "utils"
-  "macros"
   "properties"
-  "data_processing"
-  "boilerplate"
   "type_name"
-  "index_sequence")
-  list(APPEND ALTERHOOK_UTILITIES "include/alterhook/utilities/${HEADER}.hpp")
+  "index_sequence"
+  "iterator_traits"
+  "map_traits")
+  list(APPEND ALTERHOOK_UTILITIES_TRAITS
+       "include/alterhook/utilities/traits/${HEADER}.hpp")
 endforeach()
 
 set(ALTERHOOK_API "include/alterhook.hpp")
@@ -203,8 +214,13 @@ target_compile_options(
                    $<${GNU_WARNINGS_ONLY}:-Wno-return-type>)
 
 set(ALTERHOOK_PROJECT_FILES
-    ${ALTERHOOK_UTILITIES} ${ALTERHOOK_API} ${ALTERHOOK_DETAILS}
-    ${ALTERHOOK_IMPL} ${ALTERHOOK_ARCH_IMPL} ${ALTERHOOK_OS_IMPL})
+    ${ALTERHOOK_UTILITIES}
+    ${ALTERHOOK_UTILITIES_TRAITS}
+    ${ALTERHOOK_API}
+    ${ALTERHOOK_DETAILS}
+    ${ALTERHOOK_IMPL}
+    ${ALTERHOOK_ARCH_IMPL}
+    ${ALTERHOOK_OS_IMPL})
 
 if(ALTERHOOK_SHARED)
   add_library(AlterHook SHARED ${ALTERHOOK_PROJECT_FILES})
@@ -240,6 +256,7 @@ target_precompile_headers(AlterHook PRIVATE ${ALTERHOOK_PCH})
 # setup file tabs for VS
 source_group("Include\\General" FILES ${ALTERHOOK_API})
 source_group("Include\\Utilities" FILES ${ALTERHOOK_UTILITIES})
+source_group("Include\\Utilities\\Traits" FILES ${ALTERHOOK_UTILITIES_TRAITS})
 source_group("Include\\Details" FILES ${ALTERHOOK_DETAILS})
 source_group("Source Files\\General" FILES ${ALTERHOOK_IMPL})
 source_group("Source Files\\Arch" FILES ${ALTERHOOK_ARCH_IMPL})

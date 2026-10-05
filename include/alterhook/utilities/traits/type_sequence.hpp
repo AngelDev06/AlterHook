@@ -1,16 +1,33 @@
 /* Part of the AlterHook project */
 /* Designed & implemented by AngelDev06 */
 #pragma once
+#include <cstddef>
 #include <limits>
+#include <type_traits>
+#include <utility>
+#include "index_sequence.hpp"
 
 namespace alterhook::utils
 {
   namespace helpers
   {
     template <size_t i, typename... types>
-    struct type_at_impl;
-    template <size_t begin, size_t end, typename... types>
-    struct reverse_types_impl;
+    struct type_at_impl
+    {
+    };
+    template <typename... types>
+    struct type_reversed_impl;
+    template <typename ignored>
+    struct type_reversed_enclosing;
+    template <typename type_seq, template <size_t, typename> typename pred,
+              typename result_seq, size_t i = 0, typename = void>
+    struct type_take_while_impl;
+    template <typename type_seq, template <size_t, typename> typename pred,
+              typename result_seq, size_t i = 0, typename = void>
+    struct type_filter_impl;
+    template <typename type_seq, size_t begin, size_t end, ptrdiff_t step,
+              typename = void>
+    struct type_slice_impl;
     template <size_t begin, size_t end, typename... types>
     struct pop_range_impl;
     template <size_t i, typename T, typename... types>
@@ -21,27 +38,42 @@ namespace alterhook::utils
     struct make_type_pairs_impl;
     template <typename seq, typename... types>
     struct make_type_triplets_impl;
+    template <size_t total_args, size_t arity, typename seq>
+    struct make_unzipped_index_sequences_impl;
+    template <typename seqs, typename params_seq>
+    struct make_unzipped_type_sequences_impl;
   } // namespace helpers
 
   template <typename... types>
   struct type_sequence
   {
     template <template <typename...> typename trg>
-    using to = trg<types...>;
+    using apply = trg<types...>;
 
-    template <size_t begin, size_t end = sizeof...(types)>
-    using range =
-        typename helpers::pop_range_impl<begin, end, types...>::popped;
+    template <typename ignored = void>
+    using reversed = typename helpers::type_reversed_enclosing<
+        ignored>::template reversed<types...>;
 
-    template <size_t begin, size_t end = sizeof...(types)>
-    using pop = typename helpers::pop_range_impl<begin, end, types...>::type;
+    template <template <size_t, typename> typename pred>
+    using take_while =
+        typename helpers::type_take_while_impl<type_sequence, pred,
+                                               type_sequence<>>::type;
 
-    template <size_t begin = 0, size_t end = sizeof...(types)>
-    using reverse =
-        typename helpers::reverse_types_impl<begin, end, types...>::type;
+    template <template <size_t, typename> typename pred>
+    using drop_while =
+        typename helpers::type_take_while_impl<type_sequence, pred,
+                                               type_sequence<>>::remaining;
+
+    template <template <size_t, typename> typename pred>
+    using filter = typename helpers::type_filter_impl<type_sequence, pred,
+                                                      type_sequence<>>::type;
+
+    template <size_t begin, size_t end = sizeof...(types), ptrdiff_t step = 1>
+    using slice = typename helpers::type_slice_impl<type_sequence, begin, end,
+                                                    step>::type;
 
     template <template <typename> typename cls>
-    using apply = type_sequence<cls<types>...>;
+    using map = type_sequence<cls<types>...>;
 
     template <typename T>
     using push_front = type_sequence<T, types...>;
@@ -60,12 +92,17 @@ namespace alterhook::utils
     using at = typename helpers::type_at_impl<i, types...>::type;
 
     template <typename T>
-    static constexpr bool has = (std::is_same_v<T, types> || ...);
+    static constexpr bool has = std::disjunction_v<std::is_same<T, types>...>;
 
     template <typename T>
     static constexpr size_t find = helpers::find_impl<0, T, types...>;
 
     static constexpr size_t size = sizeof...(types);
+  };
+
+  template <template <typename...> typename... Fs>
+  struct template_sequence
+  {
   };
 
   template <size_t i, typename... types>
@@ -81,6 +118,9 @@ namespace alterhook::utils
 
   template <size_t i, typename... types>
   using type_at_t = typename type_at<i, types...>::type;
+
+  template <typename... types>
+  using reverse_types = typename helpers::type_reversed_impl<types...>::type;
 
   template <size_t begin, size_t end, typename... types>
   struct range_from
@@ -111,21 +151,6 @@ namespace alterhook::utils
 
   template <size_t begin, size_t end, typename... types>
   using pop_range_from_t = typename pop_range_from<begin, end, types...>::type;
-
-  template <typename... types>
-  struct reverse_types
-      : helpers::reverse_types_impl<0, sizeof...(types), types...>
-  {
-  };
-
-  template <typename... types>
-  struct reverse_types<type_sequence<types...>>
-      : helpers::reverse_types_impl<0, sizeof...(types), types...>
-  {
-  };
-
-  template <typename... types>
-  using reverse_types_t = typename reverse_types<types...>::type;
 
   template <typename T, typename... types>
   inline constexpr size_t find_type = helpers::find_impl<0, T, types...>;
@@ -167,15 +192,21 @@ namespace alterhook::utils
   template <typename... types>
   using make_type_triplets_t = typename make_type_triplets<types...>::type;
 
+  template <size_t total_args, size_t arity>
+  using make_unzipped_index_sequences =
+      typename helpers::make_unzipped_index_sequences_impl<
+          total_args, arity, std::make_index_sequence<arity>>::type;
+
+  template <size_t arity, typename... types>
+  using make_unzipped_type_sequences =
+      typename helpers::make_unzipped_type_sequences_impl<
+          make_unzipped_index_sequences<sizeof...(types), arity>,
+          type_sequence<types...>>::type;
+
   namespace helpers
   {
     template <size_t i, typename first, typename... rest>
     struct type_at_impl<i, first, rest...> : type_at_impl<i - 1, rest...>
-    {
-    };
-
-    template <size_t i>
-    struct type_at_impl<i>
     {
     };
 
@@ -185,72 +216,107 @@ namespace alterhook::utils
       typedef first type;
     };
 
-    template <typename seq, size_t begin, size_t end, size_t i = 0,
-              typename frontseq    = type_sequence<>,
-              typename backseq     = type_sequence<>,
-              typename reversedseq = type_sequence<>,
-              bool before_begin = (i < begin), bool after_end = (i >= end)>
-    struct reverse_types_impl2;
+    template <typename old_sequence, typename new_seq = type_sequence<>>
+    struct type_reversed_impl2
+    {
+      using type = new_seq;
+    };
 
-    template <typename current, typename... rest, typename... frontseq_types,
-              typename... backseq_types, typename... reversedseq_types,
-              size_t begin, size_t end, size_t i>
-    struct reverse_types_impl2<type_sequence<current, rest...>, begin, end, i,
-                               type_sequence<frontseq_types...>,
-                               type_sequence<backseq_types...>,
-                               type_sequence<reversedseq_types...>, true, false>
-        : reverse_types_impl2<type_sequence<rest...>, begin, end, i + 1,
-                              type_sequence<frontseq_types..., current>,
-                              type_sequence<backseq_types...>,
-                              type_sequence<reversedseq_types...>>
+    template <typename Head, typename... Tail, typename... Added>
+    struct type_reversed_impl2<type_sequence<Head, Tail...>,
+                               type_sequence<Added...>>
+        : type_reversed_impl2<type_sequence<Tail...>,
+                              type_sequence<Head, Added...>>
     {
     };
 
-    template <typename current, typename... rest, typename... frontseq_types,
-              typename... backseq_types, typename... reversedseq_types,
-              size_t begin, size_t end, size_t i>
-    struct reverse_types_impl2<type_sequence<current, rest...>, begin, end, i,
-                               type_sequence<frontseq_types...>,
-                               type_sequence<backseq_types...>,
-                               type_sequence<reversedseq_types...>, false, true>
-        : reverse_types_impl2<type_sequence<rest...>, begin, end, i + 1,
-                              type_sequence<frontseq_types...>,
-                              type_sequence<backseq_types..., current>,
-                              type_sequence<reversedseq_types...>>
+    template <typename... types>
+    struct type_reversed_impl : type_reversed_impl2<type_sequence<types...>>
     {
     };
 
-    template <typename current, typename... rest, typename... frontseq_types,
-              typename... backseq_types, typename... reversedseq_types,
-              size_t begin, size_t end, size_t i>
-    struct reverse_types_impl2<
-        type_sequence<current, rest...>, begin, end, i,
-        type_sequence<frontseq_types...>, type_sequence<backseq_types...>,
-        type_sequence<reversedseq_types...>, false, false>
-        : reverse_types_impl2<type_sequence<rest...>, begin, end, i + 1,
-                              type_sequence<frontseq_types...>,
-                              type_sequence<backseq_types...>,
-                              type_sequence<current, reversedseq_types...>>
+    template <typename ignored>
+    struct type_reversed_enclosing
+    {
+      template <typename... types>
+      using reversed = reverse_types<types...>;
+    };
+
+    template <typename type_seq, template <size_t, typename> typename pred,
+              typename result_seq, size_t i, typename>
+    struct type_take_while_impl
+    {
+      using type      = result_seq;
+      using remaining = type_seq;
+    };
+
+    template <typename head, typename... tail,
+              template <size_t, typename> typename pred, typename... added,
+              size_t i>
+    struct type_take_while_impl<type_sequence<head, tail...>, pred,
+                                type_sequence<added...>, i,
+                                std::enable_if_t<pred<i, head>::value>>
+        : type_take_while_impl<type_sequence<tail...>, pred,
+                               type_sequence<added..., head>, i + 1>
     {
     };
 
-    template <typename... frontseq_types, typename... backseq_types,
-              typename... reversedseq_types, size_t begin, size_t end, size_t i>
-    struct reverse_types_impl2<type_sequence<>, begin, end, i,
-                               type_sequence<frontseq_types...>,
-                               type_sequence<backseq_types...>,
-                               type_sequence<reversedseq_types...>, false, true>
+    template <typename type_seq, template <size_t, typename> typename pred,
+              typename result_seq, size_t i, typename>
+    struct type_filter_impl
     {
-      typedef type_sequence<frontseq_types..., reversedseq_types...,
-                            backseq_types...>
-                                                  type;
-      typedef type_sequence<reversedseq_types...> reversed_range;
+      using type = result_seq;
     };
 
-    template <size_t begin, size_t end, typename... types>
-    struct reverse_types_impl
-        : reverse_types_impl2<type_sequence<types...>, begin, end>
+    template <typename head, typename... tail,
+              template <size_t, typename> typename pred, typename... added,
+              size_t i>
+    struct type_filter_impl<type_sequence<head, tail...>, pred,
+                            type_sequence<added...>, i,
+                            std::enable_if_t<pred<i, head>::value>>
+        : type_filter_impl<type_sequence<tail...>, pred,
+                           type_sequence<added..., head>, i + 1>
     {
+    };
+
+    template <typename head, typename... tail,
+              template <size_t, typename> typename pred, typename... added,
+              size_t i>
+    struct type_filter_impl<type_sequence<head, tail...>, pred,
+                            type_sequence<added...>, i,
+                            std::enable_if_t<!pred<i, head>::value>>
+        : type_filter_impl<type_sequence<tail...>, pred,
+                           type_sequence<added...>, i + 1>
+    {
+    };
+
+    template <size_t begin, size_t end, ptrdiff_t step>
+    struct in_range_check_enclosing
+    {
+      template <size_t i, typename>
+      struct check : std::bool_constant<(i >= begin) && (i < end) &&
+                                        ((i - begin) % step) == 0>
+      {
+      };
+    };
+
+    template <typename type_seq, size_t begin, size_t end, ptrdiff_t step,
+              typename>
+    struct type_slice_impl
+        : type_filter_impl<
+              type_seq,
+              in_range_check_enclosing<begin, end, step>::template check,
+              type_sequence<>>
+    {
+    };
+
+    template <typename type_seq, size_t begin, size_t end, ptrdiff_t step>
+    struct type_slice_impl<type_seq, begin, end, step,
+                           std::enable_if_t<(step < 0)>>
+    {
+      using type = typename type_filter_impl<
+          type_seq, in_range_check_enclosing<end, begin, -step>::template check,
+          type_sequence<>>::type::template reversed<>;
     };
 
     template <typename seq, size_t begin, size_t end, size_t i = 0,
@@ -346,6 +412,36 @@ namespace alterhook::utils
     struct make_type_triplets_impl<type_sequence<current_triplets...>>
     {
       typedef type_sequence<current_triplets...> type;
+    };
+
+    template <size_t total_args, size_t arity, size_t... indexes>
+    struct make_unzipped_index_sequences_impl<total_args, arity,
+                                              std::index_sequence<indexes...>>
+    {
+      using type = type_sequence<
+          make_index_sequence_with_step<total_args, indexes, arity>...>;
+    };
+
+    template <typename iseq, typename params_seq>
+    struct make_unzipped_type_sequences_impl2;
+
+    template <size_t... indexes, typename params_seq>
+    struct make_unzipped_type_sequences_impl2<std::index_sequence<indexes...>,
+                                              params_seq>
+    {
+      using type = type_sequence<type_at_t<indexes, params_seq>...>;
+    };
+
+    template <typename iseq, typename params_seq>
+    using make_unzipped_type_sequences_impl2_t =
+        typename make_unzipped_type_sequences_impl2<iseq, params_seq>::type;
+
+    template <typename... sequences, typename params_seq>
+    struct make_unzipped_type_sequences_impl<type_sequence<sequences...>,
+                                             params_seq>
+    {
+      using type = type_sequence<
+          make_unzipped_type_sequences_impl2_t<sequences, params_seq>...>;
     };
   } // namespace helpers
 } // namespace alterhook::utils
